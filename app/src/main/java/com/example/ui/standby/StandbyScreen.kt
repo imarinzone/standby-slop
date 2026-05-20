@@ -436,7 +436,7 @@ fun TopAppBarOverlay(
     currentPage: Int,
     onPageSelected: (Int) -> Unit
 ) {
-    val labels = listOf("CLOCK", "ALARM", "CALENDAR", "MUSIC", "TIMER", "DUO")
+    val labels = listOf("CLOCK", "ALARM (OFFLINE)", "CALENDAR", "MUSIC", "TIMER", "DUO")
     
     Surface(
         color = Color.Black.copy(alpha = 0.7f),

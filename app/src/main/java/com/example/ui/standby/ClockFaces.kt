@@ -1174,20 +1174,183 @@ fun NixieTubeClock(
         verticalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxSize()
     ) {
-        // Main container for the tubes
+        // Main container representing the tubes standing on the chassis
         Box(
             contentAlignment = Alignment.BottomCenter
         ) {
-            // Tubes Row
+            // Under-chassis glowing light spill
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .height((45 * actualScale).dp)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFFF4800).copy(alpha = 0.15f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // Transparent Acrylic & Exposed Green Glass-Epoxy PCB chassis base block at the bottom
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .padding(horizontal = (6 * actualScale).dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 1. Dual-layer vintage PCB layout
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((28 * actualScale).dp)
+                        .border(
+                            width = (1 * actualScale).dp,
+                            color = Color.White.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape((6 * actualScale).dp)
+                        )
+                        .background(Color.Black) // clear background
+                ) {
+                    // Green printed circuit board substrate
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape((6 * actualScale).dp))
+                            .background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF0F2B19), // Classy vintage dark solder-mask green
+                                        Color(0xFF08180E)
+                                    )
+                                )
+                            )
+                    ) {
+                        // Drawing copper tracks and circular solder pads under the tubes
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val trackColor = Color(0xFFC5A059).copy(alpha = 0.35f) // copper gold
+                            
+                            // Horizontal main bus tracks
+                            drawLine(
+                                color = trackColor,
+                                start = Offset(0f, size.height * 0.45f),
+                                end = Offset(size.width, size.height * 0.45f),
+                                strokeWidth = 1.5.dp.toPx()
+                            )
+                            drawLine(
+                                color = trackColor,
+                                start = Offset(0f, size.height * 0.65f),
+                                end = Offset(size.width, size.height * 0.65f),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                            
+                            // Concentric pads & connecting routing tracks
+                            for (i in 0..12) {
+                                val xPos = size.width * (i.toFloat() / 12f)
+                                drawCircle(
+                                    color = trackColor,
+                                    radius = 5.dp.toPx(),
+                                    center = Offset(xPos, size.height * 0.55f),
+                                    style = Stroke(width = 1.dp.toPx())
+                                )
+                                drawCircle(
+                                    color = Color(0xFFD4AF37).copy(alpha = 0.4f),
+                                    radius = 1.8.dp.toPx(),
+                                    center = Offset(xPos, size.height * 0.55f)
+                                )
+                                drawLine(
+                                    color = trackColor,
+                                    start = Offset(xPos, size.height * 0.55f),
+                                    end = Offset(xPos + 10.dp.toPx(), size.height * 0.2f),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            }
+                        }
+                    }
+
+                    // Soft warm neon amber LED under-chassis spill that lights up the tracks
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                androidx.compose.ui.graphics.Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF5200).copy(alpha = 0.18f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+
+                    // Acrylic top protective transparent plate with glass bevel reflections
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.08f),
+                                        Color.White.copy(alpha = 0.01f),
+                                        Color.White.copy(alpha = 0.04f)
+                                    )
+                                )
+                            )
+                    ) {
+                        // Polished corner spacer bolts holding the transparent acrylic sheets together
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = (10 * actualScale).dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Left spacer bolt
+                            Box(
+                                modifier = Modifier
+                                    .size((6 * actualScale).dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFB5B8B1)) // Silver structural bolt
+                                    .border(0.5.dp, Color.White, CircleShape)
+                            )
+                            // Right spacer bolt
+                            Box(
+                                modifier = Modifier
+                                    .size((6 * actualScale).dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFB5B8B1))
+                                    .border(0.5.dp, Color.White, CircleShape)
+                            )
+                        }
+                    }
+                }
+
+                // 2. Heavy burnished gold metal accent strip base
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((3 * actualScale).dp)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF8B7355), // Vintage bronze
+                                    Color(0xFFD4AF37), // Polished brass highlight
+                                    Color(0xFF8B7355)
+                                )
+                            )
+                        )
+                )
+            }
+
+            // Tubes Row standing proudly on top of the PCB base block
             Row(
                 horizontalArrangement = Arrangement.spacedBy((6 * actualScale).dp),
                 verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.padding(bottom = (10 * actualScale).dp)
+                modifier = Modifier.padding(bottom = (24 * actualScale).dp) // Raised slightly above the PCB base
             ) {
                 // Hour tubes
                 hourDigits.forEach { digit ->
                     if (digit == " ") {
-                        NixieDigitTube("0", color.copy(alpha = 0.05f), fontFamily, actualScale, isDimmed = true)
+                        NixieDigitTube("0", color, fontFamily, actualScale, isDimmed = true)
                     } else {
                         NixieDigitTube(digit, color, fontFamily, actualScale, isDimmed = false)
                     }
@@ -1213,65 +1376,133 @@ fun NixieTubeClock(
                 if (!use24Hour && showAmPm) {
                     Box(
                         modifier = Modifier
-                            .width((56 * actualScale).dp)
-                            .height((110 * actualScale).dp)
+                            .width((62 * actualScale).dp)
+                            .height((176 * actualScale).dp)
                             .padding(horizontal = (2 * actualScale).dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape((28 * actualScale).dp))
-                                .background(Color.White.copy(alpha = 0.02f))
-                                .border(
-                                    width = (1 * actualScale).dp,
-                                    color = Color.White.copy(alpha = 0.08f),
-                                    shape = RoundedCornerShape((28 * actualScale).dp)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            // Glass dome envelope
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .clip(
+                                        RoundedCornerShape(
+                                            topStart = (31 * actualScale).dp,
+                                            topEnd = (31 * actualScale).dp,
+                                            bottomStart = (4 * actualScale).dp,
+                                            bottomEnd = (4 * actualScale).dp
+                                        )
+                                    )
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.linearGradient(
+                                            colors = listOf(
+                                                Color(0xFF0F0B09),
+                                                Color(0xFF160E0A)
+                                            )
+                                        )
+                                    )
+                                    .border(
+                                        width = (1.5f * actualScale).dp,
+                                        color = Color.White.copy(alpha = 0.14f),
+                                        shape = RoundedCornerShape(
+                                            topStart = (31 * actualScale).dp,
+                                            topEnd = (31 * actualScale).dp,
+                                            bottomStart = (4 * actualScale).dp,
+                                            bottomEnd = (4 * actualScale).dp
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Background mesh
+                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val step = (12f * actualScale).dp.toPx()
+                                    var y = 0f
+                                    while (y < size.height) {
+                                        drawLine(
+                                            color = Color.White.copy(alpha = 0.04f),
+                                            start = Offset(0f, y),
+                                            end = Offset(size.width, y),
+                                            strokeWidth = 1f
+                                        )
+                                        y += step
+                                    }
+                                }
+
+                                // Glowing active filament letters showing AM or PM
+                                val activeGlowColor = Color(0xFFFF5200)
+                                val activeCoreColor = Color(0xFFFFE599)
+                                val ambientHaloColor = Color(0xFFFF3300)
+
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = amPmText.uppercase().substring(0, 1),
+                                        color = activeCoreColor,
+                                        fontSize = (22 * actualScale).sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Serif,
+                                        textAlign = TextAlign.Center,
+                                        style = androidx.compose.ui.text.TextStyle(
+                                            shadow = androidx.compose.ui.graphics.Shadow(
+                                                color = activeGlowColor,
+                                                offset = Offset(0f, 0f),
+                                                blurRadius = (12 * actualScale)
+                                            )
+                                        )
+                                    )
+                                    Text(
+                                        text = amPmText.uppercase().substring(1, 2),
+                                        color = activeCoreColor,
+                                        fontSize = (22 * actualScale).sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Serif,
+                                        textAlign = TextAlign.Center,
+                                        style = androidx.compose.ui.text.TextStyle(
+                                            shadow = androidx.compose.ui.graphics.Shadow(
+                                                color = activeGlowColor,
+                                                offset = Offset(0f, 0f),
+                                                blurRadius = (12 * actualScale)
+                                            )
+                                        )
+                                    )
+                                }
+
+                                // Specular glass reflections
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .fillMaxHeight()
+                                        .width((4 * actualScale).dp)
+                                        .padding(top = (16 * actualScale).dp, bottom = (8 * actualScale).dp, start = (4 * actualScale).dp)
+                                        .clip(RoundedCornerShape(30))
+                                        .background(Color.White.copy(alpha = 0.18f))
                                 )
-                        )
-                        Text(
-                            text = amPmText,
-                            color = color,
-                            fontSize = (22 * actualScale).sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = fontFamily,
-                            textAlign = TextAlign.Center,
-                            style = androidx.compose.ui.text.TextStyle(
-                                shadow = androidx.compose.ui.graphics.Shadow(
-                                    color = color.copy(alpha = 0.7f),
-                                    offset = Offset(0f, 0f),
-                                    blurRadius = (10 * actualScale)
-                                )
+                            }
+
+                            // Mounting base
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .height((12 * actualScale).dp)
+                                    .clip(RoundedCornerShape(topStart = (3 * actualScale).dp, topEnd = (3 * actualScale).dp))
+                                    .background(Color(0xFF2C2C2E))
+                                    .border(
+                                        width = (1 * actualScale).dp,
+                                        color = Color(0xFF4A4A4F),
+                                        shape = RoundedCornerShape(topStart = (3 * actualScale).dp, topEnd = (3 * actualScale).dp)
+                                    )
                             )
-                        )
+                        }
                     }
                 }
-            }
-            
-            // Wooden/Brass chassis/base block at the bottom
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .height((16 * actualScale).dp)
-                    .clip(RoundedCornerShape((4 * actualScale).dp))
-                    .background(
-                        androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF6B4423), // Rich mahogany top highlight
-                                Color(0xFF3B2312), // Deep wood brown body
-                                Color(0xFF1B0F07)  // Shadowed bottom
-                            )
-                        )
-                    )
-            ) {
-                // Subtle gold/brass metal strip in the center layer
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height((2 * actualScale).dp)
-                        .align(Alignment.TopCenter)
-                        .background(Color(0xFFD4AF37).copy(alpha = 0.35f)) // Brass highlight
-                )
             }
         }
     }
@@ -1285,138 +1516,300 @@ fun NixieDigitTube(
     scale: Float = 1.0f,
     isDimmed: Boolean = false
 ) {
+    // Authentic premium Nixie neon amber glow setup
+    val activeGlowColor = Color(0xFFFF5200) // Saturated neon orange-red
+    val activeCoreColor = Color(0xFFFFE599) // White-hot neon filament core (bright yellow-white)
+    val ambientHaloColor = Color(0xFFFF3300) // Deep red/orange corona gas discharge
+    
+    // Inactive copper-nickel wire cathodes stack (all numbers 0 to 9)
+    val inactiveCathodes = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+    
     Box(
         modifier = Modifier
-            .width((80 * scale).dp)
-            .height((160 * scale).dp)
+            .width((84 * scale).dp)
+            .height((176 * scale).dp)
             .padding(horizontal = (4 * scale).dp),
         contentAlignment = Alignment.Center
     ) {
-        // 1. Glass Tube Shadow & Background
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(topStart = (40 * scale).dp, topEnd = (40 * scale).dp, bottomStart = (4 * scale).dp, bottomEnd = (4 * scale).dp))
-                .background(
-                    androidx.compose.ui.graphics.Brush.linearGradient(
-                        colors = listOf(
-                            Color(0x15FFFFFF),
-                            Color(0x05FFFFFF),
-                            Color(0x1AFFFFFF),
-                            Color(0x02FFFFFF),
-                            Color(0x22FFFFFF)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Glass Tube Envelope (rounded top dome, flat bottom sitting in the socket)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = (42 * scale).dp,
+                            topEnd = (42 * scale).dp,
+                            bottomStart = (6 * scale).dp,
+                            bottomEnd = (6 * scale).dp
                         )
                     )
-                )
-                .border(
-                    width = (1 * scale).dp,
-                    color = Color.White.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(topStart = (40 * scale).dp, topEnd = (40 * scale).dp, bottomStart = (4 * scale).dp, bottomEnd = (4 * scale).dp)
-                )
-        ) {
-            // Internal Grid/Mesh Anode
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val step = 12 * scale
-                var y = 0f
-                while (y < size.height) {
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.03f),
-                        start = Offset(0f, y),
-                        end = Offset(size.width, y),
-                        strokeWidth = 1f
+                    .background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF0F0B09), // Sleek vacuum dark background tint
+                                Color(0xFF160E0A)  // Very subtle amber vacuum ambience
+                            )
+                        )
                     )
-                    y += step
+                    .border(
+                        width = (1.5f * scale).dp,
+                        color = Color.White.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(
+                            topStart = (42 * scale).dp,
+                            topEnd = (42 * scale).dp,
+                            bottomStart = (6 * scale).dp,
+                            bottomEnd = (6 * scale).dp
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                // 1. Fine Metallic Anode Mesh (Hexagonal/square pattern behind/around the filaments)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val step = (10f * scale).dp.toPx()
+                    // Draw diagonal wire mesh grids
+                    var y = 0f
+                    while (y < size.height) {
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.05f),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y + size.width),
+                            strokeWidth = 1f
+                        )
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.05f),
+                            start = Offset(size.width, y),
+                            end = Offset(0f, y + size.width),
+                            strokeWidth = 1f
+                        )
+                        y += step
+                    }
                 }
-                var x = 0f
-                while (x < size.width) {
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.03f),
-                        start = Offset(x, 0f),
-                        end = Offset(x, size.height),
-                        strokeWidth = 1f
-                    )
-                    x += step
-                }
-            }
-        }
 
-        // 2. Glowing Filament Stack (Dim stacked wires for 3D depth)
-        val inactiveWires = listOf("8", "3", "0") // overlapping digits
-        Box(contentAlignment = Alignment.Center) {
-            if (!isDimmed) {
-                inactiveWires.forEach { wDigit ->
-                    if (wDigit != digit) {
+                // 2. Structural internal elements: Mica end-caps (metal brackets top & bottom)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val plateThickness = (4f * scale).dp.toPx()
+                    val marginSide = (10f * scale).dp.toPx()
+                    
+                    // Top mica plate
+                    drawRect(
+                        color = Color(0xFF2C241E), // Dark ceramic/mica grey
+                        topLeft = Offset(marginSide, (22f * scale).dp.toPx()),
+                        size = androidx.compose.ui.geometry.Size(size.width - (marginSide * 2), plateThickness)
+                    )
+                    // Bottom mica plate 
+                    drawRect(
+                        color = Color(0xFF2C241E),
+                        topLeft = Offset(marginSide, size.height - (18f * scale).dp.toPx()),
+                        size = androidx.compose.ui.geometry.Size(size.width - (marginSide * 2), plateThickness)
+                    )
+                    
+                    // Support wires connecting plates vertically on the far edges
+                    drawLine(
+                        color = Color(0xFF42382F),
+                        start = Offset(marginSide + 2f, (22f * scale).dp.toPx()),
+                        end = Offset(marginSide + 2f, size.height - (18f * scale).dp.toPx()),
+                        strokeWidth = 1.5f
+                    )
+                    drawLine(
+                        color = Color(0xFF42382F),
+                        start = Offset(size.width - marginSide - 2f, (22f * scale).dp.toPx()),
+                        end = Offset(size.width - marginSide - 2f, size.height - (18f * scale).dp.toPx()),
+                        strokeWidth = 1.5f
+                    )
+                }
+
+                // 3. Ambient Sputter Glow inside the tube (neon gas background discharge)
+                Box(
+                    modifier = Modifier
+                        .size((70 * scale).dp)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.radialGradient(
+                                colors = listOf(
+                                    if (isDimmed) Color.Transparent else activeGlowColor.copy(alpha = 0.12f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+
+                // 4. Physical Stack of Inactive Cathodes (stacked dark metal letters)
+                Box(contentAlignment = Alignment.Center) {
+                    inactiveCathodes.forEach { wDigit ->
+                        if (wDigit != digit) {
+                            Text(
+                                text = wDigit,
+                                color = Color(0xFF332014).copy(alpha = 0.16f), // weathered copper filament wire
+                                fontSize = (102 * scale).sp,
+                                fontWeight = FontWeight.Normal,
+                                fontFamily = FontFamily.Serif, // Serif has organic curves resembling manual wire frames
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    // 5. Active Glowing Multi-Layer Neon Filament
+                    if (!isDimmed) {
+                        // LAYER A: Massive ambient gas corona (Outmost blurry glow)
                         Text(
-                            text = wDigit,
-                            color = color.copy(alpha = 0.035f),
-                            fontSize = (100 * scale).sp,
-                            fontWeight = FontWeight.Light,
-                            fontFamily = fontFamily,
+                            text = digit,
+                            color = ambientHaloColor.copy(alpha = 0.75f),
+                            fontSize = (102 * scale).sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif,
+                            textAlign = TextAlign.Center,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = ambientHaloColor,
+                                    offset = Offset(0f, 0f),
+                                    blurRadius = (28 * scale)
+                                )
+                            )
+                        )
+
+                        // LAYER B: Saturated Orange Plasma Discharge (Middle thick glow)
+                        Text(
+                            text = digit,
+                            color = activeGlowColor,
+                            fontSize = (102 * scale).sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif,
+                            textAlign = TextAlign.Center,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = activeGlowColor,
+                                    offset = Offset(0f, 0f),
+                                    blurRadius = (12 * scale)
+                                )
+                            )
+                        )
+
+                        // LAYER C: Hot Wire Core (Central intense highlight representing the wire metal)
+                        Text(
+                            text = digit,
+                            color = activeCoreColor,
+                            fontSize = (101 * scale).sp,
+                            fontWeight = FontWeight.Normal,
+                            fontFamily = FontFamily.Serif,
+                            textAlign = TextAlign.Center,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = activeGlowColor.copy(alpha = 0.9f),
+                                    offset = Offset(0f, 0f),
+                                    blurRadius = (3 * scale)
+                                )
+                            )
+                        )
+                    } else {
+                        // Dimmed state for non-active digits
+                        Text(
+                            text = digit,
+                            color = activeGlowColor.copy(alpha = 0.08f),
+                            fontSize = (102 * scale).sp,
+                            fontWeight = FontWeight.Normal,
+                            fontFamily = FontFamily.Serif,
                             textAlign = TextAlign.Center
                         )
                     }
                 }
+
+                // 6. Glass Highlights & Specular Reflections (In front of filaments)
+                // Left curved highlight (Main glint)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxHeight()
+                        .width((6 * scale).dp)
+                        .padding(top = (22 * scale).dp, bottom = (12 * scale).dp, start = (6 * scale).dp)
+                        .clip(RoundedCornerShape(30))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.22f),
+                                    Color.White.copy(alpha = 0.02f)
+                                )
+                            )
+                        )
+                )
+
+                // Right warm ambient edge highlight
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .fillMaxHeight()
+                        .width((4 * scale).dp)
+                        .padding(top = (22 * scale).dp, bottom = (12 * scale).dp, end = (6 * scale).dp)
+                        .clip(RoundedCornerShape(30))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.01f),
+                                    Color.White.copy(alpha = 0.08f)
+                                )
+                            )
+                        )
+                )
+
+                // Top dome light reflection flare
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = (8 * scale).dp)
+                        .size(width = (24 * scale).dp, height = (4 * scale).dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f))
+                )
             }
-            
-            // 3. Ambient Glow layer behind the active digit
+
+            // Dark Ceramic/Metal mounting collar at the bottom of the tube
             Box(
                 modifier = Modifier
-                    .size((60 * scale).dp)
+                    .fillMaxWidth(0.9f)
+                    .height((12 * scale).dp)
+                    .clip(RoundedCornerShape(topStart = (4 * scale).dp, topEnd = (4 * scale).dp))
                     .background(
-                        androidx.compose.ui.graphics.Brush.radialGradient(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
                             colors = listOf(
-                                if (isDimmed) color.copy(alpha = 0.02f) else color.copy(alpha = 0.12f),
-                                Color.Transparent
+                                Color(0xFF2C2C2E), // Dark basalt black
+                                Color(0xFF1C1C1E)
                             )
                         )
                     )
-            )
-
-            // 4. The Lit Active Filament (high intensity, bright glow)
-            Text(
-                text = digit,
-                color = if (isDimmed) color.copy(alpha = 0.08f) else color.copy(alpha = 0.95f),
-                fontSize = (100 * scale).sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = fontFamily,
-                textAlign = TextAlign.Center,
-                style = androidx.compose.ui.text.TextStyle(
-                    shadow = androidx.compose.ui.graphics.Shadow(
-                        color = if (isDimmed) Color.Transparent else color.copy(alpha = 0.85f),
-                        offset = Offset(0f, 0f),
-                        blurRadius = if (isDimmed) 0f else (16 * scale)
-                    )
+                    .border(
+                        width = (1 * scale).dp,
+                        color = Color(0xFF4A4A4F),
+                        shape = RoundedCornerShape(topStart = (4 * scale).dp, topEnd = (4 * scale).dp)
+                    ),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                // Gold/metal copper wire spacer seal ring
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((2 * scale).dp)
+                        .background(Color(0xFF8B7355).copy(alpha = 0.35f))
                 )
-            )
+            }
         }
-
-        // 5. Glass Reflection highlight
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .fillMaxHeight()
-                .width((6 * scale).dp)
-                .padding(top = (25 * scale).dp, bottom = (10 * scale).dp, start = (8 * scale).dp)
-                .clip(RoundedCornerShape(30))
-                .background(
-                    androidx.compose.ui.graphics.Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.15f),
-                            Color.White.copy(alpha = 0.02f)
-                        )
-                    )
-                )
-        )
     }
 }
 
 @Composable
 fun NixieColon(color: Color, scale: Float, isTicking: Boolean) {
+    val activeGlowColor = Color(0xFFFF5200)
+    val activeCoreColor = Color(0xFFFFE599)
+    val ambientHaloColor = Color(0xFFFF3300)
+
     val alphaAnim = if (isTicking) {
         val infiniteTransition = rememberInfiniteTransition(label = "nixieColonAnim")
         val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.2f,
-            targetValue = 0.9f,
+            initialValue = 0.25f,
+            targetValue = 0.95f,
             animationSpec = infiniteRepeatable(
                 animation = tween(1000, easing = LinearEasing),
                 repeatMode = RepeatMode.Reverse
@@ -1425,53 +1818,149 @@ fun NixieColon(color: Color, scale: Float, isTicking: Boolean) {
         )
         alpha
     } else {
-        0.8f
+        0.85f
     }
     
-    // Mini tube for the dual glowing separator dots
+    // Matched Glass Separator Tube
     Box(
         modifier = Modifier
-            .width((28 * scale).dp)
-            .height((120 * scale).dp)
+            .width((32 * scale).dp)
+            .height((176 * scale).dp)
             .padding(horizontal = (2 * scale).dp),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape((14 * scale).dp))
-                .background(Color.White.copy(alpha = 0.02f))
-                .border(
-                    width = (1 * scale).dp,
-                    color = Color.White.copy(alpha = 0.08f),
-                    shape = RoundedCornerShape((14 * scale).dp)
-                )
-        )
-        
         Column(
-            verticalArrangement = Arrangement.spacedBy((18 * scale).dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
+            // Glass envelope
             Box(
                 modifier = Modifier
-                    .size((8 * scale).dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = alphaAnim))
-                    .border(
-                        width = (1 * scale).dp,
-                        color = color.copy(alpha = alphaAnim),
-                        shape = CircleShape
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = (16 * scale).dp,
+                            topEnd = (16 * scale).dp,
+                            bottomStart = (4 * scale).dp,
+                            bottomEnd = (4 * scale).dp
+                        )
                     )
-            )
+                    .background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF0F0B09),
+                                Color(0xFF160E0A)
+                            )
+                        )
+                    )
+                    .border(
+                        width = (1.5f * scale).dp,
+                        color = Color.White.copy(alpha = 0.14f),
+                        shape = RoundedCornerShape(
+                            topStart = (16 * scale).dp,
+                            topEnd = (16 * scale).dp,
+                            bottomStart = (4 * scale).dp,
+                            bottomEnd = (4 * scale).dp
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                // Background mesh grid inside the colon tube
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val step = (12f * scale).dp.toPx()
+                    var y = 0f
+                    while (y < size.height) {
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.04f),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = 1f
+                        )
+                        y += step
+                    }
+                }
+
+                // Two glowing neon beads representing the dots
+                Column(
+                    verticalArrangement = Arrangement.spacedBy((24 * scale).dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Top Dot
+                    Box(contentAlignment = Alignment.Center) {
+                        // Outer halo
+                        Box(
+                            modifier = Modifier
+                                .size((12 * scale).dp)
+                                .clip(CircleShape)
+                                .background(ambientHaloColor.copy(alpha = alphaAnim * 0.4f))
+                        )
+                        // Neon discharge layer
+                        Box(
+                            modifier = Modifier
+                                .size((8 * scale).dp)
+                                .clip(CircleShape)
+                                .background(activeGlowColor.copy(alpha = alphaAnim))
+                        )
+                        // Core wire layer
+                        Box(
+                            modifier = Modifier
+                                .size((4 * scale).dp)
+                                .clip(CircleShape)
+                                .background(activeCoreColor.copy(alpha = alphaAnim))
+                        )
+                    }
+
+                    // Bottom Dot
+                    Box(contentAlignment = Alignment.Center) {
+                        // Outer halo
+                        Box(
+                            modifier = Modifier
+                                .size((12 * scale).dp)
+                                .clip(CircleShape)
+                                .background(ambientHaloColor.copy(alpha = alphaAnim * 0.4f))
+                        )
+                        // Neon discharge layer
+                        Box(
+                            modifier = Modifier
+                                .size((8 * scale).dp)
+                                .clip(CircleShape)
+                                .background(activeGlowColor.copy(alpha = alphaAnim))
+                        )
+                        // Core wire layer
+                        Box(
+                            modifier = Modifier
+                                .size((4 * scale).dp)
+                                .clip(CircleShape)
+                                .background(activeCoreColor.copy(alpha = alphaAnim))
+                        )
+                    }
+                }
+
+                // Glass shine reflections
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxHeight()
+                        .width((3 * scale).dp)
+                        .padding(top = (16 * scale).dp, bottom = (8 * scale).dp, start = (4 * scale).dp)
+                        .clip(RoundedCornerShape(30))
+                        .background(Color.White.copy(alpha = 0.18f))
+                )
+            }
+
+            // Mounting base collar for colon tube
             Box(
                 modifier = Modifier
-                    .size((8 * scale).dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = alphaAnim))
+                    .fillMaxWidth(0.85f)
+                    .height((12 * scale).dp)
+                    .clip(RoundedCornerShape(topStart = (3 * scale).dp, topEnd = (3 * scale).dp))
+                    .background(Color(0xFF2C2C2E))
                     .border(
                         width = (1 * scale).dp,
-                        color = color.copy(alpha = alphaAnim),
-                        shape = CircleShape
+                        color = Color(0xFF4A4A4F),
+                        shape = RoundedCornerShape(topStart = (3 * scale).dp, topEnd = (3 * scale).dp)
                     )
             )
         }
