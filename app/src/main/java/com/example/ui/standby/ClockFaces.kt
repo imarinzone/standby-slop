@@ -361,16 +361,22 @@ class MatrixStream(
 @Composable
 fun MatrixRainBackground(accentColor: Color) {
     val characters = remember {
-        ('0'..'9').map { it.toString() } + ('A'..'Z').map { it.toString() } + ('a'..'z').map { it.toString() }
+        // Standard alphanumeric
+        ('0'..'9').map { it.toString() } + 
+        ('A'..'Z').map { it.toString() } + 
+        ('a'..'z').map { it.toString() } +
+        // Roman numerals & special script style European glyphs (guaranteeing single-character length)
+        listOf("Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ", "Ⅶ", "Ⅷ", "Ⅸ", "Ⅹ", "Ⅺ", "Ⅻ", "Ⅼ", "Ⅽ", "Ⅾ", "Ⅿ", "Ø", "Æ", "Å", "ß", "ç", "Δ", "Ξ", "Ω", "Ψ")
     }
-    val columnCount = 18
+    // High density columns to make the animation significantly more visible and rich
+    val columnCount = 32
     val streams = remember {
         List(columnCount) { index ->
             MatrixStream(
-                xPercent = (index.toFloat() / columnCount) + 0.02f,
-                speed = (4..9).random().toFloat(),
-                chars = List(15) { characters.random() },
-                headY = (-(100..500).random()).toFloat()
+                xPercent = (index.toFloat() / columnCount) + 0.015f,
+                speed = (6..12).random().toFloat(),
+                chars = List(20) { characters.random() },
+                headY = (-(100..600).random()).toFloat()
             )
         }
     }
@@ -379,16 +385,17 @@ fun MatrixRainBackground(accentColor: Color) {
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(50)
+            delay(40)
             streams.forEach { stream ->
                 stream.headY += stream.speed
-                if (stream.headY > 1000f) {
-                    stream.headY = (-(150..300).random()).toFloat()
-                    stream.speed = (4..9).random().toFloat()
+                // Dynamically recycle stream heads once they flow past the typical vertical space
+                if (stream.headY > 2200f) {
+                    stream.headY = (-(150..500).random()).toFloat()
+                    stream.speed = (6..12).random().toFloat()
                 }
-                // Randomly flicker/change 15% of characters to look active
-                if ((0..5).random() == 0) {
-                    stream.chars = List(15) { characters.random() }
+                // Randomly flicker/change 20% of characters to look highly active and dynamic
+                if ((0..4).random() == 0) {
+                    stream.chars = List(20) { characters.random() }
                 }
             }
             tick++
@@ -400,21 +407,21 @@ fun MatrixRainBackground(accentColor: Color) {
         
         streams.forEach { stream ->
             val x = stream.xPercent * size.width
-            val sizeY = 18.dp.toPx()
+            val sizeY = 20.dp.toPx() // Slightly taller spacing for bigger characters
             
             for (i in 0 until stream.chars.size) {
                 val charY = stream.headY - (i * sizeY)
                 if (charY > -50f && charY < size.height + 50f) {
                     val alpha = (1f - (i.toFloat() / stream.chars.size)).coerceIn(0f, 1f)
                     val drawColor = if (i == 0) {
-                        Color.White.copy(alpha = alpha * 0.7f)
+                        Color.White.copy(alpha = alpha * 0.95f) // White-hot digital lead
                     } else {
-                        accentColor.copy(alpha = alpha * 0.35f)
+                        Color(0xFF39FF14).copy(alpha = alpha * 0.75f) // Vibrant glowing neon green trails as requested
                     }
 
                     val paint = android.graphics.Paint().apply {
                         this.color = drawColor.toArgb()
-                        this.textSize = 14.dp.toPx()
+                        this.textSize = 17.dp.toPx() // Significantly increased font size for higher visibility
                         this.isAntiAlias = true
                         this.textAlign = android.graphics.Paint.Align.CENTER
                         this.typeface = android.graphics.Typeface.MONOSPACE
@@ -440,29 +447,35 @@ fun BinaryStyle(calendar: Calendar, color: Color, fontFamily: FontFamily, scale:
     ) {
         MatrixRainBackground(accentColor = color)
         
-        // Slight fade Overlay
+        // Slightly reduced overlay to let the dense matrix rain shine through beautifully
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                .background(Color.Black.copy(alpha = 0.3f))
         )
         
         val format = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val text = format.format(calendar.time).map { char ->
             if (char == ':') ":" else Integer.toBinaryString(char.toString().toInt()).padStart(4, '0')
-        }.joinToString("\n")
+        }.joinToString("  ") // Fully horizontal representation with generous space gaps
         
         Text(
             text = text,
-            color = Color.White,
-            fontSize = (24 * scale).sp,
-            fontFamily = fontFamily,
-            lineHeight = (28 * scale).sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .background(Color.Black.copy(alpha = 0.82f), RoundedCornerShape(16.dp))
-                .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
-                .padding(24.dp)
+            maxLines = 1,
+            softWrap = false,
+            style = androidx.compose.ui.text.TextStyle(
+                color = Color.White,
+                fontSize = (42 * scale).sp, // Significantly increased font size as requested
+                fontWeight = FontWeight.Bold,
+                fontFamily = fontFamily,
+                textAlign = TextAlign.Center,
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color(0xFF39FF14).copy(alpha = 0.85f), // Vibrant Neon Green shadow glow
+                    offset = Offset(0f, 0f),
+                    blurRadius = 24f
+                )
+            ),
+            modifier = Modifier.padding(24.dp) // Completely removed the rectangular boxing/border background!
         )
     }
 }
