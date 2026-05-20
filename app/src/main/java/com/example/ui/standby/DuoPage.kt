@@ -9,6 +9,8 @@ import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -625,7 +627,12 @@ fun DuoCalendarWidget(
 fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
     val context = LocalContext.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
-    var isPlaying by remember {
+    val trackTitle by MediaStateHolder.trackTitle.collectAsState()
+    val artistName by MediaStateHolder.artistName.collectAsState()
+    val isPlayingFlow by MediaStateHolder.isPlaying.collectAsState()
+    val albumArt by MediaStateHolder.albumArt.collectAsState()
+
+    var isMusicActive by remember {
         mutableStateOf(
             try {
                 audioManager?.isMusicActive == true
@@ -680,7 +687,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
     // Periodic check to keep system alarm status accurate on view resume/active
     LaunchedEffect(Unit) {
         while (true) {
-            isPlaying = try {
+            isMusicActive = try {
                 audioManager?.isMusicActive == true
             } catch (e: Exception) {
                 false
@@ -689,10 +696,12 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
         }
     }
 
+    val isCurrentlyPlaying = isPlayingFlow || isMusicActive
+
     // Vinyl Rotation angle
     val rotationAngle = remember { Animatable(0f) }
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) {
+    LaunchedEffect(isCurrentlyPlaying) {
+        if (isCurrentlyPlaying) {
             rotationAngle.animateTo(
                 targetValue = rotationAngle.value + 360f,
                 animationSpec = infiniteRepeatable(
@@ -756,9 +765,12 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
             ) {
-                // Spinning Classic Record Disk
+                // Spinning Classic Record Disk or Album Artwork!
                 Box(
                     modifier = Modifier
                         .size(56.dp)
@@ -768,23 +780,33 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                         .rotate(rotationAngle.value),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Draws circles representing ridges on record disk
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(color = Color.DarkGray.copy(alpha = 0.8f), radius = size.minDimension / 2.3f, style = Stroke(width = 1.dp.toPx()))
-                        drawCircle(color = Color.DarkGray.copy(alpha = 0.5f), radius = size.minDimension / 3.4f, style = Stroke(width = 1.dp.toPx()))
-                        drawCircle(color = accentColor, radius = size.minDimension / 6f)
+                    if (albumArt != null) {
+                        Image(
+                            bitmap = albumArt!!.asImageBitmap(),
+                            contentDescription = "Album Art",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                        )
+                    } else {
+                        // Draws circles representing ridges on record disk
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawCircle(color = Color.DarkGray.copy(alpha = 0.8f), radius = size.minDimension / 2.3f, style = Stroke(width = 1.dp.toPx()))
+                            drawCircle(color = Color.DarkGray.copy(alpha = 0.5f), radius = size.minDimension / 3.4f, style = Stroke(width = 1.dp.toPx()))
+                            drawCircle(color = accentColor, radius = size.minDimension / 6f)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color(0xFF151D2A), CircleShape)
+                        )
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(Color(0xFF151D2A), CircleShape)
-                    )
                 }
 
                 // Media Title Metadata
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isPlaying) "Streaming Track..." else "Media Paused",
+                        text = trackTitle ?: "No Track Playing",
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -792,10 +814,12 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "System Deck Output",
-                        color = Color.Gray,
+                        text = artistName ?: "Unknown Artist",
+                        color = accentColor.copy(alpha = 0.9f),
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -814,13 +838,12 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
 
                 IconButton(
                     onClick = { 
-                        triggerMediaKey(context, if (isPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY)
-                        isPlaying = !isPlaying
+                        triggerMediaKey(context, if (isCurrentlyPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY)
                     },
                     modifier = Modifier.size(44.dp).background(accentColor, CircleShape)
                 ) {
                     Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        imageVector = if (isCurrentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = "Toggle",
                         tint = if (accentColor == Color.White) Color.Black else Color.White,
                         modifier = Modifier.size(22.dp)
@@ -951,9 +974,9 @@ private fun triggerMediaKey(context: Context, keyCode: Int) {
 private fun getWidgetTitle(pageIndex: Int): String {
     return when (pageIndex) {
         0 -> "AMBIENT CLOCK"
-        1 -> "SYSTEM ALARM"
+        1 -> "ALARM"
         2 -> "LOCAL AGENDA"
-        3 -> "SYSTEM MUSIC"
+        3 -> "MUSIC PLAYER"
         else -> "FOCUS COUNTER"
     }
 }

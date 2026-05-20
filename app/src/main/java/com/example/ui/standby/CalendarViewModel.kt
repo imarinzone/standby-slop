@@ -36,7 +36,7 @@ class CalendarViewModel : ViewModel() {
     val showDaily = MutableStateFlow(true)
     val showWeekly = MutableStateFlow(true)
     val showMonthly = MutableStateFlow(true)
-    val showDemoEvents = MutableStateFlow(true) // Enables rich default demo calendar data if system calendar is empty
+    val showDemoEvents = MutableStateFlow(false) // Enables rich default demo calendar data if system calendar is empty
     
     // Split View (Slide-Up) Theme Preferences
     val startWeekOnMonday = MutableStateFlow(false)

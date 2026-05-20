@@ -62,6 +62,33 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
             }
         )
     }
+
+    // Dynamic states from live notification observer & media sessions
+    val trackTitle by MediaStateHolder.trackTitle.collectAsState()
+    val artistName by MediaStateHolder.artistName.collectAsState()
+    val isPlayingFlow by MediaStateHolder.isPlaying.collectAsState()
+    val albumArt by MediaStateHolder.albumArt.collectAsState()
+    val activeAppPackage by MediaStateHolder.activeAppPackage.collectAsState()
+
+    // Query active application metadata
+    val appInfo = remember(activeAppPackage) {
+        if (activeAppPackage != null) {
+            try {
+                val pm = context.packageManager
+                val info = pm.getApplicationInfo(activeAppPackage!!, 0)
+                val label = pm.getApplicationLabel(info).toString()
+                val icon = pm.getApplicationIcon(info)
+                label to icon
+            } catch (e: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+    }
+
+    val isCurrentlyPlaying = isPlayingFlow || isMusicActive
+
     var installedApps by remember { mutableStateOf<List<InstalledMusicApp>>(emptyList()) }
 
     val selectedColorIdx by standbyViewModel.colorPage3.collectAsState()
@@ -151,7 +178,7 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "System Music Controls",
+                text = "Music Player",
                 color = Color.White,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
@@ -274,7 +301,7 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
                 }
             }
 
-            if (isMusicActive) {
+            if (isCurrentlyPlaying) {
                 // Active State Display
                 Column(
                     modifier = Modifier
@@ -285,33 +312,82 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(120.dp)
+                            .size(140.dp)
                             .clip(CircleShape)
-                            .background(accentColor.copy(alpha = 0.2f)),
+                            .background(accentColor.copy(alpha = 0.12f))
+                            .border(3.dp, accentColor.copy(alpha = 0.5f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = "Active Playing",
-                            tint = accentColor,
-                            modifier = Modifier.size(60.dp)
-                        )
+                        if (albumArt != null) {
+                            Image(
+                                bitmap = albumArt!!.asImageBitmap(),
+                                contentDescription = "Album Art",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                            )
+                        } else {
+                            val appBitmap = remember(appInfo?.second) {
+                                try {
+                                    appInfo?.second?.toBitmap()?.asImageBitmap()
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            }
+                            if (appBitmap != null) {
+                                Image(
+                                    bitmap = appBitmap,
+                                    contentDescription = "App Icon",
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = "Active Playing",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(60.dp)
+                                )
+                            }
+                        }
                     }
                     
                     Spacer(modifier = Modifier.height(24.dp))
                     
                     Text(
-                        text = "Native Media Playing",
+                        text = trackTitle ?: "Unknown Track",
                         color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = customFont,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                     Text(
-                        text = "Controlling active background audio",
-                        color = Color.LightGray,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(top = 4.dp)
+                        text = artistName ?: "Unknown Artist",
+                        color = accentColor,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = customFont,
+                        modifier = Modifier.padding(top = 4.dp),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+
+                    if (appInfo != null) {
+                        Text(
+                            text = "Playing via ${appInfo.first}".uppercase(),
+                            color = Color.LightGray.copy(alpha = 0.6f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(32.dp))
 
@@ -341,7 +417,7 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
                                 .background(accentColor, CircleShape)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Pause, // Music is active, so show Pause
+                                imageVector = if (isPlayingFlow) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play/Pause Song",
                                 tint = if (accentColor == Color.White) Color.Black else Color.White,
                                 modifier = Modifier.size(36.dp)

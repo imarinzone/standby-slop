@@ -92,11 +92,36 @@ fun TimerPage(
 // Sub-Tab 0: Focus Pomodoro Timer
 @Composable
 fun FocusPomodoroTimer() {
+    var focusMinutes by remember { mutableStateOf(25) }
+    var currentSegmentIndex by remember { mutableStateOf(0) }
+    
+    fun getDurationForSegment(index: Int, focusMins: Int): Int {
+        return when (index) {
+            0, 2, 4, 6 -> focusMins * 60 // customizable focus
+            1, 3, 5 -> 5 * 60            // 5 minutes short break
+            7 -> 15 * 60                // 15 minutes long break
+            else -> focusMins * 60
+        }
+    }
+    
+    fun getSegmentLabel(index: Int): String {
+        return when (index) {
+            0 -> "Focus Period 1"
+            1 -> "Short Break"
+            2 -> "Focus Period 2"
+            3 -> "Short Break"
+            4 -> "Focus Period 3"
+            5 -> "Short Break"
+            6 -> "Focus Period 4"
+            7 -> "Long Break (Hike)"
+            else -> ""
+        }
+    }
+
     var initialSeconds by remember { mutableStateOf(1500) } // Default of 25 minutes
     var secondsLeft by remember { mutableStateOf(1500) }
     var isRunning by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
-    var completedCount by remember { mutableStateOf(0) }
     
     // Timer ticker loop
     LaunchedEffect(isRunning, secondsLeft) {
@@ -105,7 +130,10 @@ fun FocusPomodoroTimer() {
             secondsLeft -= 1
             if (secondsLeft == 0) {
                 isRunning = false
-                completedCount = (completedCount + 1) % 5
+                currentSegmentIndex = (currentSegmentIndex + 1) % 8
+                val nextDur = getDurationForSegment(currentSegmentIndex, focusMinutes)
+                initialSeconds = nextDur
+                secondsLeft = nextDur
             }
         }
     }
@@ -289,37 +317,62 @@ fun FocusPomodoroTimer() {
                             Icons.Default.Adjust to "P4", // Pomodoro 4
                             Icons.Default.DirectionsRun to "L" // Long break/Hiking trip!
                         ).forEachIndexed { index, (icon, label) ->
-                            val isCompleted = index < (completedCount * 2)
-                            val isCurrent = index == (completedCount * 2)
+                            val isCompleted = index < currentSegmentIndex
+                            val isCurrent = index == currentSegmentIndex
                             
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = label,
-                                tint = if (isCompleted) {
-                                    Color.White
-                                } else if (isCurrent) {
-                                    Color.White.copy(alpha = 0.9f)
-                                } else {
-                                    Color.White.copy(alpha = 0.35f)
-                                },
+                            Box(
                                 modifier = Modifier
-                                    .size(if (isCurrent) 26.dp else 22.dp)
-                                    .then(
-                                        if (isCurrent) Modifier.border(
-                                            1.dp,
-                                            Color.White,
-                                            CircleShape
-                                        ) else Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isCurrent) Color.White.copy(alpha = 0.15f)
+                                        else Color.Transparent
                                     )
-                            )
+                                    .then(
+                                        if (isCurrent) Modifier.border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape)
+                                        else Modifier
+                                    )
+                                    .clickable {
+                                        isRunning = false
+                                        currentSegmentIndex = index
+                                        val duration = getDurationForSegment(index, focusMinutes)
+                                        initialSeconds = duration
+                                        secondsLeft = duration
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label,
+                                    tint = if (isCurrent) {
+                                        Color.White
+                                    } else if (isCompleted) {
+                                        Color.White.copy(alpha = 0.7f)
+                                    } else {
+                                        Color.White.copy(alpha = 0.3f)
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
 
-                // Interactive Counter indicator string (as shown: 0/4 POMODOROS)
+                // Dynamic active phase label
                 Text(
-                    text = "${completedCount}/4 POMODOROS",
-                    color = Color.White.copy(alpha = 0.82f),
+                    text = getSegmentLabel(currentSegmentIndex).uppercase(),
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+
+                // Interactive Counter indicator string (as shown: 0/4 POMODOROS)
+                val focusCompletedCount = currentSegmentIndex / 2
+                Text(
+                    text = "$focusCompletedCount/4 POMODOROS DONE",
+                    color = Color.White.copy(alpha = 0.72f),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
@@ -332,25 +385,27 @@ fun FocusPomodoroTimer() {
     if (showConfigDialog) {
         AlertDialog(
             onDismissRequest = { showConfigDialog = false },
-            title = { Text("Configure Timer Length", color = Color.White) },
+            title = { Text("Configure Focus Length", color = Color.White) },
             containerColor = Color(0xFF1E293B),
             textContentColor = Color.White,
             text = {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Select a focus duration prefix", color = Color.LightGray, fontSize = 13.sp)
+                    Text("Select a focus duration for sessions:", color = Color.LightGray, fontSize = 13.sp)
                     listOf(15, 25, 45, 60).forEach { mins ->
-                        val isSel = initialSeconds == (mins * 60)
+                        val isSel = focusMinutes == mins
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = if (isSel) Color(0xFFE11D48) else Color(0xFF334155),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    initialSeconds = mins * 60
-                                    secondsLeft = initialSeconds
+                                    focusMinutes = mins
                                     isRunning = false
+                                    val nextDur = getDurationForSegment(currentSegmentIndex, mins)
+                                    initialSeconds = nextDur
+                                    secondsLeft = nextDur
                                     showConfigDialog = false
                                 }
                                 .padding(vertical = 4.dp)

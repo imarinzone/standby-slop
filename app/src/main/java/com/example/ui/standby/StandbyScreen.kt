@@ -436,7 +436,7 @@ fun TopAppBarOverlay(
     currentPage: Int,
     onPageSelected: (Int) -> Unit
 ) {
-    val labels = listOf("CLOCK", "ALARM (OFFLINE)", "CALENDAR", "MUSIC", "TIMER", "DUO")
+    val labels = listOf("CLOCK", "ALARM", "CALENDAR", "MUSIC", "TIMER", "DUO")
     
     Surface(
         color = Color.Black.copy(alpha = 0.7f),
@@ -518,7 +518,7 @@ fun StandbyCustomizationDialog(
 ) {
     var activeTab by remember { mutableStateOf(currentPage) }
 
-    val tabTitles = listOf("CLOCK FACE", "ALARM SYSTEM", "CALENDAR GRID", "MUSIC CONTROLLER", "TIMER FOCUS", "DUO WIDGETS")
+    val tabTitles = listOf("CLOCK FACE", "ALARM", "CALENDAR", "MUSIC PLAYER", "TIMER FOCUS", "DUO WIDGETS")
     val tabSubtitles = listOf("Main Display", "Alert Synchronization", "Monthly Calendar", "Media Playback", "Focus Tracking", "Split View Screens")
 
     val selectedColorIdx by viewModel.getColorFlow(activeTab).collectAsState()
@@ -1357,7 +1357,7 @@ fun AppOverviewLayout(
 
                     // Card 1: Alarm screen preview
                     OverviewPreviewCard(
-                        title = "02 | ALARM SYNC",
+                        title = "02 | ALARM",
                         accentColor = color1,
                         modifier = Modifier.weight(1f),
                         onClick = { onNavigateToPage(1) }
@@ -1384,7 +1384,7 @@ fun AppOverviewLayout(
 
                     // Card 2: Calendar screen preview
                     OverviewPreviewCard(
-                        title = "03 | CALENDAR INDEX",
+                        title = "03 | CALENDAR",
                         accentColor = color2,
                         modifier = Modifier.weight(1f),
                         onClick = { onNavigateToPage(2) }
@@ -1395,7 +1395,7 @@ fun AppOverviewLayout(
                             modifier = Modifier.fillMaxSize().padding(8.dp)
                         ) {
                             Text(
-                                text = "Device Calendar",
+                                text = "Calendar",
                                 color = color2,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
@@ -1416,7 +1416,7 @@ fun AppOverviewLayout(
                 ) {
                     // Card 3: Media control preview
                     OverviewPreviewCard(
-                        title = "04 | MUSIC DECKS",
+                        title = "04 | MUSIC PLAYER",
                         accentColor = color3,
                         modifier = Modifier.weight(1f),
                         onClick = { onNavigateToPage(3) }
@@ -1427,7 +1427,7 @@ fun AppOverviewLayout(
                             modifier = Modifier.fillMaxSize().padding(8.dp)
                         ) {
                             Text(
-                                text = "System Music",
+                                text = "Music Player",
                                 color = color3,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold

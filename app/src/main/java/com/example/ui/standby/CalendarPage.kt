@@ -132,7 +132,7 @@ fun CalendarPage(
                         fontFamily = customFont
                     )
                     Text(
-                        text = "Device Calendar Decks",
+                        text = "Calendar",
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -197,7 +197,7 @@ fun CalendarPage(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "CALENDAR FILTER DECK",
+                            text = "CALENDAR FILTER",
                             color = accentColor,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -234,28 +234,7 @@ fun CalendarPage(
                             )
                         }
 
-                        Divider(color = Color.White.copy(alpha = 0.05f), thickness = 0.5.dp)
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Show Realistic Demo Schedules",
-                                color = Color.LightGray,
-                                fontSize = 11.sp
-                            )
-                            Switch(
-                                checked = showDemoEventsVal,
-                                onCheckedChange = { viewModel.showDemoEvents.value = it },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.Black,
-                                    checkedTrackColor = accentColor
-                                ),
-                                modifier = Modifier.scale(0.8f)
-                            )
-                        }
                     }
                 }
             }
@@ -284,7 +263,7 @@ fun CalendarPage(
                         fontFamily = customFont
                     )
                     Text(
-                        text = "This app synchronizes native events to maintain beautiful standby screens. Grant access below or toggle 'Show Demo Schedules' in options.",
+                        text = "This app synchronizes native events to maintain beautiful standby screens. Grant access below to view your calendar details.",
                         color = Color.Gray,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center,
@@ -348,8 +327,8 @@ fun CalendarPage(
                     }
                 } else {
                     LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(vertical = 20.dp, horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(events, key = { it.id }) { event ->
@@ -877,7 +856,7 @@ fun SplitMonthTheme(
 
                             // Theme Split panel layouts Config
                             Column(modifier = Modifier.weight(1.5f)) {
-                                Text("LEFT DECK DISPLAY", color = Color.Gray, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                Text("LEFT DISPLAY", color = Color.Gray, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     PresetSelectTag(
@@ -1141,59 +1120,107 @@ fun LocalEventItem(
 ) {
     val startFormat = remember { SimpleDateFormat("EEE, MMM dd 'at' hh:mm a", Locale.getDefault()) }
     val endFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
-    val allDayFormat = remember { SimpleDateFormat("EEE, MMM dd (All Day)", Locale.getDefault()) }
+    val allDayFormat = remember { SimpleDateFormat("EEE, MMM dd '(All Day)'", Locale.getDefault()) }
+
+    // Parse day of month & day abbreviation from the event start date
+    val eventDate = remember(event.dtStart) { Date(event.dtStart) }
+    val dayNum = remember(event.dtStart) { SimpleDateFormat("d", Locale.getDefault()).format(eventDate) }
+    val dayName = remember(event.dtStart) { SimpleDateFormat("EEE", Locale.getDefault()).format(eventDate).uppercase() }
 
     val formattedTime = if (event.allDay) {
-        allDayFormat.format(Date(event.dtStart))
+        "All Day"
     } else {
-        val startStr = startFormat.format(Date(event.dtStart))
+        val startStr = startFormat.format(eventDate)
         val endStr = endFormat.format(Date(event.dtEnd))
         "$startStr - $endStr"
     }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    // Dynamic bar colors to mimic the image's vibrant, high-fidelity variety
+    val barColor = remember(event.title, event.category, accentColor) {
+        val code = event.title.hashCode()
+        val absCode = if (code < 0) -code else code
+        val colors = listOf(
+            Color(0xFF38BDF8), // Sky/Light Blue (Matches Niten Singh's birthday)
+            Color(0xFF34D399), // Emerald/Mint (Matches Bakrid tentative)
+            Color(0xFFFB923C), // Orange
+            Color(0xFFC084FC), // Lavender / Purple
+            Color(0xFFF472B6)  // Muted Rose Pink
+        )
+        // Let event type/category have priority colors or choose from randomized list
+        when (event.category.lowercase()) {
+            "holiday" -> Color(0xFF34D399) // Emerald Mint
+            "birthday" -> Color(0xFF38BDF8) // Sky blue
+            else -> colors[absCode % colors.size]
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = event.title, 
-                    color = Color.White, 
-                    fontWeight = FontWeight.SemiBold, 
-                    fontFamily = customFont,
-                    fontSize = 18.sp,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(accentColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = event.category.uppercase(),
-                        color = accentColor,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(6.dp))
+        // Date indicator block on far left (matching screenshot style)
+        Column(
+            modifier = Modifier.width(68.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(
-                text = formattedTime, 
-                color = Color(0xFF94A3B8),
+                text = dayNum,
+                color = Color.White,
+                fontSize = 42.sp,
+                fontWeight = FontWeight.Bold,
                 fontFamily = customFont,
-                fontSize = 13.sp
+                lineHeight = 42.sp
             )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = dayName,
+                color = Color(0xFF94A3B8),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.5.sp,
+                fontFamily = customFont
+            )
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        // Vertical colored status bar
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(44.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(barColor)
+        )
+
+        Spacer(modifier = Modifier.width(20.dp))
+
+        // Event information details
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = event.title,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = customFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = formattedTime,
+                color = Color(0xFF94A3B8),
+                fontSize = 13.sp,
+                fontFamily = customFont
+            )
+
             if (!event.eventLocation.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
@@ -1203,27 +1230,18 @@ fun LocalEventItem(
                     Icon(
                         imageVector = Icons.Default.Place,
                         contentDescription = "Location",
-                        tint = accentColor,
+                        tint = barColor.copy(alpha = 0.7f),
                         modifier = Modifier.size(12.dp)
                     )
                     Text(
-                        text = event.eventLocation, 
-                        color = accentColor, 
+                        text = event.eventLocation,
+                        color = barColor.copy(alpha = 0.8f),
                         fontFamily = customFont,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-            }
-            if (!event.description.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = event.description, 
-                    color = Color(0xFFCBD5E1),
-                    fontFamily = customFont,
-                    fontSize = 13.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }
