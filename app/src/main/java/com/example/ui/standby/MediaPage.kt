@@ -46,7 +46,15 @@ data class InstalledMusicApp(
 fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel = viewModel()) {
     val context = LocalContext.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
-    var isMusicActive by remember { mutableStateOf(audioManager?.isMusicActive == true) }
+    var isMusicActive by remember {
+        mutableStateOf(
+            try {
+                audioManager?.isMusicActive == true
+            } catch (e: Exception) {
+                false
+            }
+        )
+    }
     var installedApps by remember { mutableStateOf<List<InstalledMusicApp>>(emptyList()) }
 
     val selectedColorIdx by standbyViewModel.colorPage3.collectAsState()
@@ -56,13 +64,21 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
 
     // Query installed music apps
     LaunchedEffect(Unit) {
-        installedApps = getInstalledMusicApps(context)
+        installedApps = try {
+            getInstalledMusicApps(context)
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     // Monitor playback activity
     LaunchedEffect(Unit) {
         while (true) {
-            isMusicActive = audioManager?.isMusicActive == true
+            isMusicActive = try {
+                audioManager?.isMusicActive == true
+            } catch (e: Exception) {
+                false
+            }
             delay(1000)
         }
     }

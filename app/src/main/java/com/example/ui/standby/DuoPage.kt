@@ -2,6 +2,7 @@ package com.example.ui.standby
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.provider.AlarmClock
 import android.view.KeyEvent
@@ -39,7 +40,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -62,7 +67,7 @@ fun DuoPage(
     Row(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070B11)),
+            .background(Color.Black),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // LEFT HALF PANELS
@@ -70,7 +75,6 @@ fun DuoPage(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .padding(end = 4.dp)
         ) {
             VerticalPager(
                 state = leftPagerState,
@@ -121,22 +125,12 @@ fun DuoPage(
             }
         }
 
-        // Dividers / Trim Panel border in between
+        // Soft, ultra-subtle vertical separator in between to keep a clean, modern aesthetic
         Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(2.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.White.copy(alpha = 0.15f),
-                            Color.White.copy(alpha = 0.25f),
-                            Color.White.copy(alpha = 0.15f),
-                            Color.Transparent
-                        )
-                    )
-                )
+                .width(1.dp)
+                .background(Color.White.copy(alpha = 0.04f))
         )
 
         // RIGHT HALF PANELS
@@ -144,7 +138,6 @@ fun DuoPage(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .padding(start = 4.dp)
         ) {
             VerticalPager(
                 state = rightPagerState,
@@ -208,26 +201,31 @@ fun WidgetContainer(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F19))
-            .padding(16.dp)
+            .background(Color.Black) // AMOLED True Black Background
+            .padding(
+                start = if (isLeft) 12.dp else 4.dp,
+                end = if (isLeft) 4.dp else 12.dp,
+                top = 12.dp,
+                bottom = 12.dp
+            )
     ) {
-        // Background Glow matching widget types
+        // High-contrast subtle ambient glow for premium AMOLED vibes
         val ambientBrush = when (pageIndex) {
-            0 -> Brush.radialGradient(colors = listOf(Color(0xFF1D4ED8).copy(alpha = 0.08f), Color.Transparent)) // Clock blue
-            1 -> Brush.radialGradient(colors = listOf(Color(0xFFE11D48).copy(alpha = 0.08f), Color.Transparent)) // Alarm Red
-            2 -> Brush.radialGradient(colors = listOf(Color(0xFF0D9488).copy(alpha = 0.08f), Color.Transparent)) // Calendar Teal
-            3 -> Brush.radialGradient(colors = listOf(Color(0xFF8B5CF6).copy(alpha = 0.08f), Color.Transparent)) // Music Violet
-            else -> Brush.radialGradient(colors = listOf(Color(0xFFEA580C).copy(alpha = 0.08f), Color.Transparent)) // Timer Amber
+            0 -> Brush.radialGradient(colors = listOf(Color(0xFF3B82F6).copy(alpha = 0.04f), Color.Transparent)) // Clock blue
+            1 -> Brush.radialGradient(colors = listOf(Color(0xFFEF4444).copy(alpha = 0.04f), Color.Transparent)) // Alarm Red
+            2 -> Brush.radialGradient(colors = listOf(Color(0xFF10B981).copy(alpha = 0.04f), Color.Transparent)) // Calendar Teal
+            3 -> Brush.radialGradient(colors = listOf(Color(0xFF8B5CF6).copy(alpha = 0.04f), Color.Transparent)) // Music Violet
+            else -> Brush.radialGradient(colors = listOf(Color(0xFFF97316).copy(alpha = 0.04f), Color.Transparent)) // Timer Amber
         }
         
         Box(modifier = Modifier.fillMaxSize().background(ambientBrush))
 
         Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF151D2A).copy(alpha = 0.65f)),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF080A0D)), // Ultra-deep slate near-black
             modifier = Modifier
                 .fillMaxSize()
-                .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
+                .border(0.5.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // Header Bar showing current active module
@@ -482,6 +480,7 @@ fun DuoAlarmWidget(viewModel: StandbyViewModel) {
 }
 
 // 2. Duo Calendar: Agenda items scrollable widget list
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun DuoCalendarWidget(
     calendarViewModel: CalendarViewModel,
@@ -492,11 +491,82 @@ fun DuoCalendarWidget(
     val selectedColorIdx by standbyViewModel.colorPage2.collectAsState()
     val accentColor = standbyViewModel.colors[selectedColorIdx].first
 
-    LaunchedEffect(Unit) {
-        calendarViewModel.loadLocalEvents(context)
+    val calendarPermissionState = rememberPermissionState(
+        android.Manifest.permission.READ_CALENDAR
+    )
+
+    var hasCalendarPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.READ_CALENDAR
+            ) == PackageManager.PERMISSION_GRANTED
+        )
     }
 
-    if (events.isEmpty()) {
+    LaunchedEffect(calendarPermissionState.status.isGranted) {
+        hasCalendarPermission = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_CALENDAR
+        ) == PackageManager.PERMISSION_GRANTED || calendarPermissionState.status.isGranted
+        if (hasCalendarPermission) {
+            calendarViewModel.loadLocalEvents(context)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        hasCalendarPermission = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_CALENDAR
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasCalendarPermission) {
+            calendarViewModel.loadLocalEvents(context)
+        }
+    }
+
+    if (!hasCalendarPermission) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize().padding(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Event,
+                contentDescription = null,
+                tint = Color.DarkGray,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Calendar Locked",
+                color = Color.LightGray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                "Access is required",
+                color = Color.Gray,
+                fontSize = 8.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { calendarPermissionState.launchPermissionRequest() },
+                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                modifier = Modifier.height(24.dp)
+            ) {
+                Text(
+                    "GRANT ACCESS",
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (accentColor == Color.White) Color.Black else Color.White
+                )
+            }
+        }
+    } else if (events.isEmpty()) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -584,7 +654,15 @@ fun DuoCalendarWidget(
 fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
     val context = LocalContext.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
-    var isPlaying by remember { mutableStateOf(audioManager?.isMusicActive == true) }
+    var isPlaying by remember {
+        mutableStateOf(
+            try {
+                audioManager?.isMusicActive == true
+            } catch (e: Exception) {
+                false
+            }
+        )
+    }
     
     val selectedColorIdx by standbyViewModel.colorPage3.collectAsState()
     val accentColor = standbyViewModel.colors[selectedColorIdx].first
@@ -592,7 +670,11 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
     // Periodic check to keep system alarm status accurate on view resume/active
     LaunchedEffect(Unit) {
         while (true) {
-            isPlaying = audioManager?.isMusicActive == true
+            isPlaying = try {
+                audioManager?.isMusicActive == true
+            } catch (e: Exception) {
+                false
+            }
             delay(1000)
         }
     }

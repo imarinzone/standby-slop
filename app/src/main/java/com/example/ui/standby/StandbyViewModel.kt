@@ -70,20 +70,24 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun updateNextAlarm() {
-        val app = getApplication<Application>()
-        val alarmManager = app.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-        val nextAlarm = alarmManager?.nextAlarmClock
-        if (nextAlarm != null) {
-            val triggerTime = nextAlarm.triggerTime
-            val calendar = Calendar.getInstance().apply { timeInMillis = triggerTime }
-            val is24Hour = DateFormat.is24HourFormat(app)
-            val pattern = if (is24Hour) "EEE HH:mm" else "EEE h:mm a"
-            val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-            _nextSystemAlarm.value = sdf.format(calendar.time)
-        } else {
+        try {
+            val app = getApplication<Application>()
+            val alarmManager = app.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            val nextAlarm = alarmManager?.nextAlarmClock
+            if (nextAlarm != null) {
+                val triggerTime = nextAlarm.triggerTime
+                val calendar = Calendar.getInstance().apply { timeInMillis = triggerTime }
+                val is24Hour = DateFormat.is24HourFormat(app)
+                val pattern = if (is24Hour) "EEE HH:mm" else "EEE h:mm a"
+                val sdf = SimpleDateFormat(pattern, Locale.getDefault())
+                _nextSystemAlarm.value = sdf.format(calendar.time)
+            } else {
+                _nextSystemAlarm.value = "No Alarm"
+            }
+        } catch (e: Exception) {
             _nextSystemAlarm.value = "No Alarm"
+            android.util.Log.e("StandbyViewModel", "Failed to update next system alarm status", e)
         }
-        android.util.Log.d("StandbyViewModel", "Updated next system alarm status: ${_nextSystemAlarm.value}")
     }
 
     val selectedColorIndex = MutableStateFlow(0)

@@ -1,5 +1,7 @@
 package com.example.ui.standby
 
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,8 +43,31 @@ fun CalendarPage(
         android.Manifest.permission.READ_CALENDAR
     )
 
+    var hasCalendarPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.READ_CALENDAR
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
     LaunchedEffect(calendarPermissionState.status.isGranted) {
-        if (calendarPermissionState.status.isGranted) {
+        hasCalendarPermission = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_CALENDAR
+        ) == PackageManager.PERMISSION_GRANTED || calendarPermissionState.status.isGranted
+        if (hasCalendarPermission) {
+            viewModel.loadLocalEvents(context)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        hasCalendarPermission = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_CALENDAR
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasCalendarPermission) {
             viewModel.loadLocalEvents(context)
         }
     }
@@ -61,7 +86,7 @@ fun CalendarPage(
                     fontWeight = FontWeight.Bold,
                     fontFamily = customFont
                 )
-                if (calendarPermissionState.status.isGranted) {
+                if (hasCalendarPermission) {
                     Button(
                         onClick = { viewModel.loadLocalEvents(context) },
                         colors = ButtonDefaults.buttonColors(containerColor = accentColor)
@@ -71,7 +96,7 @@ fun CalendarPage(
                 }
             }
             
-            if (!calendarPermissionState.status.isGranted) {
+            if (!hasCalendarPermission) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
