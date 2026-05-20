@@ -89,6 +89,10 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
         )
     }
 
+    var isNotificationListenerGranted by remember {
+        mutableStateOf(isNotificationListenerEnabled(context))
+    }
+
     LaunchedEffect(notificationPermissionState?.status?.isGranted) {
         if (Build.VERSION.SDK_INT >= 33) {
             hasNotificationPermission = (androidx.core.content.ContextCompat.checkSelfPermission(
@@ -117,13 +121,20 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
         }
     }
 
-    // Monitor playback activity
+    // Monitor playback activity & permissions periodic sync
     LaunchedEffect(Unit) {
         while (true) {
             isMusicActive = try {
                 audioManager?.isMusicActive == true
             } catch (e: Exception) {
                 false
+            }
+            isNotificationListenerGranted = isNotificationListenerEnabled(context)
+            if (Build.VERSION.SDK_INT >= 33) {
+                hasNotificationPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
             }
             delay(1000)
         }
@@ -148,8 +159,64 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Dynamic notification permission card for SDK >= 33
-            if (!hasNotificationPermission && Build.VERSION.SDK_INT >= 33) {
+            // Dynamic special notification access card (highest priority)
+            if (!isNotificationListenerGranted) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(accentColor.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Special Notification Access Required",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Enable Notification Sync settings to let Standby recognize and control active music applications.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Button(
+                            onClick = { openNotificationListenerSettings(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                            modifier = Modifier.defaultMinSize(minHeight = 1.dp)
+                        ) {
+                            Text(
+                                "Grant Access",
+                                color = if (accentColor == Color.White) Color.Black else Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            } else if (!hasNotificationPermission && Build.VERSION.SDK_INT >= 33) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
                     shape = RoundedCornerShape(16.dp),
@@ -480,5 +547,41 @@ private fun sendMediaCommand(context: Context, keyCode: Int) {
         }
     } catch (e: Exception) {
         e.printStackTrace()
+    }
+}
+
+private fun isNotificationListenerEnabled(context: Context): Boolean {
+    val pkgName = context.packageName
+    val flat = android.provider.Settings.Secure.getString(
+        context.contentResolver,
+        "enabled_notification_listeners"
+    )
+    if (!flat.isNullOrEmpty()) {
+        val names = flat.split(":")
+        for (name in names) {
+            val cn = android.content.ComponentName.unflattenFromString(name)
+            if (cn != null && cn.packageName == pkgName) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+private fun openNotificationListenerSettings(context: Context) {
+    try {
+        val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        try {
+            val intent = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (ex: Exception) {
+            android.util.Log.e("MediaPage", "Failed to open settings pages", ex)
+        }
     }
 }

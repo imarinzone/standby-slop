@@ -81,16 +81,21 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         android.util.Log.d(TAG, "onResume: Standby screen active and visible")
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_POWER_CONNECTED)
-            addAction(Intent.ACTION_POWER_DISCONNECTED)
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_POWER_CONNECTED)
+                addAction(Intent.ACTION_POWER_DISCONNECTED)
+            }
+            androidx.core.content.ContextCompat.registerReceiver(
+                this,
+                powerStateReceiver,
+                filter,
+                androidx.core.content.ContextCompat.RECEIVER_EXPORTED
+            )
+            android.util.Log.d(TAG, "onResume: powerStateReceiver registered successfully")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "onResume: Failed to register powerStateReceiver due to permission/platform constraint", e)
         }
-        androidx.core.content.ContextCompat.registerReceiver(
-            this,
-            powerStateReceiver,
-            filter,
-            androidx.core.content.ContextCompat.RECEIVER_EXPORTED
-        )
     }
 
     override fun onPause() {

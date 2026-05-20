@@ -1046,6 +1046,155 @@ fun StandbyCustomizationDialog(
                             }
                         }
 
+                        // Calendar Display Preferences (Only for activeTab == 2)
+                        if (activeTab == 2) {
+                            val calendarViewModel: CalendarViewModel = viewModel()
+                            val showDaily by calendarViewModel.showDaily.collectAsState()
+                            val showWeekly by calendarViewModel.showWeekly.collectAsState()
+                            val showMonthly by calendarViewModel.showMonthly.collectAsState()
+                            
+                            val startOnMon by calendarViewModel.startWeekOnMonday.collectAsState()
+                            val showDots by calendarViewModel.showEventDots.collectAsState()
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF0C111D))
+                                    .border(1.dp, Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    Text(
+                                        "CALENDAR CATEGORY FILTERS",
+                                        color = pageColor,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.2.sp
+                                    )
+
+                                    // Daily toggles
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("Show Daily Events", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("Shows schedules listed on current day", color = Color.Gray, fontSize = 9.sp)
+                                        }
+                                        Switch(
+                                            checked = showDaily,
+                                            onCheckedChange = { calendarViewModel.showDaily.value = it },
+                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                        )
+                                    }
+
+                                    // Weekly toggles
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("Show Weekly Events", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("Shows schedules starting in the next 7 days", color = Color.Gray, fontSize = 9.sp)
+                                        }
+                                        Switch(
+                                            checked = showWeekly,
+                                            onCheckedChange = { calendarViewModel.showWeekly.value = it },
+                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                        )
+                                    }
+
+                                    // Monthly toggles
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("Show Monthly Events", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("Shows future events further than a week ahead", color = Color.Gray, fontSize = 9.sp)
+                                        }
+                                        Switch(
+                                            checked = showMonthly,
+                                            onCheckedChange = { calendarViewModel.showMonthly.value = it },
+                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "THEME & DISPLAY SETUP",
+                                        color = pageColor,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.2.sp
+                                    )
+
+                                    // Week Starters
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("Start Week On Monday", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("Changes grid start layout of monthly themes", color = Color.Gray, fontSize = 9.sp)
+                                        }
+                                        Switch(
+                                            checked = startOnMon,
+                                            onCheckedChange = { calendarViewModel.startWeekOnMonday.value = it },
+                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                        )
+                                    }
+
+                                    // Indicators dot
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("Show Event Day Dots", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("Draws small markers below day cells with scheduled events", color = Color.Gray, fontSize = 9.sp)
+                                        }
+                                        Switch(
+                                            checked = showDots,
+                                            onCheckedChange = { calendarViewModel.showEventDots.value = it },
+                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // Distraction-Free theme for EVERY relevant customization tab
                         Box(
                             modifier = Modifier

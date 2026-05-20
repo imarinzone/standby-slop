@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
-import android.provider.AlarmClock
 import android.view.KeyEvent
 import android.os.Build
 import androidx.compose.animation.*
@@ -405,15 +404,9 @@ private fun getWeatherCodeDesc(code: Int): String {
 // 1. Duo Alarm widget: Large high-contrast neon list card of next alarm
 @Composable
 fun DuoAlarmWidget(viewModel: StandbyViewModel) {
-    val context = LocalContext.current
     val nextSystemAlarm by viewModel.nextSystemAlarm.collectAsState()
     val selectedColorIdx by viewModel.colorPage1.collectAsState()
     val accentColor = viewModel.colors[selectedColorIdx].first
-
-    // Auto update
-    LaunchedEffect(Unit) {
-        viewModel.updateNextAlarm()
-    }
 
     val hasAlarm = nextSystemAlarm != null && nextSystemAlarm != "No Alarm"
 
@@ -440,43 +433,19 @@ fun DuoAlarmWidget(viewModel: StandbyViewModel) {
         Text(
             text = nextSystemAlarm ?: "No Active Alarm",
             color = if (hasAlarm) Color.White else Color.DarkGray,
-            fontSize = 20.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 12.dp)
         )
-        Spacer(modifier = Modifier.height(10.dp))
-        
-        // Tap action to launch systems alarms directly inside split panel
-        Surface(
-            color = Color.White.copy(alpha = 0.05f),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier
-                .clickable {
-                    try {
-                        val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        android.util.Log.e("DuoPage", "Launch alarm fail", e)
-                    }
-                }
-                .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.OpenInNew,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(10.dp)
-                )
-                Text("OPEN ALARMS", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Configure & customize in the full Alarms tab.",
+            color = Color.Gray.copy(alpha = 0.4f),
+            fontSize = 9.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 12.dp)
+        )
     }
 }
 

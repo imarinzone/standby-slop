@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.text.format.DateFormat
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.AndroidViewModel
@@ -17,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -34,61 +34,6 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
 
     private val _nextSystemAlarm = MutableStateFlow<String?>("No Alarm")
     val nextSystemAlarm: StateFlow<String?> = _nextSystemAlarm
-
-    private val alarmReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            android.util.Log.d("StandbyViewModel", "onReceive: System alarm status changed!")
-            updateNextAlarm()
-        }
-    }
-
-    init {
-        updateNextAlarm()
-        val filter = IntentFilter(AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                application.registerReceiver(alarmReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                application.registerReceiver(alarmReceiver, filter)
-            }
-        } catch (e: Exception) {
-            try {
-                application.registerReceiver(alarmReceiver, filter)
-            } catch (ex: Exception) {
-                android.util.Log.e("StandbyViewModel", "Failed to register alarm changer receiver", ex)
-            }
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        try {
-            getApplication<Application>().unregisterReceiver(alarmReceiver)
-        } catch (e: Exception) {
-            android.util.Log.e("StandbyViewModel", "Failed to unregister alarm receiver on cleared", e)
-        }
-    }
-
-    fun updateNextAlarm() {
-        try {
-            val app = getApplication<Application>()
-            val alarmManager = app.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-            val nextAlarm = alarmManager?.nextAlarmClock
-            if (nextAlarm != null) {
-                val triggerTime = nextAlarm.triggerTime
-                val calendar = Calendar.getInstance().apply { timeInMillis = triggerTime }
-                val is24Hour = DateFormat.is24HourFormat(app)
-                val pattern = if (is24Hour) "EEE HH:mm" else "EEE h:mm a"
-                val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-                _nextSystemAlarm.value = sdf.format(calendar.time)
-            } else {
-                _nextSystemAlarm.value = "No Alarm"
-            }
-        } catch (e: Exception) {
-            _nextSystemAlarm.value = "No Alarm"
-            android.util.Log.e("StandbyViewModel", "Failed to update next system alarm status", e)
-        }
-    }
 
     val selectedColorIndex = MutableStateFlow(0)
     val selectedFontIndex = MutableStateFlow(0)
@@ -131,6 +76,68 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     val use24HourFormat = MutableStateFlow(false) // default to 12-hour or false for user choice, let's look at standard default
     val showAmPm = MutableStateFlow(true)
     val showSeconds = MutableStateFlow(true)
+
+    init {
+        // Automatically re-calculate our custom next alarm whenever the list or time format preferences change
+        viewModelScope.launch {
+            combine(alarms, use24HourFormat) { _, _ -> }.collect {
+                updateNextAlarm()
+            }
+        }
+    }
+
+    fun updateNextAlarm() {
+        try {
+            val currentAlarms = alarms.value
+            val is24Hr = use24HourFormat.value
+            val enabledAlarms = currentAlarms.filter { it.isEnabled }
+            if (enabledAlarms.isEmpty()) {
+                _nextSystemAlarm.value = "No Alarm"
+                return
+            }
+            
+            val now = Calendar.getInstance()
+            var soonestAlarm: Alarm? = null
+            var soonestDiff = Long.MAX_VALUE
+            
+            for (alarm in enabledAlarms) {
+                val alarmCal = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, alarm.hour)
+                    set(Calendar.MINUTE, alarm.minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                if (alarmCal.before(now)) {
+                    alarmCal.add(Calendar.DAY_OF_YEAR, 1)
+                }
+                val diff = alarmCal.timeInMillis - now.timeInMillis
+                if (diff < soonestDiff) {
+                    soonestDiff = diff
+                    soonestAlarm = alarm
+                }
+            }
+            
+            if (soonestAlarm != null) {
+                val displayCal = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, soonestAlarm.hour)
+                    set(Calendar.MINUTE, soonestAlarm.minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                if (displayCal.before(now)) {
+                    displayCal.add(Calendar.DAY_OF_YEAR, 1)
+                }
+                val formatter = SimpleDateFormat(if (is24Hr) "HH:mm" else "h:mm a", Locale.getDefault())
+                val prefix = if (displayCal.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)) "Today " else "Tom. "
+                _nextSystemAlarm.value = "$prefix${formatter.format(displayCal.time)} (${soonestAlarm.label})"
+            } else {
+                _nextSystemAlarm.value = "No Alarm"
+            }
+        } catch (e: Exception) {
+            _nextSystemAlarm.value = "No Alarm"
+            android.util.Log.e("StandbyViewModel", "Failed to update local next alarm status", e)
+        }
+    }
 
     fun setUse24HourFormat(use24Hour: Boolean) {
         use24HourFormat.value = use24Hour
@@ -272,16 +279,23 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         scalePage0.value = scale
     }
         
-    fun addAlarm(hour: Int, minute: Int, label: String, snooze: Int) {
+    fun addAlarm(hour: Int, minute: Int, label: String, snooze: Int, toneUri: String = "alarm_beep") {
         viewModelScope.launch {
             db.alarmDao().insert(
                 Alarm(
                     hour = hour,
                     minute = minute,
                     label = label,
-                    snoozeMinutes = snooze
+                    snoozeMinutes = snooze,
+                    toneUri = toneUri
                 )
             )
+        }
+    }
+    
+    fun updateAlarm(alarm: Alarm) {
+        viewModelScope.launch {
+            db.alarmDao().update(alarm)
         }
     }
     
