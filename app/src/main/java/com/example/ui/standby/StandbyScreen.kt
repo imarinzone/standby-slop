@@ -6,6 +6,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -436,203 +438,459 @@ fun StandbyCustomizationDialog(
     currentPage: Int,
     onDismiss: () -> Unit
 ) {
-    val selectedColorIdx by viewModel.getColorFlow(currentPage).collectAsState()
-    val selectedFontIdx by viewModel.getFontFlow(currentPage).collectAsState()
-    val showWeatherVal by viewModel.getWeatherFlow(currentPage).collectAsState()
-    val clockScaleVal by viewModel.getScaleFlow(currentPage).collectAsState()
-    val animationsEnabledVal by viewModel.getAnimFlow(currentPage).collectAsState()
+    var activeTab by remember { mutableStateOf(currentPage) }
 
-    AlertDialog(
+    val tabTitles = listOf("CLOCK FACE", "ALARM SYSTEM", "CALENDAR GRID", "MUSIC CONTROLLER", "TIMER FOCUS", "DUO WIDGETS")
+    val tabSubtitles = listOf("Main Display", "Alert Synchronization", "Monthly Calendar", "Media Playback", "Focus Tracking", "Split View Screens")
+
+    val selectedColorIdx by viewModel.getColorFlow(activeTab).collectAsState()
+    val selectedFontIdx by viewModel.getFontFlow(activeTab).collectAsState()
+    val showWeatherVal by viewModel.getWeatherFlow(activeTab).collectAsState()
+    val clockScaleVal by viewModel.getScaleFlow(activeTab).collectAsState()
+    val animationsEnabledVal by viewModel.getAnimFlow(activeTab).collectAsState()
+
+    val pageColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color.Green
+
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Customize ${listOf("Clock", "Alarm", "Calendar", "Music", "Timer").getOrElse(currentPage) { "Timer" }} Screen",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
-            )
-        },
-        containerColor = Color(0xFF1E293B),
-        textContentColor = Color.White,
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Color selection
-                Column {
-                    Text(
-                        "Interface Color Accent",
-                        color = Color.LightGray,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(bottom = 8.dp)
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF070B13))
+                .systemBarsPadding()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.radialGradient(
+                            colors = listOf(pageColor.copy(alpha = 0.08f), Color.Transparent),
+                            center = androidx.compose.ui.geometry.Offset(200f, 200f),
+                            radius = 600f
+                        )
                     )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // LEFT COLUMN: SIDEBAR SELECTOR
+                Column(
+                    modifier = Modifier
+                        .width(280.dp)
+                        .fillMaxHeight()
+                        .background(Color(0xFF0C111D))
+                        .padding(20.dp)
+                ) {
+                    Text(
+                        text = "STUDIO HUB",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 2.sp
+                    )
+                    Text(
+                        text = "PREFERENCES & THEMING",
+                        color = pageColor,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        modifier = Modifier.padding(bottom = 20.dp)
+                    )
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        viewModel.colors.forEachIndexed { index, (color, name) ->
-                            val isSelected = index == selectedColorIdx
+                        tabTitles.forEachIndexed { idx, title ->
+                            val isSelected = activeTab == idx
+                            val tabAccent = viewModel.colors[viewModel.getColorFlow(idx).collectAsState().value].first
+                            val borderWidth = if (isSelected) 1.5.dp else 1.dp
+                            val borderColor = if (isSelected) tabAccent.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.05f)
+                            
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .border(
-                                        width = if (isSelected) 3.dp else 0.dp,
-                                        color = if (isSelected) Color.White else Color.Transparent,
-                                        shape = CircleShape
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isSelected) tabAccent.copy(alpha = 0.12f)
+                                        else Color.Transparent
                                     )
-                                    .clickable { viewModel.setColorIndexForPage(currentPage, index) },
-                                contentAlignment = Alignment.Center
-                              ) {
-                                if (isSelected) {
+                                    .border(
+                                        width = borderWidth,
+                                        color = borderColor,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { activeTab = idx }
+                                    .padding(vertical = 10.dp, horizontal = 12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = title,
+                                            color = if (isSelected) Color.White else Color.Gray,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        Text(
+                                            text = tabSubtitles[idx],
+                                            color = if (isSelected) tabAccent.copy(alpha = 0.7f) else Color.DarkGray,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    
                                     Box(
                                         modifier = Modifier
-                                            .size(8.dp)
+                                            .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(Color.Black)
+                                            .background(tabAccent)
                                     )
                                 }
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Customizations apply automatically across active Standby screens.",
+                        color = Color.DarkGray,
+                        fontSize = 9.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
-                // Font style selection
-                Column {
-                    Text(
-                        "Typography Style",
-                        color = Color.LightGray,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                Spacer(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(Color.White.copy(alpha = 0.05f))
+                )
+
+                // RIGHT COLUMN: SETTINGS DECK
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(horizontal = 32.dp, vertical = 20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        viewModel.fonts.forEachIndexed { index, (fontFamily, name) ->
-                            val isSelected = index == selectedFontIdx
-                            Button(
-                                onClick = { viewModel.setFontIndexForPage(currentPage, index) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isSelected) viewModel.colors[selectedColorIdx].first else Color(0xFF334155),
-                                    contentColor = if (isSelected && viewModel.colors[selectedColorIdx].first == Color.White) Color.Black else Color.White
-                                ),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(end = 8.dp)
+                                        .background(pageColor, RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "0${activeTab + 1}",
+                                        color = if (pageColor == Color.White) Color.Black else Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                                 Text(
-                                    text = name,
-                                    fontFamily = fontFamily,
-                                    fontSize = 13.sp
+                                    text = tabTitles[activeTab],
+                                    color = Color.White,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                            Text(
+                                text = "Adjust dynamic layout styles and accents below",
+                                color = Color.Gray,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = pageColor,
+                                contentColor = if (pageColor == Color.White) Color.Black else Color.White
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = "Apply & Close",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Card 1: Colors selection
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF0C111D))
+                                .border(1.dp, Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                                .padding(16.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = "INTERFACE COLOR ACCENT",
+                                    color = pageColor,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.2.sp,
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    viewModel.colors.forEachIndexed { index, (color, name) ->
+                                        val isSelected = index == selectedColorIdx
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.clickable {
+                                                viewModel.setColorIndexForPage(activeTab, index)
+                                            }
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(38.dp)
+                                                    .clip(CircleShape)
+                                                    .background(color)
+                                                    .border(
+                                                        width = if (isSelected) 2.5.dp else 1.dp,
+                                                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.1f),
+                                                        shape = CircleShape
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (isSelected) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(Color.Black)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = name.split(" ").lastOrNull() ?: "",
+                                                color = if (isSelected) Color.White else Color.Gray,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Card 2: Font selection
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF0C111D))
+                                .border(1.dp, Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                                .padding(16.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = "TYPOGRAPHY STYLE",
+                                    color = pageColor,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.2.sp,
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    viewModel.fonts.forEachIndexed { index, (fontFamily, name) ->
+                                        val isSelected = index == selectedFontIdx
+                                        Button(
+                                            onClick = { viewModel.setFontIndexForPage(activeTab, index) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (isSelected) pageColor else Color(0x0FFFFFFF),
+                                                contentColor = if (isSelected) {
+                                                    if (pageColor == Color.White) Color.Black else Color.White
+                                                } else Color.LightGray
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = name,
+                                                fontFamily = fontFamily,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Clock Scales and Weather (Only for Clock system tab 0 or Duo widgets tab 5)
+                        if (activeTab == 0 || activeTab == 5) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF0C111D))
+                                    .border(1.dp, Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    if (activeTab == 0) {
+                                        Column {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "CLOCK DISPLAY SCALE Size",
+                                                    color = pageColor,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 1.2.sp
+                                                )
+                                                Text(
+                                                    text = String.format("%.1fx", clockScaleVal),
+                                                    color = Color.White,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Slider(
+                                                value = clockScaleVal,
+                                                onValueChange = { viewModel.setClockScaleForPage(activeTab, it) },
+                                                valueRange = 0.8f..1.8f,
+                                                modifier = Modifier.padding(top = 2.dp),
+                                                colors = SliderDefaults.colors(
+                                                    thumbColor = pageColor,
+                                                    activeTrackColor = pageColor,
+                                                    inactiveTrackColor = Color.White.copy(alpha = 0.05f)
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    // Show weather option
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                "Show Live Temperature Info",
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                "Overlays current weather metrics on compatible layouts",
+                                                color = Color.Gray,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+                                        Switch(
+                                            checked = showWeatherVal,
+                                            onCheckedChange = { viewModel.setShowWeatherForPage(activeTab, it) },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = Color.Black,
+                                                checkedTrackColor = pageColor
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Distraction-Free theme for EVERY relevant customization tab
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF0C111D))
+                                .border(1.dp, Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                                .padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "DISTRACTION-FREE THEME",
+                                        color = pageColor,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.2.sp,
+                                        modifier = Modifier.padding(bottom = 2.dp)
+                                    )
+                                    Text(
+                                        text = "Calms down ticking seconds trackers & decorative details",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Highly recommended for deep focus/dark spaces to clean motion noise",
+                                        color = Color.Gray,
+                                        fontSize = 9.sp
+                                    )
+                                }
+                                Switch(
+                                    checked = !animationsEnabledVal,
+                                    onCheckedChange = { isDistractionFree ->
+                                        viewModel.setAnimationsEnabledForPage(activeTab, !isDistractionFree)
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.Black,
+                                        checkedTrackColor = pageColor
+                                    )
                                 )
                             }
                         }
                     }
                 }
-
-                // Clock scale selection (Only applicable on actual Clock page)
-                if (currentPage == 0) {
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Clock Display Size",
-                                color = Color.LightGray,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = String.format("%.1fx", clockScaleVal),
-                                color = viewModel.colors[selectedColorIdx].first,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Slider(
-                            value = clockScaleVal,
-                            onValueChange = { viewModel.setClockScaleForPage(currentPage, it) },
-                            valueRange = 0.8f..1.8f,
-                            modifier = Modifier.padding(top = 4.dp),
-                            colors = SliderDefaults.colors(
-                                thumbColor = viewModel.colors[selectedColorIdx].first,
-                                activeTrackColor = viewModel.colors[selectedColorIdx].first
-                            )
-                        )
-                    }
-
-                    // Show weather toggle
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF334155))
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (showWeatherVal) Icons.Default.Cloud else Icons.Default.CloudOff,
-                                contentDescription = "Weather Widget Toggle",
-                                tint = Color.White
-                            )
-                            Text("Show Weather Info", color = Color.White, fontSize = 15.sp)
-                        }
-                        Switch(
-                            checked = showWeatherVal,
-                            onCheckedChange = { viewModel.setShowWeatherForPage(currentPage, it) }
-                        )
-                    }
-                }
-
-                // Animation removal for distraction-free theme setting
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF334155))
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Distraction-Free Theme", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Removes ticking seconds tracker & animations", color = Color.LightGray, fontSize = 11.sp)
-                    }
-                    Switch(
-                        checked = !animationsEnabledVal,
-                        onCheckedChange = { isDistractionFree ->
-                            viewModel.setAnimationsEnabledForPage(currentPage, !isDistractionFree)
-                        }
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = viewModel.colors[selectedColorIdx].first)
-            ) {
-                Text(
-                    "Apply",
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (viewModel.colors[selectedColorIdx].first == Color.White) Color.Black else Color.White
-                )
             }
         }
-    )
+    }
 }
 
 @Composable

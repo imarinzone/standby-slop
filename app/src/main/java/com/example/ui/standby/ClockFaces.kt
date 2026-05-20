@@ -74,10 +74,10 @@ fun ClockFaceRenderer(
                 4 -> BinaryStyle(currentTime, customColor, customFont, clockScaleValue)
                 5 -> ModernBoldTextClock(currentTime, customColor, customFont, clockScaleValue)
                 6 -> LargeSidebarClock(currentTime, customColor, customFont, nextSystemAlarm, clockScaleValue)
-                7 -> ContrastingSplitClock(currentTime, customFont, clockScaleValue)
+                7 -> ContrastingSplitClock(currentTime, customColor, customFont, clockScaleValue)
                 8 -> AnalogDashboard(currentTime, customColor, customFont, clockScaleValue, animsEnabled)
-                9 -> BubblePastelClock(currentTime, customFont, clockScaleValue)
-                10 -> AmbientGradientClock(currentTime, customFont, clockScaleValue)
+                9 -> BubblePastelClock(currentTime, customColor, customFont, clockScaleValue)
+                10 -> AmbientGradientClock(currentTime, customColor, customFont, clockScaleValue)
             }
         }
         
@@ -465,7 +465,7 @@ fun BinaryStyle(calendar: Calendar, color: Color, fontFamily: FontFamily, scale:
             softWrap = false,
             style = androidx.compose.ui.text.TextStyle(
                 color = Color.White,
-                fontSize = (42 * scale).sp, // Significantly increased font size as requested
+                fontSize = (52 * scale).sp, // Increased font size for superior landscape visibility
                 fontWeight = FontWeight.Bold,
                 fontFamily = fontFamily,
                 textAlign = TextAlign.Center,
@@ -645,7 +645,7 @@ class DiagonalSplitShape : Shape {
 }
 
 @Composable
-fun ContrastingSplitClock(calendar: Calendar, fontFamily: FontFamily, scale: Float = 1.0f) {
+fun ContrastingSplitClock(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
     val format = SimpleDateFormat("HH:mm", Locale.getDefault())
     val timeText = format.format(calendar.time)
 
@@ -657,7 +657,7 @@ fun ContrastingSplitClock(calendar: Calendar, fontFamily: FontFamily, scale: Flo
     ) {
         Text(
             text = timeText,
-            color = Color.White,
+            color = color,
             fontSize = (150 * scale).sp,
             fontWeight = FontWeight.ExtraBold,
             fontFamily = fontFamily,
@@ -668,7 +668,7 @@ fun ContrastingSplitClock(calendar: Calendar, fontFamily: FontFamily, scale: Flo
             modifier = Modifier
                 .fillMaxSize()
                 .clip(DiagonalSplitShape())
-                .background(Color.White),
+                .background(color),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -888,7 +888,7 @@ fun AnalogDashboard(calendar: Calendar, color: Color, fontFamily: FontFamily, sc
 }
 
 @Composable
-fun BubblePastelClock(calendar: Calendar, fontFamily: FontFamily, scale: Float = 1.0f) {
+fun BubblePastelClock(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
     val hh = SimpleDateFormat("h", Locale.getDefault()).format(calendar.time)
     val mm = SimpleDateFormat("mm", Locale.getDefault()).format(calendar.time)
     
@@ -905,15 +905,15 @@ fun BubblePastelClock(calendar: Calendar, fontFamily: FontFamily, scale: Float =
         Spacer(modifier = Modifier.weight(1f))
         
         hourDigits.forEachIndexed { idx, digit ->
-            val color = if (hourDigits.size == 1) Color(0xFFFBC4C4) else {
-                if (idx == 0) Color(0xFFFBC4C4) else Color(0xFFE2C6FF)
+            val digitColor = if (hourDigits.size == 1) color else {
+                if (idx == 0) color else color.copy(alpha = 0.85f)
             }
-            BubbleDigit(digit, color, fontFamily, scale)
+            BubbleDigit(digit, digitColor, fontFamily, scale)
         }
 
         Text(
             text = ":",
-            color = Color(0xFFDCD6CD),
+            color = color.copy(alpha = 0.5f),
             fontSize = (110 * scale).sp,
             fontWeight = FontWeight.Black,
             fontFamily = fontFamily,
@@ -921,8 +921,8 @@ fun BubblePastelClock(calendar: Calendar, fontFamily: FontFamily, scale: Float =
         )
 
         minuteDigits.forEachIndexed { idx, digit ->
-            val color = if (idx == 0) Color(0xFFC5E0FF) else Color(0xFFFFF2CC)
-            BubbleDigit(digit, color, fontFamily, scale)
+            val digitColor = if (idx == 0) color.copy(alpha = 0.7f) else color.copy(alpha = 0.6f)
+            BubbleDigit(digit, digitColor, fontFamily, scale)
         }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -953,13 +953,13 @@ fun BubbleDigit(digit: String, color: Color, fontFamily: FontFamily, scale: Floa
 }
 
 @Composable
-fun AmbientGradientClock(calendar: Calendar, fontFamily: FontFamily, scale: Float = 1.0f) {
+fun AmbientGradientClock(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
     val format = SimpleDateFormat("H:mm", Locale.getDefault())
     val gradientBrush = androidx.compose.ui.graphics.Brush.linearGradient(
         colors = listOf(
-            Color(0xFF2E3D2E),
-            Color(0xFF4C5E45),
-            Color(0xFF7F8F63)
+            color.copy(alpha = 0.25f),
+            color.copy(alpha = 0.45f),
+            Color.Black
         )
     )
     Box(
@@ -970,7 +970,7 @@ fun AmbientGradientClock(calendar: Calendar, fontFamily: FontFamily, scale: Floa
     ) {
         Text(
             text = format.format(calendar.time),
-            color = Color(0xFFCCFF88).copy(alpha = 0.65f),
+            color = color.copy(alpha = 0.85f),
             fontSize = (140 * scale).sp,
             fontWeight = FontWeight.ExtraBold,
             fontFamily = fontFamily,

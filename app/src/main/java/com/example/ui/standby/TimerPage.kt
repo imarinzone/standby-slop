@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 // Page index 4: Standby Timer & Stopwatch Screen
@@ -38,67 +41,49 @@ fun TimerPage(
     viewModel: StandbyViewModel,
     modifier: Modifier = Modifier
 ) {
-    var selectedSubTab by remember { mutableStateOf(0) } // 0 = POMODORO, 1 = STOPWATCH
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val coroutineScope = rememberCoroutineScope()
     
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Render corresponding theme subpages
-        AnimatedContent(
-            targetState = selectedSubTab,
-            transitionSpec = {
-                if (targetState > initialState) {
-                    (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
-                        slideOutHorizontally { width -> -width } + fadeOut()
-                    )
-                } else {
-                    (slideInHorizontally { width -> -width } + fadeIn()).togetherWith(
-                        slideOutHorizontally { width -> width } + fadeOut()
-                    )
-                }.using(SizeTransform(clip = false))
-            },
-            label = "TimerSubTabTransition"
-        ) { tab ->
-            when (tab) {
+        // Vertical Pager supporting dragging/swiping up and down
+        VerticalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            when (page) {
                 0 -> FocusPomodoroTimer()
                 1 -> HighTechStopwatch()
             }
         }
 
-        // Sub-Tab Switcher at the top right/center depending on orientation
-        Surface(
-            color = Color.Black.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(12.dp),
+        // Minimalist vertical dots indicator on the right edge of the screen
+        Column(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 16.dp, end = 24.dp)
-                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                .align(Alignment.CenterEnd)
+                .padding(end = 16.dp)
+                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier.padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                val tabs = listOf("Focus Timer", "Stopwatch")
-                tabs.forEachIndexed { index, label ->
-                    val isSelected = selectedSubTab == index
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent)
-                            .clickable { selectedSubTab = index }
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = label,
-                            color = if (isSelected) Color.White else Color.Gray,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+            for (i in 0 until 2) {
+                val isSelected = pagerState.currentPage == i
+                Box(
+                    modifier = Modifier
+                        .size(if (isSelected) 10.dp else 6.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.35f))
+                        .clickable {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(i)
+                            }
+                        }
+                )
             }
         }
     }

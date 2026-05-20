@@ -300,7 +300,7 @@ fun RenderDuoWidget(
         1 -> DuoAlarmWidget(viewModel)
         2 -> DuoCalendarWidget(calendarViewModel, viewModel)
         3 -> DuoMusicWidget(viewModel)
-        4 -> DuoTimerWidget()
+        4 -> DuoTimerWidget(viewModel)
     }
 }
 
@@ -704,7 +704,10 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
 
 // 4. Duo Timer: Interactive countdown Focus block and split stopwatch
 @Composable
-fun DuoTimerWidget() {
+fun DuoTimerWidget(viewModel: StandbyViewModel) {
+    val selectedColorIdx by viewModel.colorPage4.collectAsState()
+    val accentColor = viewModel.colors[selectedColorIdx].first
+
     var isRunning by remember { mutableStateOf(false) }
     var secondsLeft by remember { mutableStateOf(1500) } // Standard 25 mins
 
@@ -739,7 +742,7 @@ fun DuoTimerWidget() {
                     style = Stroke(width = 3.dp.toPx())
                 )
                 drawArc(
-                    color = Color(0xFFF97316),
+                    color = accentColor,
                     startAngle = -90f,
                     sweepAngle = 360f * ratio,
                     useCenter = false,
