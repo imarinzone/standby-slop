@@ -127,6 +127,23 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     val animPage3 = MutableStateFlow(true)
     val animPage4 = MutableStateFlow(true)
 
+    // Clock general options (12/24 hour, AM/PM visibility, Seconds visibility)
+    val use24HourFormat = MutableStateFlow(false) // default to 12-hour or false for user choice, let's look at standard default
+    val showAmPm = MutableStateFlow(true)
+    val showSeconds = MutableStateFlow(true)
+
+    fun setUse24HourFormat(use24Hour: Boolean) {
+        use24HourFormat.value = use24Hour
+    }
+
+    fun setShowAmPm(show: Boolean) {
+        showAmPm.value = show
+    }
+
+    fun setShowSeconds(show: Boolean) {
+        showSeconds.value = show
+    }
+
     fun getColorFlow(page: Int): MutableStateFlow<Int> {
         return when (page) {
             0 -> colorPage0

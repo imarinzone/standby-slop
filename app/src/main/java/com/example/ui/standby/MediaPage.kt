@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.view.KeyEvent
+import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.delay
 
 data class InstalledMusicApp(
@@ -42,6 +48,7 @@ data class InstalledMusicApp(
     val icon: android.graphics.drawable.Drawable?
 )
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel = viewModel()) {
     val context = LocalContext.current
@@ -61,6 +68,45 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
     val selectedFontIdx by standbyViewModel.fontPage3.collectAsState()
     val accentColor = standbyViewModel.colors[selectedColorIdx].first
     val customFont = standbyViewModel.fonts[selectedFontIdx].first
+
+    // Notification Permission Handling for Android 13+
+    val notificationPermissionState = if (Build.VERSION.SDK_INT >= 33) {
+        rememberPermissionState(android.Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        null
+    }
+
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= 33) {
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    LaunchedEffect(notificationPermissionState?.status?.isGranted) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            hasNotificationPermission = (androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED) ||
+                    (notificationPermissionState?.status?.isGranted == true)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            hasNotificationPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+    }
 
     // Query installed music apps
     LaunchedEffect(Unit) {
@@ -101,6 +147,65 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
                 fontFamily = customFont,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+
+            // Dynamic notification permission card for SDK >= 33
+            if (!hasNotificationPermission && Build.VERSION.SDK_INT >= 33) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(accentColor.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Notification Permission Recommended",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Allows the display to sync accurately with active media players.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Button(
+                            onClick = { notificationPermissionState?.launchPermissionRequest() },
+                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                            modifier = Modifier.defaultMinSize(minHeight = 1.dp)
+                        ) {
+                            Text(
+                                "Grant",
+                                color = if (accentColor == Color.White) Color.Black else Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
 
             if (isMusicActive) {
                 // Active State Display

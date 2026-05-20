@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.provider.AlarmClock
 import android.view.KeyEvent
+import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -650,6 +651,7 @@ fun DuoCalendarWidget(
 }
 
 // 3. Duo Music Widget: Spinning vinyl disc and compact playback controllers
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
     val context = LocalContext.current
@@ -666,6 +668,45 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
     
     val selectedColorIdx by standbyViewModel.colorPage3.collectAsState()
     val accentColor = standbyViewModel.colors[selectedColorIdx].first
+
+    // Notification permission setup
+    val notificationPermissionState = if (Build.VERSION.SDK_INT >= 33) {
+        rememberPermissionState(android.Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        null
+    }
+
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= 33) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    LaunchedEffect(notificationPermissionState?.status?.isGranted) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            hasNotificationPermission = (ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED) ||
+                    (notificationPermissionState?.status?.isGranted == true)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            hasNotificationPermission = ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
 
     // Periodic check to keep system alarm status accurate on view resume/active
     LaunchedEffect(Unit) {
@@ -695,90 +736,134 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
         }
     }
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.weight(1f)
+    if (!hasNotificationPermission && Build.VERSION.SDK_INT >= 33) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize().padding(8.dp)
         ) {
-            // Spinning Classic Record Disk
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black)
-                    .border(2.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                    .rotate(rotationAngle.value),
-                contentAlignment = Alignment.Center
+            Icon(
+                imageVector = Icons.Default.Notifications,
+                contentDescription = null,
+                tint = Color.DarkGray,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Notifications Setup",
+                color = Color.LightGray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Permit playback status sync",
+                color = Color.Gray,
+                fontSize = 8.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { notificationPermissionState?.launchPermissionRequest() },
+                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                modifier = Modifier.height(24.dp)
             ) {
-                // Draws circles representing ridges on record disk
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawCircle(color = Color.DarkGray.copy(alpha = 0.8f), radius = size.minDimension / 2.3f, style = Stroke(width = 1.dp.toPx()))
-                    drawCircle(color = Color.DarkGray.copy(alpha = 0.5f), radius = size.minDimension / 3.4f, style = Stroke(width = 1.dp.toPx()))
-                    drawCircle(color = accentColor, radius = size.minDimension / 6f)
-                }
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(Color(0xFF151D2A), CircleShape)
-                )
-            }
-
-            // Media Title Metadata
-            Column {
                 Text(
-                    text = if (isPlaying) "Streaming Track..." else "Media Paused",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "System Deck Output",
-                    color = Color.Gray,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium
+                    "GRANT",
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (accentColor == Color.White) Color.Black else Color.White
                 )
             }
         }
-
-        // Action Deck buttons
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+    } else {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            IconButton(
-                onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
-                modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.05f), CircleShape)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                // Spinning Classic Record Disk
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black)
+                        .border(2.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+                        .rotate(rotationAngle.value),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Draws circles representing ridges on record disk
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawCircle(color = Color.DarkGray.copy(alpha = 0.8f), radius = size.minDimension / 2.3f, style = Stroke(width = 1.dp.toPx()))
+                        drawCircle(color = Color.DarkGray.copy(alpha = 0.5f), radius = size.minDimension / 3.4f, style = Stroke(width = 1.dp.toPx()))
+                        drawCircle(color = accentColor, radius = size.minDimension / 6f)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(Color(0xFF151D2A), CircleShape)
+                    )
+                }
+
+                // Media Title Metadata
+                Column {
+                    Text(
+                        text = if (isPlaying) "Streaming Track..." else "Media Paused",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "System Deck Output",
+                        color = Color.Gray,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
 
-            IconButton(
-                onClick = { 
-                    triggerMediaKey(context, if (isPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY)
-                    isPlaying = !isPlaying
-                },
-                modifier = Modifier.size(44.dp).background(accentColor, CircleShape)
+            // Action Deck buttons
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = "Toggle",
-                    tint = if (accentColor == Color.White) Color.Black else Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+                IconButton(
+                    onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
+                    modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.05f), CircleShape)
+                ) {
+                    Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                }
 
-            IconButton(
-                onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
-                modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.05f), CircleShape)
-            ) {
-                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                IconButton(
+                    onClick = { 
+                        triggerMediaKey(context, if (isPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY)
+                        isPlaying = !isPlaying
+                    },
+                    modifier = Modifier.size(44.dp).background(accentColor, CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = "Toggle",
+                        tint = if (accentColor == Color.White) Color.Black else Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
+                    modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.05f), CircleShape)
+                ) {
+                    Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                }
             }
         }
     }

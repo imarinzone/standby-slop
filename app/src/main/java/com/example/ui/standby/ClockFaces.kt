@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -53,6 +54,10 @@ fun ClockFaceRenderer(
     val nextSystemAlarm by standbyViewModel.nextSystemAlarm.collectAsState()
     val clockScaleValue by standbyViewModel.scalePage0.collectAsState()
     val animsEnabled by standbyViewModel.animPage0.collectAsState()
+    
+    val use24Hour by standbyViewModel.use24HourFormat.collectAsState()
+    val showAmPm by standbyViewModel.showAmPm.collectAsState()
+    val showSeconds by standbyViewModel.showSeconds.collectAsState()
 
     val customColor = standbyViewModel.colors[selectedColorIdx].first
     val customFont = standbyViewModel.fonts[selectedFontIdx].first
@@ -66,18 +71,19 @@ fun ClockFaceRenderer(
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            when (themeIndex % 11) {
-                0 -> DigitalMinimal(currentTime, customColor, customFont, clockScaleValue, animsEnabled)
-                1 -> AnalogClassic(currentTime, customColor, clockScaleValue, animsEnabled)
-                2 -> DigitalNeon(currentTime, customColor, customFont, clockScaleValue)
-                3 -> RetroFlip(currentTime, customColor, customFont, clockScaleValue)
-                4 -> BinaryStyle(currentTime, customColor, customFont, clockScaleValue)
-                5 -> ModernBoldTextClock(currentTime, customColor, customFont, clockScaleValue)
-                6 -> LargeSidebarClock(currentTime, customColor, customFont, nextSystemAlarm, clockScaleValue)
-                7 -> ContrastingSplitClock(currentTime, customColor, customFont, clockScaleValue)
-                8 -> AnalogDashboard(currentTime, customColor, customFont, clockScaleValue, animsEnabled)
-                9 -> BubblePastelClock(currentTime, customColor, customFont, clockScaleValue)
-                10 -> AmbientGradientClock(currentTime, customColor, customFont, clockScaleValue)
+            when (themeIndex % 12) {
+                0 -> DigitalMinimal(currentTime, customColor, customFont, clockScaleValue, animsEnabled, use24Hour, showAmPm, showSeconds)
+                1 -> AnalogClassic(currentTime, customColor, clockScaleValue, animsEnabled, showSeconds)
+                2 -> DigitalNeon(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                3 -> RetroFlip(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                4 -> BinaryStyle(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                5 -> ModernBoldTextClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                6 -> LargeSidebarClock(currentTime, customColor, customFont, nextSystemAlarm, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                7 -> ContrastingSplitClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                8 -> AnalogDashboard(currentTime, customColor, customFont, clockScaleValue, animsEnabled, showSeconds)
+                9 -> BubblePastelClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                10 -> AmbientGradientClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                11 -> NixieTubeClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
             }
         }
         
@@ -98,10 +104,19 @@ fun ClockFaceRenderer(
 }
 
 @Composable
-fun DigitalMinimal(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f, animationsEnabled: Boolean = true) {
-    val format = remember(animationsEnabled) {
-        if (animationsEnabled) SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-        else SimpleDateFormat("HH:mm", Locale.getDefault())
+fun DigitalMinimal(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f, 
+    animationsEnabled: Boolean = true,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
+    val format = remember(use24Hour, showAmPm, showSeconds) {
+        val pattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
+        SimpleDateFormat(pattern, Locale.getDefault())
     }
     Text(
         text = format.format(calendar.time),
@@ -113,10 +128,10 @@ fun DigitalMinimal(calendar: Calendar, color: Color, fontFamily: FontFamily, sca
 }
 
 @Composable
-fun AnalogClassic(calendar: Calendar, color: Color, scale: Float = 1.0f, animationsEnabled: Boolean = true) {
+fun AnalogClassic(calendar: Calendar, color: Color, scale: Float = 1.0f, animationsEnabled: Boolean = true, showSeconds: Boolean = true) {
     val hour = calendar.get(Calendar.HOUR)
     val minute = calendar.get(Calendar.MINUTE)
-    val second = if (animationsEnabled) calendar.get(Calendar.SECOND) else 0
+    val second = if (animationsEnabled && showSeconds) calendar.get(Calendar.SECOND) else 0
 
     Canvas(modifier = Modifier.size((300 * scale).dp)) {
         val cx = size.width / 2
@@ -166,8 +181,19 @@ fun AnalogClassic(calendar: Calendar, color: Color, scale: Float = 1.0f, animati
 }
 
 @Composable
-fun DigitalNeon(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
-    val format = SimpleDateFormat("HH:mm", Locale.getDefault())
+fun DigitalNeon(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
+    val format = remember(use24Hour, showAmPm, showSeconds) {
+        val pattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
+        SimpleDateFormat(pattern, Locale.getDefault())
+    }
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -248,14 +274,25 @@ fun FuturisticTech(calendar: Calendar, color: Color, fontFamily: FontFamily) {
 }
 
 @Composable
-fun RetroFlip(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
-    val formatH = SimpleDateFormat("HH", Locale.getDefault())
-    val formatM = SimpleDateFormat("mm", Locale.getDefault())
-    val boxWidth = (165 * scale).dp
-    val boxHeight = (185 * scale).dp
-    val fontSize = (110 * scale).sp
-    val cornerRadius = (16 * scale).dp
-    val spacing = (20 * scale).dp
+fun RetroFlip(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
+    val hourText = SimpleDateFormat(if (use24Hour) "HH" else "hh", Locale.getDefault()).format(calendar.time)
+    val minuteText = SimpleDateFormat("mm", Locale.getDefault()).format(calendar.time)
+    val secondText = SimpleDateFormat("ss", Locale.getDefault()).format(calendar.time)
+    val amPmText = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
+
+    val boxWidth = (if (showSeconds) 120 * scale else 165 * scale).dp
+    val boxHeight = (if (showSeconds) 140 * scale else 185 * scale).dp
+    val fontSize = (if (showSeconds) 80 * scale else 110 * scale).sp
+    val cornerRadius = (if (showSeconds) 12 * scale else 16 * scale).dp
+    val spacing = (if (showSeconds) 12 * scale else 20 * scale).dp
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -263,7 +300,7 @@ fun RetroFlip(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: F
     ) {
         // Hour flap section
         FlipFlapCard(
-            text = formatH.format(calendar.time),
+            text = hourText,
             color = color,
             fontSize = fontSize,
             fontFamily = fontFamily,
@@ -274,7 +311,7 @@ fun RetroFlip(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: F
 
         // Minute flap section
         FlipFlapCard(
-            text = formatM.format(calendar.time),
+            text = minuteText,
             color = color,
             fontSize = fontSize,
             fontFamily = fontFamily,
@@ -282,6 +319,30 @@ fun RetroFlip(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: F
             boxHeight = boxHeight,
             cornerRadius = cornerRadius
         )
+
+        // Seconds flap section
+        if (showSeconds) {
+            FlipFlapCard(
+                text = secondText,
+                color = color.copy(alpha = 0.8f),
+                fontSize = fontSize * 0.85f,
+                fontFamily = fontFamily,
+                boxWidth = boxWidth * 0.85f,
+                boxHeight = boxHeight * 0.85f,
+                cornerRadius = cornerRadius * 0.85f
+            )
+        }
+
+        if (!use24Hour && showAmPm) {
+            Text(
+                text = amPmText,
+                color = color.copy(alpha = 0.6f),
+                fontSize = (24 * scale).sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = fontFamily,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
     }
 }
 
@@ -440,7 +501,15 @@ fun MatrixRainBackground(accentColor: Color) {
 }
 
 @Composable
-fun BinaryStyle(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
+fun BinaryStyle(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black),
         contentAlignment = Alignment.Center
@@ -454,9 +523,15 @@ fun BinaryStyle(calendar: Calendar, color: Color, fontFamily: FontFamily, scale:
                 .background(Color.Black.copy(alpha = 0.3f))
         )
         
-        val format = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val formatPattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
+        val format = SimpleDateFormat(formatPattern, Locale.getDefault())
         val text = format.format(calendar.time).map { char ->
-            if (char == ':') ":" else Integer.toBinaryString(char.toString().toInt()).padStart(4, '0')
+            when {
+                char == ':' -> ":"
+                char == ' ' -> " "
+                char.isDigit() -> Integer.toBinaryString(char.toString().toInt()).padStart(4, '0')
+                else -> char.toString()
+            }
         }.joinToString("  ") // Fully horizontal representation with generous space gaps
         
         Text(
@@ -481,7 +556,15 @@ fun BinaryStyle(calendar: Calendar, color: Color, fontFamily: FontFamily, scale:
 }
 
 @Composable
-fun ModernBoldTextClock(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
+fun ModernBoldTextClock(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
     val dayOfWeek = SimpleDateFormat("EEEE", Locale.getDefault()).format(calendar.time)
     val hourOfDay = calendar.get(Calendar.HOUR_OF_DAY)
     val periodName = when (hourOfDay) {
@@ -490,7 +573,8 @@ fun ModernBoldTextClock(calendar: Calendar, color: Color, fontFamily: FontFamily
         in 17..20 -> "Evening"
         else -> "Night"
     }
-    val timeStr = SimpleDateFormat("h:mm", Locale.getDefault()).format(calendar.time)
+    val timePattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "")
+    val timeStr = SimpleDateFormat(timePattern, Locale.getDefault()).format(calendar.time)
     val amPmStr = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
     val dateStr = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(calendar.time)
 
@@ -531,14 +615,16 @@ fun ModernBoldTextClock(calendar: Calendar, color: Color, fontFamily: FontFamily
                 fontFamily = fontFamily,
                 lineHeight = (90 * scale).sp
             )
-            Text(
-                text = amPmStr,
-                color = Color.DarkGray,
-                fontSize = (24 * scale).sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = fontFamily,
-                modifier = Modifier.padding(bottom = (12 * scale).dp, start = (6 * scale).dp)
-            )
+            if (!use24Hour && showAmPm) {
+                Text(
+                    text = amPmStr,
+                    color = Color.DarkGray,
+                    fontSize = (24 * scale).sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = fontFamily,
+                    modifier = Modifier.padding(bottom = (12 * scale).dp, start = (6 * scale).dp)
+                )
+            }
         }
         Text(
             text = dateStr,
@@ -553,8 +639,19 @@ fun ModernBoldTextClock(calendar: Calendar, color: Color, fontFamily: FontFamily
 }
 
 @Composable
-fun LargeSidebarClock(calendar: Calendar, color: Color, fontFamily: FontFamily, nextSystemAlarm: String?, scale: Float = 1.0f) {
-    val timeFormat = SimpleDateFormat("h:mm", Locale.getDefault())
+fun LargeSidebarClock(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    nextSystemAlarm: String?, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
+    val timePattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "")
+    val timeFormat = SimpleDateFormat(timePattern, Locale.getDefault())
+    val amPmFormat = SimpleDateFormat(" a", Locale.getDefault())
     val dayOfWeekAbbr = SimpleDateFormat("EEE", Locale.getDefault()).format(calendar.time).uppercase()
     val dayOfMonth = SimpleDateFormat("d", Locale.getDefault()).format(calendar.time)
     
@@ -568,10 +665,17 @@ fun LargeSidebarClock(calendar: Calendar, color: Color, fontFamily: FontFamily, 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
+        val timeStr = timeFormat.format(calendar.time)
+        val fullTimeText = if (!use24Hour && showAmPm) {
+            timeStr + amPmFormat.format(calendar.time)
+        } else {
+            timeStr
+        }
+
         Text(
-            text = timeFormat.format(calendar.time),
+            text = fullTimeText,
             color = color,
-            fontSize = (135 * scale).sp,
+            fontSize = (if (showSeconds || (!use24Hour && showAmPm)) 100 * scale else 135 * scale).sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = fontFamily,
             modifier = Modifier.weight(1f)
@@ -645,9 +749,19 @@ class DiagonalSplitShape : Shape {
 }
 
 @Composable
-fun ContrastingSplitClock(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
-    val format = SimpleDateFormat("HH:mm", Locale.getDefault())
+fun ContrastingSplitClock(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
+    val pattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
+    val format = SimpleDateFormat(pattern, Locale.getDefault())
     val timeText = format.format(calendar.time)
+    val actualFontSize = if (showSeconds || (!use24Hour && showAmPm)) 110 * scale else 150 * scale
 
     Box(
         modifier = Modifier
@@ -658,7 +772,7 @@ fun ContrastingSplitClock(calendar: Calendar, color: Color, fontFamily: FontFami
         Text(
             text = timeText,
             color = color,
-            fontSize = (150 * scale).sp,
+            fontSize = actualFontSize.sp,
             fontWeight = FontWeight.ExtraBold,
             fontFamily = fontFamily,
             letterSpacing = (-4 * scale).sp
@@ -674,7 +788,7 @@ fun ContrastingSplitClock(calendar: Calendar, color: Color, fontFamily: FontFami
             Text(
                 text = timeText,
                 color = Color.Black,
-                fontSize = (150 * scale).sp,
+                fontSize = actualFontSize.sp,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = fontFamily,
                 letterSpacing = (-4 * scale).sp
@@ -684,7 +798,7 @@ fun ContrastingSplitClock(calendar: Calendar, color: Color, fontFamily: FontFami
 }
 
 @Composable
-fun AnalogDashboard(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f, animationsEnabled: Boolean = true) {
+fun AnalogDashboard(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f, animationsEnabled: Boolean = true, showSeconds: Boolean = true) {
     val hour = calendar.get(Calendar.HOUR)
     val minute = calendar.get(Calendar.MINUTE)
     val second = calendar.get(Calendar.SECOND)
@@ -804,7 +918,7 @@ fun AnalogDashboard(calendar: Calendar, color: Color, fontFamily: FontFamily, sc
             )
 
             // Second Hand with Tail
-            if (animationsEnabled) {
+            if (animationsEnabled && showSeconds) {
                 val secAngle = Math.toRadians((second * 6).toDouble() - 90)
                 val secMainLength = size.height * 0.44f * scale
                 val secTailLength = 20.dp.toPx() * scale
@@ -888,15 +1002,28 @@ fun AnalogDashboard(calendar: Calendar, color: Color, fontFamily: FontFamily, sc
 }
 
 @Composable
-fun BubblePastelClock(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
-    val hh = SimpleDateFormat("h", Locale.getDefault()).format(calendar.time)
+fun BubblePastelClock(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
+    val hh = SimpleDateFormat(if (use24Hour) "HH" else "h", Locale.getDefault()).format(calendar.time)
     val mm = SimpleDateFormat("mm", Locale.getDefault()).format(calendar.time)
+    val ss = SimpleDateFormat("ss", Locale.getDefault()).format(calendar.time)
+    val amPmText = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
     
     val hourDigits = hh.map { it.toString() }
     val minuteDigits = mm.map { it.toString() }
+    val secondDigits = ss.map { it.toString() }
+
+    val actualScale = if (showSeconds) scale * 0.8f else scale
 
     Row(
-        horizontalArrangement = Arrangement.spacedBy((4 * scale).dp),
+        horizontalArrangement = Arrangement.spacedBy((4 * actualScale).dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxSize()
@@ -908,21 +1035,47 @@ fun BubblePastelClock(calendar: Calendar, color: Color, fontFamily: FontFamily, 
             val digitColor = if (hourDigits.size == 1) color else {
                 if (idx == 0) color else color.copy(alpha = 0.85f)
             }
-            BubbleDigit(digit, digitColor, fontFamily, scale)
+            BubbleDigit(digit, digitColor, fontFamily, actualScale)
         }
 
         Text(
             text = ":",
             color = color.copy(alpha = 0.5f),
-            fontSize = (110 * scale).sp,
+            fontSize = (110 * actualScale).sp,
             fontWeight = FontWeight.Black,
             fontFamily = fontFamily,
-            modifier = Modifier.padding(horizontal = (4 * scale).dp)
+            modifier = Modifier.padding(horizontal = (4 * actualScale).dp)
         )
 
         minuteDigits.forEachIndexed { idx, digit ->
             val digitColor = if (idx == 0) color.copy(alpha = 0.7f) else color.copy(alpha = 0.6f)
-            BubbleDigit(digit, digitColor, fontFamily, scale)
+            BubbleDigit(digit, digitColor, fontFamily, actualScale)
+        }
+
+        if (showSeconds) {
+            Text(
+                text = ":",
+                color = color.copy(alpha = 0.4f),
+                fontSize = (90 * actualScale).sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = fontFamily,
+                modifier = Modifier.padding(horizontal = (4 * actualScale).dp)
+            )
+            secondDigits.forEachIndexed { idx, digit ->
+                val digitColor = if (idx == 0) color.copy(alpha = 0.5f) else color.copy(alpha = 0.45f)
+                BubbleDigit(digit, digitColor, fontFamily, actualScale)
+            }
+        }
+
+        if (!use24Hour && showAmPm) {
+            Text(
+                text = " " + amPmText.uppercase(),
+                color = color.copy(alpha = 0.5f),
+                fontSize = (20 * actualScale).sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = fontFamily,
+                modifier = Modifier.padding(start = (6 * actualScale).dp)
+            )
         }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -953,8 +1106,17 @@ fun BubbleDigit(digit: String, color: Color, fontFamily: FontFamily, scale: Floa
 }
 
 @Composable
-fun AmbientGradientClock(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f) {
-    val format = SimpleDateFormat("H:mm", Locale.getDefault())
+fun AmbientGradientClock(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
+    val pattern = (if (use24Hour) "H" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
+    val format = SimpleDateFormat(pattern, Locale.getDefault())
     val gradientBrush = androidx.compose.ui.graphics.Brush.linearGradient(
         colors = listOf(
             color.copy(alpha = 0.25f),
@@ -983,5 +1145,335 @@ fun AmbientGradientClock(calendar: Calendar, color: Color, fontFamily: FontFamil
                 )
             )
         )
+    }
+}
+
+@Composable
+fun NixieTubeClock(
+    calendar: Calendar, 
+    color: Color, 
+    fontFamily: FontFamily, 
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    showAmPm: Boolean = true,
+    showSeconds: Boolean = true
+) {
+    val hh = SimpleDateFormat(if (use24Hour) "HH" else "h", Locale.getDefault()).format(calendar.time)
+    val mm = SimpleDateFormat("mm", Locale.getDefault()).format(calendar.time)
+    val ss = SimpleDateFormat("ss", Locale.getDefault()).format(calendar.time)
+    val amPmText = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
+    
+    val hourDigits = hh.padStart(if (use24Hour) 2 else 1, ' ').map { it.toString() }
+    val minuteDigits = mm.map { it.toString() }
+    val secondDigits = ss.map { it.toString() }
+
+    val actualScale = if (showSeconds) scale * 0.75f else scale
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Main container for the tubes
+        Box(
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            // Tubes Row
+            Row(
+                horizontalArrangement = Arrangement.spacedBy((6 * actualScale).dp),
+                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.padding(bottom = (10 * actualScale).dp)
+            ) {
+                // Hour tubes
+                hourDigits.forEach { digit ->
+                    if (digit == " ") {
+                        NixieDigitTube("0", color.copy(alpha = 0.05f), fontFamily, actualScale, isDimmed = true)
+                    } else {
+                        NixieDigitTube(digit, color, fontFamily, actualScale, isDimmed = false)
+                    }
+                }
+
+                // Colon
+                NixieColon(color, actualScale, isTicking = true)
+
+                // Minute tubes
+                minuteDigits.forEach { digit ->
+                    NixieDigitTube(digit, color, fontFamily, actualScale, isDimmed = false)
+                }
+
+                // Colon & Seconds
+                if (showSeconds) {
+                    NixieColon(color, actualScale, isTicking = true)
+                    secondDigits.forEach { digit ->
+                        NixieDigitTube(digit, color, fontFamily, actualScale, isDimmed = false)
+                    }
+                }
+
+                // AM/PM Tube
+                if (!use24Hour && showAmPm) {
+                    Box(
+                        modifier = Modifier
+                            .width((56 * actualScale).dp)
+                            .height((110 * actualScale).dp)
+                            .padding(horizontal = (2 * actualScale).dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape((28 * actualScale).dp))
+                                .background(Color.White.copy(alpha = 0.02f))
+                                .border(
+                                    width = (1 * actualScale).dp,
+                                    color = Color.White.copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape((28 * actualScale).dp)
+                                )
+                        )
+                        Text(
+                            text = amPmText,
+                            color = color,
+                            fontSize = (22 * actualScale).sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily,
+                            textAlign = TextAlign.Center,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = color.copy(alpha = 0.7f),
+                                    offset = Offset(0f, 0f),
+                                    blurRadius = (10 * actualScale)
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+            
+            // Wooden/Brass chassis/base block at the bottom
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .height((16 * actualScale).dp)
+                    .clip(RoundedCornerShape((4 * actualScale).dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF6B4423), // Rich mahogany top highlight
+                                Color(0xFF3B2312), // Deep wood brown body
+                                Color(0xFF1B0F07)  // Shadowed bottom
+                            )
+                        )
+                    )
+            ) {
+                // Subtle gold/brass metal strip in the center layer
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((2 * actualScale).dp)
+                        .align(Alignment.TopCenter)
+                        .background(Color(0xFFD4AF37).copy(alpha = 0.35f)) // Brass highlight
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun NixieDigitTube(
+    digit: String,
+    color: Color,
+    fontFamily: FontFamily,
+    scale: Float = 1.0f,
+    isDimmed: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .width((80 * scale).dp)
+            .height((160 * scale).dp)
+            .padding(horizontal = (4 * scale).dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // 1. Glass Tube Shadow & Background
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(topStart = (40 * scale).dp, topEnd = (40 * scale).dp, bottomStart = (4 * scale).dp, bottomEnd = (4 * scale).dp))
+                .background(
+                    androidx.compose.ui.graphics.Brush.linearGradient(
+                        colors = listOf(
+                            Color(0x15FFFFFF),
+                            Color(0x05FFFFFF),
+                            Color(0x1AFFFFFF),
+                            Color(0x02FFFFFF),
+                            Color(0x22FFFFFF)
+                        )
+                    )
+                )
+                .border(
+                    width = (1 * scale).dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(topStart = (40 * scale).dp, topEnd = (40 * scale).dp, bottomStart = (4 * scale).dp, bottomEnd = (4 * scale).dp)
+                )
+        ) {
+            // Internal Grid/Mesh Anode
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val step = 12 * scale
+                var y = 0f
+                while (y < size.height) {
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.03f),
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1f
+                    )
+                    y += step
+                }
+                var x = 0f
+                while (x < size.width) {
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.03f),
+                        start = Offset(x, 0f),
+                        end = Offset(x, size.height),
+                        strokeWidth = 1f
+                    )
+                    x += step
+                }
+            }
+        }
+
+        // 2. Glowing Filament Stack (Dim stacked wires for 3D depth)
+        val inactiveWires = listOf("8", "3", "0") // overlapping digits
+        Box(contentAlignment = Alignment.Center) {
+            if (!isDimmed) {
+                inactiveWires.forEach { wDigit ->
+                    if (wDigit != digit) {
+                        Text(
+                            text = wDigit,
+                            color = color.copy(alpha = 0.035f),
+                            fontSize = (100 * scale).sp,
+                            fontWeight = FontWeight.Light,
+                            fontFamily = fontFamily,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+            
+            // 3. Ambient Glow layer behind the active digit
+            Box(
+                modifier = Modifier
+                    .size((60 * scale).dp)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.radialGradient(
+                            colors = listOf(
+                                if (isDimmed) color.copy(alpha = 0.02f) else color.copy(alpha = 0.12f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // 4. The Lit Active Filament (high intensity, bright glow)
+            Text(
+                text = digit,
+                color = if (isDimmed) color.copy(alpha = 0.08f) else color.copy(alpha = 0.95f),
+                fontSize = (100 * scale).sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = fontFamily,
+                textAlign = TextAlign.Center,
+                style = androidx.compose.ui.text.TextStyle(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = if (isDimmed) Color.Transparent else color.copy(alpha = 0.85f),
+                        offset = Offset(0f, 0f),
+                        blurRadius = if (isDimmed) 0f else (16 * scale)
+                    )
+                )
+            )
+        }
+
+        // 5. Glass Reflection highlight
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxHeight()
+                .width((6 * scale).dp)
+                .padding(top = (25 * scale).dp, bottom = (10 * scale).dp, start = (8 * scale).dp)
+                .clip(RoundedCornerShape(30))
+                .background(
+                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.15f),
+                            Color.White.copy(alpha = 0.02f)
+                        )
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+fun NixieColon(color: Color, scale: Float, isTicking: Boolean) {
+    val alphaAnim = if (isTicking) {
+        val infiniteTransition = rememberInfiniteTransition(label = "nixieColonAnim")
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 0.9f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "colonAlpha"
+        )
+        alpha
+    } else {
+        0.8f
+    }
+    
+    // Mini tube for the dual glowing separator dots
+    Box(
+        modifier = Modifier
+            .width((28 * scale).dp)
+            .height((120 * scale).dp)
+            .padding(horizontal = (2 * scale).dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape((14 * scale).dp))
+                .background(Color.White.copy(alpha = 0.02f))
+                .border(
+                    width = (1 * scale).dp,
+                    color = Color.White.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape((14 * scale).dp)
+                )
+        )
+        
+        Column(
+            verticalArrangement = Arrangement.spacedBy((18 * scale).dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size((8 * scale).dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = alphaAnim))
+                    .border(
+                        width = (1 * scale).dp,
+                        color = color.copy(alpha = alphaAnim),
+                        shape = CircleShape
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .size((8 * scale).dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = alphaAnim))
+                    .border(
+                        width = (1 * scale).dp,
+                        color = color.copy(alpha = alphaAnim),
+                        shape = CircleShape
+                    )
+            )
+        }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -50,7 +52,7 @@ fun StandbyScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val horizontalPagerState = rememberPagerState(pageCount = { 6 })
-    val verticalPagerState = rememberPagerState(pageCount = { 11 })
+    val verticalPagerState = rememberPagerState(pageCount = { 12 })
 
     var isHudVisible by remember { mutableStateOf(true) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -139,7 +141,7 @@ fun StandbyScreen(
                 ) {
                     VerticalThemeIndicator(
                         currentIndex = verticalPagerState.currentPage,
-                        pageCount = 11,
+                        pageCount = 12,
                         onDotClicked = { selectedIdx ->
                             isHudVisible = true
                             coroutineScope.launch {
@@ -250,103 +252,179 @@ fun StandbyScreen(
             )
         }
 
-        // Screen Lock Overlay (Premium tactical glassmorphic protector)
+        // Screen Lock Overlay (Premium glassmorphic protector)
         AnimatedVisibility(
             visible = isScreenLocked,
             enter = fadeIn(animationSpec = tween(500)),
             exit = fadeOut(animationSpec = tween(500))
         ) {
-            var isPressed by remember { mutableStateOf(false) }
-            val infiniteTransition = rememberInfiniteTransition(label = "")
-            val pulseScale by infiniteTransition.animateFloat(
-                initialValue = 1.0f,
-                targetValue = 1.05f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1200, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = ""
-            )
+            val currentTab = horizontalPagerState.currentPage
+            val activeColorIdx by viewModel.getColorFlow(currentTab).collectAsState()
+            val accentColor = viewModel.colors.getOrNull(activeColorIdx)?.first ?: Color(0xFF34D399)
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.65f))
+                    .background(Color.Black.copy(alpha = 0.08f)) // Minimal dimming to keep clocks 100% visible
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onTap = {}
+                            onTap = {} // Intercept and consume taps so that items underneath aren't clicked
                         )
-                    },
-                contentAlignment = Alignment.Center
+                    }
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                // 1. Top Capsule: [ 🔒 TOUCH INPUT LOCKED ]
+                Box(
                     modifier = Modifier
-                        .wrapContentSize()
-                        .padding(32.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xFF0F172A).copy(alpha = 0.9f))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
-                        .padding(horizontal = 48.dp, vertical = 32.dp)
+                        .align(Alignment.TopCenter)
+                        .padding(top = 40.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.Black.copy(alpha = 0.75f))
+                        .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    // Giant Padlock Lock Target
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = if (isPressed) 0.15f else 0.05f))
-                            .border(
-                                width = 1.dp,
-                                color = if (isPressed) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.2f),
-                                shape = CircleShape
-                            )
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onLongPress = {
-                                        isScreenLocked = false
-                                        isHudVisible = true
-                                    },
-                                    onPress = {
-                                        try {
-                                            isPressed = true
-                                            awaitRelease()
-                                        } finally {
-                                            isPressed = false
-                                        }
-                                    }
-                                )
-                            }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
-                            contentDescription = "Hold to unlock",
-                            tint = if (isPressed) Color(0xFF34D399) else Color.White,
-                            modifier = Modifier
-                                .size(if (isPressed) 36.dp else 42.dp)
+                            contentDescription = "Locked",
+                            tint = accentColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "TOUCH INPUT LOCKED",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
                         )
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        text = "TOUCH LOCKED",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 2.sp
+                // 2. Bottom Slider: Slide To Unlock
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 60.dp)
+                ) {
+                    val density = LocalDensity.current
+                    val trackWidthDp = 280.dp
+                    val trackHeightDp = 52.dp
+                    val thumbSizeDp = 44.dp
+                    val paddingDp = 4.dp
+                    
+                    val maxDragOffsetDp = trackWidthDp - thumbSizeDp - (paddingDp * 2) // 228.dp
+                    val maxDragOffsetPx = with(density) { maxDragOffsetDp.toPx() }
+                    
+                    val dragAmount = remember { Animatable(0f) }
+                    
+                    // Text shimmer pulse animation
+                    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+                    val textAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.3f,
+                        targetValue = 0.85f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1400, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "textAlpha"
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // Slider Track
+                    Box(
+                        modifier = Modifier
+                            .size(width = trackWidthDp, height = trackHeightDp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(Color(0xFF0F172A).copy(alpha = 0.85f))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(26.dp)),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        // Slider prompt text
+                        Text(
+                            text = "Slide to unlock >>>",
+                            color = Color.White.copy(alpha = textAlpha),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
 
-                    Text(
-                        text = if (isPressed) "Unlocking..." else "Press & hold lock icon to unlock",
-                        color = if (isPressed) Color(0xFF34D399) else Color.Gray,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
+                        // Progress path highlighting slide progress
+                        val fraction = if (maxDragOffsetPx > 0) (dragAmount.value / maxDragOffsetPx).coerceIn(0f, 1f) else 0f
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(thumbSizeDp + (paddingDp * 2) + (maxDragOffsetDp * fraction))
+                                .clip(RoundedCornerShape(26.dp))
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        colors = listOf(
+                                            accentColor.copy(alpha = 0.05f),
+                                            accentColor.copy(alpha = 0.35f)
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Draggable thumb/handle
+                        Box(
+                            modifier = Modifier
+                                .padding(start = paddingDp + with(density) { dragAmount.value.toDp() })
+                                .size(thumbSizeDp)
+                                .clip(CircleShape)
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.radialGradient(
+                                        colors = listOf(
+                                            accentColor,
+                                            accentColor.copy(alpha = 0.85f)
+                                        )
+                                    )
+                                )
+                                .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                                .pointerInput(maxDragOffsetPx) {
+                                    detectDragGestures(
+                                        onDragEnd = {
+                                            coroutineScope.launch {
+                                                if (dragAmount.value >= maxDragOffsetPx * 0.85f) {
+                                                    isScreenLocked = false
+                                                    isHudVisible = true
+                                                    dragAmount.snapTo(0f)
+                                                } else {
+                                                    dragAmount.animateTo(
+                                                        targetValue = 0f,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                            stiffness = Spring.StiffnessLow
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            coroutineScope.launch {
+                                                dragAmount.animateTo(0f)
+                                            }
+                                        },
+                                        onDrag = { change, dragAmountOffset ->
+                                            change.consume()
+                                            coroutineScope.launch {
+                                                val nextVal = (dragAmount.value + dragAmountOffset.x).coerceIn(0f, maxDragOffsetPx)
+                                                dragAmount.snapTo(nextVal)
+                                            }
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LockOpen,
+                                contentDescription = "Unlock handle",
+                                tint = Color.Black,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -448,6 +526,10 @@ fun StandbyCustomizationDialog(
     val showWeatherVal by viewModel.getWeatherFlow(activeTab).collectAsState()
     val clockScaleVal by viewModel.getScaleFlow(activeTab).collectAsState()
     val animationsEnabledVal by viewModel.getAnimFlow(activeTab).collectAsState()
+
+    val use24Hour by viewModel.use24HourFormat.collectAsState()
+    val showAmPm by viewModel.showAmPm.collectAsState()
+    val showSeconds by viewModel.showSeconds.collectAsState()
 
     val pageColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color.Green
 
@@ -829,6 +911,131 @@ fun StandbyCustomizationDialog(
                                         Switch(
                                             checked = showWeatherVal,
                                             onCheckedChange = { viewModel.setShowWeatherForPage(activeTab, it) },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = Color.Black,
+                                                checkedTrackColor = pageColor
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (activeTab == 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF0C111D))
+                                    .border(1.dp, Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    Text(
+                                        "CLOCK FORMAT PREFERENCES",
+                                        color = pageColor,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.2.sp
+                                    )
+
+                                    // 24 Hour format toggle
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "24-Hour Format",
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                "Display time in 24-hour style (e.g. 13:00 vs 1:00)",
+                                                color = Color.Gray,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+                                        Switch(
+                                            checked = use24Hour,
+                                            onCheckedChange = { viewModel.setUse24HourFormat(it) },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = Color.Black,
+                                                checkedTrackColor = pageColor
+                                            )
+                                        )
+                                    }
+
+                                    // Show AM/PM toggle (only enables/shows if 12-hour is active)
+                                    AnimatedVisibility(visible = !use24Hour) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Color(0xFF131A26))
+                                                .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                                .padding(12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    "Show AM/PM Indicator",
+                                                    color = Color.White,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                Text(
+                                                    "Displays AM or PM label alongside 12-hour clocks",
+                                                    color = Color.Gray,
+                                                    fontSize = 9.sp
+                                                )
+                                            }
+                                            Switch(
+                                                checked = showAmPm,
+                                                onCheckedChange = { viewModel.setShowAmPm(it) },
+                                                colors = SwitchDefaults.colors(
+                                                    checkedThumbColor = Color.Black,
+                                                    checkedTrackColor = pageColor
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    // Show Seconds toggle
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "Display Seconds Trackers",
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                "Show ticking seconds on compatible lock screen clock faces",
+                                                color = Color.Gray,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+                                        Switch(
+                                            checked = showSeconds,
+                                            onCheckedChange = { viewModel.setShowSeconds(it) },
                                             colors = SwitchDefaults.colors(
                                                 checkedThumbColor = Color.Black,
                                                 checkedTrackColor = pageColor
