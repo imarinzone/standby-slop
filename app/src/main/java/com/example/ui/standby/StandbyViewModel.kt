@@ -37,7 +37,7 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
 
     val selectedColorIndex = MutableStateFlow(0)
     val selectedFontIndex = MutableStateFlow(0)
-    val showWeather = MutableStateFlow(true)
+    val showWeather = MutableStateFlow(false)
     val clockScale = MutableStateFlow(1.2f)
 
     // Per-page customized settings (Page 0: Clock, 1: Alarm, 2: Calendar, 3: Music, 4: Timer)
@@ -53,8 +53,8 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     val fontPage3 = MutableStateFlow(0)
     val fontPage4 = MutableStateFlow(0)
 
-    val showWeatherPage0 = MutableStateFlow(true)
-    val showWeatherPage1 = MutableStateFlow(true)
+    val showWeatherPage0 = MutableStateFlow(false)
+    val showWeatherPage1 = MutableStateFlow(false)
     val showWeatherPage2 = MutableStateFlow(false)
     val showWeatherPage3 = MutableStateFlow(false)
     val showWeatherPage4 = MutableStateFlow(false)
@@ -74,8 +74,8 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
 
     // Clock general options (12/24 hour, AM/PM visibility, Seconds visibility)
     val use24HourFormat = MutableStateFlow(false) // default to 12-hour or false for user choice, let's look at standard default
-    val showAmPm = MutableStateFlow(true)
-    val showSeconds = MutableStateFlow(true)
+    val showAmPm = MutableStateFlow(false)
+    val showSeconds = MutableStateFlow(false)
 
     init {
         // Automatically re-calculate our custom next alarm whenever the list or time format preferences change

@@ -73,14 +73,14 @@ fun ClockFaceRenderer(
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when (themeIndex % 12) {
                 0 -> DigitalMinimal(currentTime, customColor, customFont, clockScaleValue, animsEnabled, use24Hour, showAmPm, showSeconds)
-                1 -> AnalogClassic(currentTime, customColor, clockScaleValue, animsEnabled, showSeconds)
+                1 -> AnalogClassic(currentTime, customColor, clockScaleValue, animsEnabled, true)
                 2 -> DigitalNeon(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
                 3 -> RetroFlip(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
                 4 -> BinaryStyle(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
                 5 -> ModernBoldTextClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
                 6 -> LargeSidebarClock(currentTime, customColor, customFont, nextSystemAlarm, clockScaleValue, use24Hour, showAmPm, showSeconds)
                 7 -> ContrastingSplitClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                8 -> AnalogDashboard(currentTime, customColor, customFont, clockScaleValue, animsEnabled, showSeconds)
+                8 -> AnalogDashboard(currentTime, customColor, customFont, clockScaleValue, animsEnabled, true)
                 9 -> BubblePastelClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
                 10 -> AmbientGradientClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
                 11 -> NixieTubeClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
