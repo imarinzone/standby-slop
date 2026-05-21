@@ -6,46 +6,24 @@ This repository is now fully open-source! We welcome developers, designers, and 
 
 ---
 
-## 📸 product Showroom & Live Gallery
+## 📸 Product Showroom & Live Gallery
 
-Below is a curated layout of the application's most gorgeous views—optimized precisely for dynamic landscape configurations:
+Below is a curated layout of the application's actual screenshots recorded directly from the living codebase—optimized precisely for dynamic landscape configurations:
 
 | 🌌 NEON DIGITAL CLOCK | 🎵 MUSIC CONTROLLER PAGE |
 |:---:|:---:|
-| <img src="docs/screenshots/neon_digital_clock.png" width="400" alt="Cyber Neon Digital Clock Screen" placeholder="glowing neon aesthetic, cyan & magenta contrast colorways" /> | <img src="docs/screenshots/music_player_panel.png" width="400" alt="Landscape Music Player Interface" placeholder="sleek album vinyl, playback timers, fluid sound waves" /> |
+| <img src="app/src/test/screenshots/neon_digital_clock.png" width="400" alt="Cyber Neon Digital Clock Screen" /> | <img src="app/src/test/screenshots/music_player_panel.png" width="400" alt="Landscape Music Player Interface" /> |
 | **Cyberpunk aesthetics meet crisp timekeeping** | **Integrated media control center with radial ripples** |
 
 | ⏱️ FOCUS TIMER & STOPWATCH MATRIX | 🎛️ STANDBY DIRECTORY OVERVIEW |
 |:---:|:---:|
-| <img src="docs/screenshots/focus_timer_matrix.png" width="400" alt="Draggable Pomodoro Focus State" placeholder="high-contrast focus wheels, swift swipe triggers" /> | <img src="docs/screenshots/standby_directory.png" width="400" alt="App Overview Matrix Grid" placeholder="interactive thumbnail gallery displaying active states" /> |
+| <img src="app/src/test/screenshots/focus_timer_matrix.png" width="400" alt="Draggable Pomodoro Focus State" /> | <img src="app/src/test/screenshots/standby_directory.png" width="400" alt="App Overview Matrix Grid" /> |
 | **Elegant gesture-driven Focus Ring and Millisecond Lap counter** | **Press or pinch-to-zoom directory displaying live preview metrics** |
 
-### 🛠️ Display Layout Framework (ASCII Wireframes)
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        STANDBY OVERVIEW DIRECTORY                      │
-│                                                                        │
-│  ┌────────────────────────┐  ┌────────────────────────┐  ┌──────────┐  │
-│  │ 01 | COMSIC DIGITAL    │  │ 02 | CALENDAR WIDGET   │  │ 03 | ... │  │
-│  │                        │  │                        │  │          │  │
-│  │         10:24          │  │   MAY 21 | THURSDAY    │  │ [ALARM]  │  │
-│  │    Minimalist Style    │  │ • Dev Review 10:00 AM  │  │  07:30   │  │
-│  └────────────────────────┘  └────────────────────────┘  └──────────┘  │
-│  ┌────────────────────────┐  ┌────────────────────────┐  ┌──────────┐  │
-│  │ 04 | MUSIC PLAYER      │  │ 05 | TIMER FOCUS       │  │ 06 | ... │  │
-│  │                        │  │                        │  │          │  │
-│  │  ♫ Midnight Serenade   │  │         25:00          │  │  [DUO]   │  │
-│  │    [⏮]  [⏯]  [⏭]       │  │      Focus Round       │  │  SPLITS  │  │
-│  └────────────────────────┘  └────────────────────────┘  └──────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-> **💡 Developer Tip:** To update or add your customized device screenshots:
-> 1. Launch the app in your device/emulator.
-> 2. Take a screenshot in Landscape Mode (`16:9` works best).
-> 3. Save the images inside `docs/screenshots/` with names matching the gallery above (e.g., `neon_digital_clock.png`, `music_player_panel.png`, `focus_timer_matrix.png`, `standby_directory.png`).
-> 4. GitHub will automatically pick them up and display them inline beautiful!
+> **💡 Developer Tip:** To update or recreate these high-fidelity screenshots:
+> 1. Run standard Roborazzi recording via terminal command: `gradle :app:recordRoborazziDebug`
+> 2. The images inside `app/src/test/screenshots/` will be updated with your active styles, layouts, and clock interfaces.
+> 3. Commit the changes and push to GitHub to showcase your unique Standby customization!
 
 ---
 
