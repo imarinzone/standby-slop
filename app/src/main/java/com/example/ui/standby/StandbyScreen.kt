@@ -31,7 +31,10 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -100,7 +103,6 @@ fun StandbyScreen(
             }
     ) {
         if (!isOverviewMode) {
-            // Horizontal pages
             HorizontalPager(
                 state = horizontalPagerState,
                 userScrollEnabled = !isScreenLocked,
@@ -1423,35 +1425,102 @@ fun AppOverviewLayout(
                 5 to ("Duo Split Views" to "DUO WIDGETS")
             )
 
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 265.dp),
+            LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                // Category 1 Header: System Widget Panels
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Box(
+                // Column 1: Clock Faces (Scroll Vertically inside this column to choose any theme!)
+                item {
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
+                            .width(180.dp)
+                            .fillMaxHeight()
+                            .background(Color(0xFF0F172A).copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                            .padding(8.dp)
                     ) {
                         Text(
-                            text = "SYSTEM UTILITY PANELS",
-                            color = Color(0xFF64748B),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp
+                            text = "01 | CLOCK FACES",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.padding(bottom = 2.dp, start = 4.dp),
+                            maxLines = 1
                         )
+                        Text(
+                            text = "Scroll vertically to choose theme",
+                            color = Color.Gray,
+                            fontSize = 9.sp,
+                            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp),
+                            maxLines = 1
+                        )
+                        
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 8.dp)
+                        ) {
+                            itemsIndexed(clockThemes) { clockThemeIdx, themeItem ->
+                                val (title, label) = themeItem
+                                val isActive = (activePage == 0 && activeClockFace == clockThemeIdx)
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isActive) Color(0xFF1E293B) else Color.Black)
+                                        .border(
+                                            1.dp,
+                                            if (isActive) color0 else Color.White.copy(alpha = 0.08f),
+                                            RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable { onSelectClockFace(clockThemeIdx) }
+                                        .padding(6.dp)
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = label.substringAfter("| ").trim(),
+                                            color = if (isActive) color0 else Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(144.dp, 80.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color.Black),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .requiredSize(400.dp, 220.dp)
+                                                    .graphicsLayer {
+                                                        scaleX = 0.36f
+                                                        scaleY = 0.36f
+                                                    }
+                                            ) {
+                                                ClockPage(themeIndex = clockThemeIdx)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
-                itemsIndexed(utilityPages) { _, item ->
-                    val pageIdx = item.first
-                    val (title, label) = item.second
+                // Columns 2 to 6: Utility Panels (System Alarm, Calendar, Music, Timer, Duo Split)
+                itemsIndexed(utilityPages) { _, uItem ->
+                    val pageIdx = uItem.first
+                    val (title, label) = uItem.second
                     val isActive = (activePage == pageIdx)
                     
                     val pageColor = when (pageIdx) {
@@ -1462,194 +1531,66 @@ fun AppOverviewLayout(
                         else -> Color(0xFF2DD4BF)
                     }
 
-                    Card(
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToPage(pageIdx) }
+                            .width(180.dp)
+                            .fillMaxHeight()
+                            .background(Color(0xFF0F172A).copy(alpha = 0.4f), RoundedCornerShape(16.dp))
                             .border(
                                 1.5.dp,
                                 if (isActive) pageColor else Color.White.copy(alpha = 0.08f),
                                 RoundedCornerShape(16.dp)
-                            ),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isActive) Color(0xFF1E293B).copy(alpha = 0.7f) else Color(0xFF0F172A).copy(alpha = 0.4f)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = label,
-                                        color = if (isActive) pageColor else Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = title,
-                                        color = Color.Gray,
-                                        fontSize = 9.sp,
-                                        maxLines = 1
-                                    )
-                                }
-                                
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isActive) pageColor else Color.White.copy(alpha = 0.1f))
-                                        .border(1.dp, if (isActive) pageColor else Color.White.copy(alpha = 0.2f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (isActive) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Selected",
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            
-                            Box(
-                                modifier = Modifier
-                                    .size(240.dp, 135.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.Black),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .requiredSize(480.dp, 270.dp)
-                                        .graphicsLayer {
-                                            scaleX = 0.5f
-                                            scaleY = 0.5f
-                                        }
-                                ) {
-                                    when (pageIdx) {
-                                        1 -> PreviewAlarmPage(accentColor = color1, fontFamily = font1)
-                                        2 -> PreviewCalendarPage(accentColor = color2, fontFamily = font2)
-                                        3 -> PreviewMediaPage(accentColor = color3, fontFamily = font3)
-                                        4 -> PreviewTimerPage(accentColor = color4, fontFamily = font4)
-                                        5 -> PreviewDuoPage(fontFamily = font0)
-                                        else -> {}
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Category 2 Header: Ambient Clock Faces
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp, bottom = 8.dp)
+                            )
+                            .clickable { onNavigateToPage(pageIdx) }
+                            .padding(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "AMBIENT CLOCK FACES",
-                            color = Color(0xFF64748B),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp
+                            text = label, 
+                            color = if (isActive) pageColor else Color.White, 
+                            fontSize = 11.sp, 
+                            fontWeight = FontWeight.ExtraBold, 
+                            maxLines = 1,
+                            modifier = Modifier.padding(bottom = 2.dp)
                         )
-                    }
-                }
-
-                itemsIndexed(clockThemes) { clockThemeIdx, item ->
-                    val (title, label) = item
-                    val isActive = (activePage == 0 && activeClockFace == clockThemeIdx)
-                    
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelectClockFace(clockThemeIdx) }
-                            .border(
-                                1.5.dp,
-                                if (isActive) color0 else Color.White.copy(alpha = 0.08f),
-                                RoundedCornerShape(16.dp)
-                            ),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isActive) Color(0xFF1E293B).copy(alpha = 0.7f) else Color(0xFF0F172A).copy(alpha = 0.4f)
+                        Text(
+                            text = title, 
+                            color = Color.Gray, 
+                            fontSize = 9.sp, 
+                            maxLines = 1,
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.Black),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = label,
-                                        color = if (isActive) color0 else Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = title,
-                                        color = Color.Gray,
-                                        fontSize = 9.sp,
-                                        maxLines = 1
-                                    )
-                                }
-                                
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isActive) color0 else Color.White.copy(alpha = 0.1f))
-                                        .border(1.dp, if (isActive) color0 else Color.White.copy(alpha = 0.2f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (isActive) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Selected",
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            
                             Box(
                                 modifier = Modifier
-                                    .size(240.dp, 135.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.Black),
-                                contentAlignment = Alignment.Center
+                                    .requiredSize(400.dp, 220.dp)
+                                    .graphicsLayer { 
+                                        scaleX = 0.36f 
+                                        scaleY = 0.36f 
+                                    }
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .requiredSize(480.dp, 270.dp)
-                                        .graphicsLayer {
-                                            scaleX = 0.5f
-                                            scaleY = 0.5f
-                                        }
-                                ) {
-                                    ClockPage(themeIndex = clockThemeIdx)
+                                when (pageIdx) {
+                                    1 -> PreviewAlarmPage(accentColor = color1, fontFamily = font1)
+                                    2 -> PreviewCalendarPage(accentColor = color2, fontFamily = font2)
+                                    3 -> PreviewMediaPage(accentColor = color3, fontFamily = font3)
+                                    4 -> PreviewTimerPage(accentColor = color4, fontFamily = font4)
+                                    5 -> PreviewDuoPage(fontFamily = font0)
+                                    else -> {}
                                 }
                             }
                         }
                     }
                 }
             }
+
         }
     }
 }
