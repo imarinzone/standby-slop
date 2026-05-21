@@ -24,17 +24,28 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -239,11 +250,21 @@ fun StandbyScreen(
             // Full screen Pitch zoom out overview layout
             AppOverviewLayout(
                 viewModel = viewModel,
+                activePage = horizontalPagerState.currentPage,
+                activeClockFace = verticalPagerState.currentPage,
                 onNavigateToPage = { targetPage ->
                     isOverviewMode = false
                     isHudVisible = true
                     coroutineScope.launch {
                         horizontalPagerState.scrollToPage(targetPage)
+                    }
+                },
+                onSelectClockFace = { themeIdx ->
+                    isOverviewMode = false
+                    isHudVisible = true
+                    coroutineScope.launch {
+                        horizontalPagerState.scrollToPage(0)
+                        verticalPagerState.scrollToPage(themeIdx)
                     }
                 },
                 onDismiss = {
@@ -262,167 +283,199 @@ fun StandbyScreen(
             val activeColorIdx by viewModel.getColorFlow(currentTab).collectAsState()
             val accentColor = viewModel.colors.getOrNull(activeColorIdx)?.first ?: Color(0xFF34D399)
 
+            var isUnlockUiVisible by remember { mutableStateOf(false) }
+            val dragAmount = remember { Animatable(0f) }
+            var isDraggingState by remember { mutableStateOf(false) }
+
+            LaunchedEffect(isUnlockUiVisible, isDraggingState) {
+                if (isUnlockUiVisible && !isDraggingState) {
+                    delay(4000)
+                    isUnlockUiVisible = false
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.08f)) // Minimal dimming to keep clocks 100% visible
+                    .background(Color.Transparent) // Completely clean/transparent lock screen
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onTap = {} // Intercept and consume taps so that items underneath aren't clicked
+                            onTap = {
+                                isUnlockUiVisible = true
+                            },
+                            onPress = {
+                                isUnlockUiVisible = true
+                            }
                         )
                     }
             ) {
-                // 1. Top Capsule: [ 🔒 TOUCH INPUT LOCKED ]
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 40.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.Black.copy(alpha = 0.75f))
-                        .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                // 1. Top Capsule: [ 🔒 TOUCH INPUT LOCKED ] - Fades in/out with tap
+                AnimatedVisibility(
+                    visible = isUnlockUiVisible,
+                    enter = fadeIn(animationSpec = tween(400)) + slideInVertically(animationSpec = tween(400)) { -it },
+                    exit = fadeOut(animationSpec = tween(400)) + slideOutVertically(animationSpec = tween(400)) { -it },
+                    modifier = Modifier.align(Alignment.TopCenter)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 40.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.Black.copy(alpha = 0.75f))
+                            .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Locked",
-                            tint = accentColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "TOUCH INPUT LOCKED",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Locked",
+                                tint = accentColor,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "TOUCH INPUT LOCKED",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
                     }
                 }
 
-                // 2. Bottom Slider: Slide To Unlock
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 60.dp)
+                // 2. Bottom Slider: Slide To Unlock - Only shows on bottom part when touched
+                AnimatedVisibility(
+                    visible = isUnlockUiVisible,
+                    enter = fadeIn(animationSpec = tween(400)) + slideInVertically(animationSpec = tween(400)) { it / 2 },
+                    exit = fadeOut(animationSpec = tween(400)) + slideOutVertically(animationSpec = tween(400)) { it / 2 },
+                    modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
-                    val density = LocalDensity.current
-                    val trackWidthDp = 280.dp
-                    val trackHeightDp = 52.dp
-                    val thumbSizeDp = 44.dp
-                    val paddingDp = 4.dp
-                    
-                    val maxDragOffsetDp = trackWidthDp - thumbSizeDp - (paddingDp * 2) // 228.dp
-                    val maxDragOffsetPx = with(density) { maxDragOffsetDp.toPx() }
-                    
-                    val dragAmount = remember { Animatable(0f) }
-                    
-                    // Text shimmer pulse animation
-                    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-                    val textAlpha by infiniteTransition.animateFloat(
-                        initialValue = 0.3f,
-                        targetValue = 0.85f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1400, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "textAlpha"
-                    )
-
-                    // Slider Track
                     Box(
                         modifier = Modifier
-                            .size(width = trackWidthDp, height = trackHeightDp)
-                            .clip(RoundedCornerShape(26.dp))
-                            .background(Color(0xFF0F172A).copy(alpha = 0.85f))
-                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(26.dp)),
-                        contentAlignment = Alignment.CenterStart
+                            .padding(bottom = 60.dp)
                     ) {
-                        // Slider prompt text
-                        Text(
-                            text = "Slide to unlock >>>",
-                            color = Color.White.copy(alpha = textAlpha),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
+                        val density = LocalDensity.current
+                        val trackWidthDp = 280.dp
+                        val trackHeightDp = 52.dp
+                        val thumbSizeDp = 44.dp
+                        val paddingDp = 4.dp
+                        
+                        val maxDragOffsetDp = trackWidthDp - thumbSizeDp - (paddingDp * 2) // 228.dp
+                        val maxDragOffsetPx = with(density) { maxDragOffsetDp.toPx() }
+                        
+                        // Text shimmer pulse animation
+                        val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+                        val textAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.3f,
+                            targetValue = 0.85f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1400, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "textAlpha"
                         )
 
-                        // Progress path highlighting slide progress
-                        val fraction = if (maxDragOffsetPx > 0) (dragAmount.value / maxDragOffsetPx).coerceIn(0f, 1f) else 0f
+                        // Slider Track
                         Box(
                             modifier = Modifier
-                                .fillMaxHeight()
-                                .width(thumbSizeDp + (paddingDp * 2) + (maxDragOffsetDp * fraction))
+                                .size(width = trackWidthDp, height = trackHeightDp)
                                 .clip(RoundedCornerShape(26.dp))
-                                .background(
-                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                        colors = listOf(
-                                            accentColor.copy(alpha = 0.05f),
-                                            accentColor.copy(alpha = 0.35f)
-                                        )
-                                    )
-                                )
-                        )
+                                .background(Color(0xFF0F172A).copy(alpha = 0.85f))
+                                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(26.dp)),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            // Slider prompt text
+                            Text(
+                                text = "Slide to unlock >>>",
+                                color = Color.White.copy(alpha = textAlpha),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
 
-                        // Draggable thumb/handle
-                        Box(
-                            modifier = Modifier
-                                .padding(start = paddingDp + with(density) { dragAmount.value.toDp() })
-                                .size(thumbSizeDp)
-                                .clip(CircleShape)
-                                .background(
-                                    androidx.compose.ui.graphics.Brush.radialGradient(
-                                        colors = listOf(
-                                            accentColor,
-                                            accentColor.copy(alpha = 0.85f)
+                            // Progress path highlighting slide progress
+                            val fraction = if (maxDragOffsetPx > 0) (dragAmount.value / maxDragOffsetPx).coerceIn(0f, 1f) else 0f
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(thumbSizeDp + (paddingDp * 2) + (maxDragOffsetDp * fraction))
+                                    .clip(RoundedCornerShape(26.dp))
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                            colors = listOf(
+                                                accentColor.copy(alpha = 0.05f),
+                                                accentColor.copy(alpha = 0.35f)
+                                            )
                                         )
                                     )
-                                )
-                                .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                                .pointerInput(maxDragOffsetPx) {
-                                    detectDragGestures(
-                                        onDragEnd = {
-                                            coroutineScope.launch {
-                                                if (dragAmount.value >= maxDragOffsetPx * 0.85f) {
-                                                    isScreenLocked = false
-                                                    isHudVisible = true
-                                                    dragAmount.snapTo(0f)
-                                                } else {
-                                                    dragAmount.animateTo(
-                                                        targetValue = 0f,
-                                                        animationSpec = spring(
-                                                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                            stiffness = Spring.StiffnessLow
+                            )
+
+                            // Draggable thumb/handle
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = paddingDp + with(density) { dragAmount.value.toDp() })
+                                    .size(thumbSizeDp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.radialGradient(
+                                            colors = listOf(
+                                                accentColor,
+                                                accentColor.copy(alpha = 0.85f)
+                                            )
+                                        )
+                                    )
+                                    .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                                    .pointerInput(maxDragOffsetPx) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                isDraggingState = true
+                                            },
+                                            onDragEnd = {
+                                                isDraggingState = false
+                                                coroutineScope.launch {
+                                                    if (dragAmount.value >= maxDragOffsetPx * 0.85f) {
+                                                        isScreenLocked = false
+                                                        isHudVisible = true
+                                                        isUnlockUiVisible = false
+                                                        dragAmount.snapTo(0f)
+                                                    } else {
+                                                        dragAmount.animateTo(
+                                                            targetValue = 0f,
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                stiffness = Spring.StiffnessLow
+                                                            )
                                                         )
-                                                    )
+                                                    }
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                isDraggingState = false
+                                                coroutineScope.launch {
+                                                    dragAmount.animateTo(0f)
+                                                }
+                                            },
+                                            onDrag = { change, dragAmountOffset ->
+                                                change.consume()
+                                                coroutineScope.launch {
+                                                    val nextVal = (dragAmount.value + dragAmountOffset.x).coerceIn(0f, maxDragOffsetPx)
+                                                    dragAmount.snapTo(nextVal)
                                                 }
                                             }
-                                        },
-                                        onDragCancel = {
-                                            coroutineScope.launch {
-                                                dragAmount.animateTo(0f)
-                                            }
-                                        },
-                                        onDrag = { change, dragAmountOffset ->
-                                            change.consume()
-                                            coroutineScope.launch {
-                                                val nextVal = (dragAmount.value + dragAmountOffset.x).coerceIn(0f, maxDragOffsetPx)
-                                                dragAmount.snapTo(nextVal)
-                                            }
-                                        }
-                                    )
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LockOpen,
-                                contentDescription = "Unlock handle",
-                                tint = Color.Black,
-                                modifier = Modifier.size(20.dp)
-                            )
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LockOpen,
+                                    contentDescription = "Unlock handle",
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1252,7 +1305,10 @@ fun StandbyCustomizationDialog(
 @Composable
 fun AppOverviewLayout(
     viewModel: StandbyViewModel,
+    activePage: Int,
+    activeClockFace: Int,
     onNavigateToPage: (Int) -> Unit,
+    onSelectClockFace: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     // Read the customized colors and typography for previewing
@@ -1269,10 +1325,18 @@ fun AppOverviewLayout(
     val color4 = viewModel.colors[color4Idx].first
 
     val font0Idx by viewModel.fontPage0.collectAsState()
+    val font1Idx by viewModel.fontPage1.collectAsState()
+    val font2Idx by viewModel.fontPage2.collectAsState()
+    val font3Idx by viewModel.fontPage3.collectAsState()
+    val font4Idx by viewModel.fontPage4.collectAsState()
+
     val font0 = viewModel.fonts[font0Idx].first
+    val font1 = viewModel.fonts[font1Idx].first
+    val font2 = viewModel.fonts[font2Idx].first
+    val font3 = viewModel.fonts[font3Idx].first
+    val font4 = viewModel.fonts[font4Idx].first
 
     var currentTime by remember { mutableStateOf(Calendar.getInstance()) }
-    val nextSystemAlarm by viewModel.nextSystemAlarm.collectAsState()
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -1284,214 +1348,304 @@ fun AppOverviewLayout(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.95f))
-            .padding(24.dp)
+            .background(Color(0xFF020617).copy(alpha = 0.98f)) // Deep slate-black premium background
+            .padding(16.dp)
             .pointerInput(Unit) {
                 detectTransformGestures { _, _, zoom, _ ->
                     if (zoom > 1.15f) {
                         onDismiss()
                     }
                 }
-            },
-        contentAlignment = Alignment.Center
+            }
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Dashboard Title
-            Text(
-                text = "STANDBY PANELS DIRECTORY",
-                color = Color.LightGray,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 3.sp,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            Text(
-                text = "Tap a screen to focus or pinch open to zoom in",
-                color = Color.Gray,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(bottom = 28.dp)
-            )
-
-            // 3x2 Grid of Previews for 5 screens
-            Column(
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.widthIn(max = 760.dp)
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Header bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                Column {
+                    Text(
+                        text = "STANDBY LAYOUT DIRECTORY",
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Tap a screen to select or swipe through them",
+                        color = Color.Gray,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+                
+                // Close button
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color.White.copy(alpha = 0.08f), CircleShape)
                 ) {
-                    // Card 0: Clock screen preview
-                    OverviewPreviewCard(
-                        title = "01 | CLOCK SYSTEM",
-                        accentColor = color0,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToPage(0) }
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss directory view",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            val clockThemes = listOf(
+                "Minimal Digital Clock" to "01 | DIGITAL MINIMAL",
+                "Classic Analog Clock" to "02 | ANALOG CLASSIC",
+                "Cyber Neon Clock" to "03 | DIGITAL NEON",
+                "Retro Flip Card Clock" to "04 | RETRO FLIP CARD",
+                "Binary Dots Matrix" to "05 | BINARY STYLE",
+                "Modern Bold Typography" to "06 | MODERN BOLD TEXT",
+                "Large Sidebar Alarm Clock" to "07 | LARGE SIDEBAR",
+                "Contrasting Split Color" to "08 | CONTRASTING SPLIT",
+                "Analog Motor Dashboard" to "09 | ANALOG DASHBOARD",
+                "Pastel Bubbles Clock" to "10 | BUBBLE PASTEL",
+                "Ambient Horizon Gradient" to "11 | AMBIENT GRADIENT",
+                "High-Tech Nixie Tube" to "12 | NIXIE TUBE"
+            )
+
+            val utilityPages = listOf(
+                1 to ("System Alarm" to "ALARM DISPATCH"),
+                2 to ("Calendar Agenda" to "CALENDAR AGENDA"),
+                3 to ("Music Player" to "MUSIC PLAYER"),
+                4 to ("Timer Focus Matrix" to "TIMER FOCUS"),
+                5 to ("Duo Split Views" to "DUO WIDGETS")
+            )
+
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 265.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Category 1 Header: System Widget Panels
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize().padding(8.dp)
-                        ) {
-                            val format = SimpleDateFormat("HH:mm", Locale.getDefault())
-                            Text(
-                                text = format.format(currentTime.time),
-                                color = color0,
-                                fontSize = 32.sp,
-                                fontFamily = font0,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Clock Live View",
-                                color = Color.Gray,
-                                fontSize = 10.sp
-                            )
-                        }
+                        Text(
+                            text = "SYSTEM UTILITY PANELS",
+                            color = Color(0xFF64748B),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp
+                        )
+                    }
+                }
+
+                itemsIndexed(utilityPages) { _, item ->
+                    val pageIdx = item.first
+                    val (title, label) = item.second
+                    val isActive = (activePage == pageIdx)
+                    
+                    val pageColor = when (pageIdx) {
+                        1 -> color1
+                        2 -> color2
+                        3 -> color3
+                        4 -> color4
+                        else -> Color(0xFF2DD4BF)
                     }
 
-                    // Card 1: Alarm screen preview
-                    OverviewPreviewCard(
-                        title = "02 | ALARM",
-                        accentColor = color1,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToPage(1) }
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToPage(pageIdx) }
+                            .border(
+                                1.5.dp,
+                                if (isActive) pageColor else Color.White.copy(alpha = 0.08f),
+                                RoundedCornerShape(16.dp)
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isActive) Color(0xFF1E293B).copy(alpha = 0.7f) else Color(0xFF0F172A).copy(alpha = 0.4f)
+                        )
                     ) {
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize().padding(8.dp)
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = nextSystemAlarm ?: "No Alarm",
-                                color = color1,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Native Clock Sync",
-                                color = Color.Gray,
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
-
-                    // Card 2: Calendar screen preview
-                    OverviewPreviewCard(
-                        title = "03 | CALENDAR",
-                        accentColor = color2,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToPage(2) }
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize().padding(8.dp)
-                        ) {
-                            Text(
-                                text = "Calendar",
-                                color = color2,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Upcoming Native Events",
-                                color = Color.Gray,
-                                fontSize = 10.sp
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = label,
+                                        color = if (isActive) pageColor else Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = title,
+                                        color = Color.Gray,
+                                        fontSize = 9.sp,
+                                        maxLines = 1
+                                    )
+                                }
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isActive) pageColor else Color.White.copy(alpha = 0.1f))
+                                        .border(1.dp, if (isActive) pageColor else Color.White.copy(alpha = 0.2f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isActive) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(240.dp, 135.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .requiredSize(480.dp, 270.dp)
+                                        .graphicsLayer {
+                                            scaleX = 0.5f
+                                            scaleY = 0.5f
+                                        }
+                                ) {
+                                    when (pageIdx) {
+                                        1 -> PreviewAlarmPage(accentColor = color1, fontFamily = font1)
+                                        2 -> PreviewCalendarPage(accentColor = color2, fontFamily = font2)
+                                        3 -> PreviewMediaPage(accentColor = color3, fontFamily = font3)
+                                        4 -> PreviewTimerPage(accentColor = color4, fontFamily = font4)
+                                        5 -> PreviewDuoPage(fontFamily = font0)
+                                        else -> {}
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Card 3: Media control preview
-                    OverviewPreviewCard(
-                        title = "04 | MUSIC PLAYER",
-                        accentColor = color3,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToPage(3) }
+                // Category 2 Header: Ambient Clock Faces
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, bottom = 8.dp)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize().padding(8.dp)
-                        ) {
-                            Text(
-                                text = "Music Player",
-                                color = color3,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Live Media Controls",
-                                color = Color.Gray,
-                                fontSize = 10.sp
-                            )
-                        }
+                        Text(
+                            text = "AMBIENT CLOCK FACES",
+                            color = Color(0xFF64748B),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp
+                        )
                     }
+                }
 
-                    // Card 4: Timer & Stopwatch preview
-                    OverviewPreviewCard(
-                        title = "05 | TIMER MATRIX",
-                        accentColor = color4,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToPage(4) }
+                itemsIndexed(clockThemes) { clockThemeIdx, item ->
+                    val (title, label) = item
+                    val isActive = (activePage == 0 && activeClockFace == clockThemeIdx)
+                    
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectClockFace(clockThemeIdx) }
+                            .border(
+                                1.5.dp,
+                                if (isActive) color0 else Color.White.copy(alpha = 0.08f),
+                                RoundedCornerShape(16.dp)
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isActive) Color(0xFF1E293B).copy(alpha = 0.7f) else Color(0xFF0F172A).copy(alpha = 0.4f)
+                        )
                     ) {
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize().padding(8.dp)
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = "Focus & Lap Timer",
-                                color = color4,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Pomodoro & High-Tech Stops",
-                                color = Color.Gray,
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
-
-                    // Card 5: Duo split widget page preview
-                    OverviewPreviewCard(
-                        title = "06 | DUO SPLIT SPLITS",
-                        accentColor = Color(0xFF2DD4BF),
-                        modifier = Modifier.weight(1f),
-                        onClick = { onNavigateToPage(5) }
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize().padding(8.dp)
-                        ) {
-                            Text(
-                                text = "Duo Screens",
-                                color = Color(0xFF2DD4BF),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Side-by-Side Dual Widgets",
-                                color = Color.Gray,
-                                fontSize = 10.sp
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = label,
+                                        color = if (isActive) color0 else Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = title,
+                                        color = Color.Gray,
+                                        fontSize = 9.sp,
+                                        maxLines = 1
+                                    )
+                                }
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isActive) color0 else Color.White.copy(alpha = 0.1f))
+                                        .border(1.dp, if (isActive) color0 else Color.White.copy(alpha = 0.2f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isActive) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(240.dp, 135.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .requiredSize(480.dp, 270.dp)
+                                        .graphicsLayer {
+                                            scaleX = 0.5f
+                                            scaleY = 0.5f
+                                        }
+                                ) {
+                                    ClockPage(themeIndex = clockThemeIdx)
+                                }
+                            }
                         }
                     }
                 }
@@ -1501,43 +1655,527 @@ fun AppOverviewLayout(
 }
 
 @Composable
-fun OverviewPreviewCard(
-    title: String,
-    accentColor: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = modifier
-            .height(130.dp)
-            .clickable { onClick() }
-            .border(1.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B).copy(alpha = 0.3f))
+fun PreviewAlarmPage(accentColor: Color, fontFamily: FontFamily) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = 0.15f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Lock,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "07:30",
+                color = accentColor,
+                fontSize = 42.sp,
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "WAKE UP ALARM",
+                color = Color.LightGray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.5.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Mon, Tue, Wed, Thu, Fri",
+                color = Color.Gray,
+                fontSize = 9.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun PreviewCalendarPage(accentColor: Color, fontFamily: FontFamily) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(16.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(240.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = 0.12f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .background(accentColor.copy(alpha = 0.08f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .weight(0.4f)
+                    .fillMaxHeight()
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = title,
+                    text = "MAY",
                     color = accentColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.sp
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = "21",
+                    color = Color.White,
+                    fontSize = 44.sp,
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "THURSDAY",
+                    color = Color.Gray,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
+            
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                    .width(1.dp)
+                    .fillMaxHeight(0.7f)
+                    .background(Color.White.copy(alpha = 0.15f))
+            )
+
+            Column(
+                modifier = Modifier
+                    .weight(0.6f)
+                    .fillMaxHeight()
+                    .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "UPCOMING AGENDA",
+                    color = Color.Gray,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(accentColor)
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Column {
+                        Text(
+                            text = "Design Review Meeting",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "10:00 AM - 11:30 AM",
+                            color = Color.Gray,
+                            fontSize = 8.sp
+                        )
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(accentColor.copy(alpha = 0.5f))
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Column {
+                        Text(
+                            text = "Lunch with Team",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "12:30 PM - 1:30 PM",
+                            color = Color.Gray,
+                            fontSize = 8.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PreviewMediaPage(accentColor: Color, fontFamily: FontFamily) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(16.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(240.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = 0.15f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(90.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1E293B))
+                    .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                content()
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(accentColor)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Midnight Serenade",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1
+                )
+                Text(
+                    text = "Acoustic Horizon",
+                    color = accentColor,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+                
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("1:24", color = Color.Gray, fontSize = 7.sp)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 6.dp)
+                            .height(2.dp)
+                            .background(Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.4f)
+                                .fillMaxHeight()
+                                .background(accentColor)
+                        )
+                    }
+                    Text("3:45", color = Color.Gray, fontSize = 7.sp)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(accentColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Icon(
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PreviewTimerPage(accentColor: Color, fontFamily: FontFamily) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = 0.15f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .weight(0.45f),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.1f),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4.dp.toPx())
+                    )
+                    drawArc(
+                        color = accentColor,
+                        startAngle = -90f,
+                        sweepAngle = 270f,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 4.dp.toPx(),
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    )
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "25:00",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "FOCUS",
+                        color = accentColor,
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(0.55f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "FOCUS ROUND 1/4",
+                    color = Color.Gray,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Deep Work Session",
+                    color = Color.LightGray,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {},
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("START", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = {},
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("RESET", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PreviewDuoPage(fontFamily: FontFamily) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF0F172A))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "AMBIENT DUO",
+                        color = Color(0xFF3B82F6),
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "10:24",
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "London 🌤️ 18°C",
+                        color = Color.Gray,
+                        fontSize = 8.sp
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF0F172A))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.Start) {
+                    Text(
+                        text = "UPCOMING",
+                        color = Color(0xFF2DD4BF),
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    Text(
+                        text = "• Tea Ceremony",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "03:30 PM - Duo Zen",
+                        color = Color.Gray,
+                        fontSize = 7.sp,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "• Standby Sync",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 9.sp,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
