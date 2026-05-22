@@ -87,14 +87,6 @@ fun AlarmPage(modifier: Modifier = Modifier, viewModel: StandbyViewModel = viewM
                         fontFamily = customFont,
                         letterSpacing = 1.5.sp
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (alarms.isEmpty()) "No alarms configured" else "${alarms.size} active alarms list",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 12.sp,
-                        fontFamily = customFont,
-                        fontWeight = FontWeight.Medium
-                    )
                 }
 
                 // Add Alarm Button with modern outline glowing look
@@ -160,16 +152,6 @@ fun AlarmPage(modifier: Modifier = Modifier, viewModel: StandbyViewModel = viewM
                             fontFamily = customFont,
                             letterSpacing = 1.sp
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Set customizable recurring chimes, alert labels, and snooze rules to organize your routines.",
-                            color = Color.Gray,
-                            fontSize = 12.sp,
-                            fontFamily = customFont,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 18.sp,
-                            modifier = Modifier.widthIn(max = 280.dp)
-                        )
                     }
                 }
             } else {
@@ -222,7 +204,7 @@ fun AlarmCard(
     val enabledState = alarm.isEnabled
 
     val cardBg = remember(enabledState) {
-        if (enabledState) Color(0xFF0F172A) else Color(0xFF050505)
+        Color.Black // True AMOLED Black for maximum power saving
     }
     val cardBorder = remember(enabledState, accentColor) {
         if (enabledState) BorderStroke(1.dp, accentColor.copy(alpha = 0.2f))
@@ -371,7 +353,7 @@ fun CustomAddAlarmDialog(
     AlertDialog(
         onDismissRequest = { onDismiss() },
         shape = RoundedCornerShape(24.dp),
-        containerColor = Color(0xFF0F172A),
+        containerColor = Color.Black, // True AMOLED Black for maximum power saving
         title = {
             Text(
                 text = "Add custom Alarm".uppercase(),

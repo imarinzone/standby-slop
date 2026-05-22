@@ -79,9 +79,86 @@ class StandbyNotificationListenerService : NotificationListenerService() {
         activeCallbacks.clear()
     }
 
+    private fun getMediaControllersFromNotifications(): List<MediaController> {
+        val list = mutableListOf<MediaController>()
+        try {
+            val activeNotifications = this.activeNotifications
+            if (activeNotifications != null) {
+                for (sbn in activeNotifications) {
+                    val notification = sbn.notification ?: continue
+                    val extras = notification.extras ?: continue
+                    val token = extras.get(android.app.Notification.EXTRA_MEDIA_SESSION) as? android.media.session.MediaSession.Token
+                    if (token != null) {
+                        try {
+                            val controller = MediaController(this, token)
+                            list.add(controller)
+                        } catch (e: Exception) {
+                            // Ignore
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting controllers from notifications", e)
+        }
+        return list
+    }
+
+    private fun tryExtractMediaFromNotifications() {
+        try {
+            val activeNotifications = this.activeNotifications
+            if (activeNotifications != null) {
+                for (sbn in activeNotifications) {
+                    val notification = sbn.notification ?: continue
+                    val extras = notification.extras ?: continue
+                    
+                    val isMedia = extras.containsKey(android.app.Notification.EXTRA_MEDIA_SESSION)
+                    if (isMedia || sbn.packageName.contains("spotify") || sbn.packageName.contains("music") || sbn.packageName.contains("player")) {
+                        var title = extras.getString(android.app.Notification.EXTRA_TITLE)
+                        var artist = extras.getString(android.app.Notification.EXTRA_TEXT)
+                        if (title.isNullOrEmpty()) {
+                            title = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
+                        }
+                        if (artist.isNullOrEmpty()) {
+                            artist = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString()
+                        }
+                        
+                        if (!title.isNullOrEmpty()) {
+                            MediaStateHolder.trackTitle.value = title
+                            MediaStateHolder.artistName.value = artist ?: "Unknown Artist"
+                            val isPlaying = sbn.notification.actions?.any { action ->
+                                action.title?.toString()?.contains("pause", ignoreCase = true) == true
+                            } ?: false
+                            MediaStateHolder.isPlaying.value = isPlaying
+                            MediaStateHolder.activeAppPackage.value = sbn.packageName
+                            
+                            val artLarge = notification.getLargeIcon()?.loadDrawable(this)
+                            if (artLarge is android.graphics.drawable.BitmapDrawable) {
+                                MediaStateHolder.albumArt.value = artLarge.bitmap
+                            }
+                            Log.d(TAG, "Fallback extracted media from active notifications: $title - $artist (playing=$isPlaying)")
+                            return
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in fallback media extractor", e)
+        }
+    }
+
     private fun syncControllers(controllers: List<MediaController>?) {
         clearCallbacks()
-        if (controllers.isNullOrEmpty()) {
+        var targetControllers = controllers
+        if (targetControllers.isNullOrEmpty()) {
+            targetControllers = getMediaControllersFromNotifications()
+        }
+
+        if (targetControllers.isNullOrEmpty()) {
+            tryExtractMediaFromNotifications()
+            if (MediaStateHolder.trackTitle.value != "No Track" && MediaStateHolder.trackTitle.value != null && !MediaStateHolder.trackTitle.value.isNullOrEmpty()) {
+                return
+            }
             MediaStateHolder.trackTitle.value = "No Track"
             MediaStateHolder.artistName.value = "Unknown Artist"
             MediaStateHolder.isPlaying.value = false
@@ -90,20 +167,24 @@ class StandbyNotificationListenerService : NotificationListenerService() {
             return
         }
 
-        val activeController = controllers.firstOrNull { 
+        val activeController = targetControllers.firstOrNull { 
             it.playbackState?.state == PlaybackState.STATE_PLAYING 
-        } ?: controllers.first()
+        } ?: targetControllers.first()
 
         updateMediaState(activeController)
 
-        for (controller in controllers) {
+        for (controller in targetControllers) {
             val cb = object : MediaController.Callback() {
                 override fun onPlaybackStateChanged(state: PlaybackState?) {
                     handler.post {
-                        val refreshed = mediaSessionManager?.getActiveSessions(
-                            ComponentName(this@StandbyNotificationListenerService, StandbyNotificationListenerService::class.java)
-                        )
-                        var target = refreshed?.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+                        val refreshed = try {
+                            mediaSessionManager?.getActiveSessions(
+                                ComponentName(this@StandbyNotificationListenerService, StandbyNotificationListenerService::class.java)
+                            )
+                        } catch (e: Exception) {
+                            null
+                        } ?: getMediaControllersFromNotifications()
+                        var target = refreshed.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
                         if (target == null) {
                             target = controller
                         }

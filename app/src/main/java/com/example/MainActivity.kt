@@ -48,6 +48,14 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             android.util.Log.e(TAG, "onCreate: Failed to set screen orientation", e)
         }
+
+        try {
+            // Keep screen on while Standby is active to act as a continuous desk clock
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            android.util.Log.d(TAG, "onCreate: FLAG_KEEP_SCREEN_ON added successfully")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "onCreate: Failed to set keep screen on flag", e)
+        }
         
         try {
             // Immersive approach for Standby Display

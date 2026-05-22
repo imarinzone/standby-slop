@@ -88,7 +88,8 @@ fun StandbyScreen(
             .pointerInput(isOverviewMode, isScreenLocked) {
                 if (isScreenLocked) return@pointerInput
                 detectTransformGestures { _, _, zoom, _ ->
-                    if (zoom < 0.82f && !isOverviewMode) {
+                    // Support both pinch-out (zoom > 1.12) and pinch-in (zoom < 0.88) to show zoom out layout
+                    if ((zoom < 0.88f || zoom > 1.12f) && !isOverviewMode) {
                         isOverviewMode = true
                     }
                 }
@@ -384,7 +385,7 @@ fun StandbyScreen(
                             modifier = Modifier
                                 .size(width = trackWidthDp, height = trackHeightDp)
                                 .clip(RoundedCornerShape(26.dp))
-                                .background(Color(0xFF0F172A).copy(alpha = 0.85f))
+                                .background(Color.Black.copy(alpha = 0.95f)) // True AMOLED Black for maximum power saving
                                 .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(26.dp)),
                             contentAlignment = Alignment.CenterStart
                         ) {
@@ -595,7 +596,7 @@ fun StandbyCustomizationDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF070B13))
+                .background(Color.Black) // True AMOLED Black for maximum power saving
                 .systemBarsPadding()
         ) {
             Box(
@@ -618,7 +619,7 @@ fun StandbyCustomizationDialog(
                     modifier = Modifier
                         .width(280.dp)
                         .fillMaxHeight()
-                        .background(Color(0xFF0C111D))
+                        .background(Color.Black) // True AMOLED Black for maximum power saving
                         .padding(20.dp)
                 ) {
                     Text(
@@ -1350,7 +1351,7 @@ fun AppOverviewLayout(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF020617).copy(alpha = 0.98f)) // Deep slate-black premium background
+            .background(Color.Black) // True AMOLED Black for maximum power saving
             .padding(16.dp)
             .pointerInput(Unit) {
                 detectTransformGestures { _, _, zoom, _ ->
@@ -1439,7 +1440,7 @@ fun AppOverviewLayout(
                         modifier = Modifier
                             .width(180.dp)
                             .fillMaxHeight()
-                            .background(Color(0xFF0F172A).copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                            .background(Color.Black, RoundedCornerShape(16.dp)) // True AMOLED Black for maximum power saving
                             .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
                             .padding(8.dp)
                     ) {
@@ -1535,7 +1536,7 @@ fun AppOverviewLayout(
                         modifier = Modifier
                             .width(180.dp)
                             .fillMaxHeight()
-                            .background(Color(0xFF0F172A).copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                            .background(Color.Black, RoundedCornerShape(16.dp)) // True AMOLED Black for maximum power saving
                             .border(
                                 1.5.dp,
                                 if (isActive) pageColor else Color.White.copy(alpha = 0.08f),
@@ -2121,3 +2122,5 @@ fun PreviewDuoPage(fontFamily: FontFamily) {
         }
     }
 }
+
+

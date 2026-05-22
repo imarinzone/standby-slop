@@ -8,22 +8,17 @@ This repository is now fully open-source! We welcome developers, designers, and 
 
 ## 📸 Product Showroom & Live Gallery
 
-Below is a curated layout of the application's actual screenshots recorded directly from the living codebase—optimized precisely for dynamic landscape configurations:
+Below is a curated layout of the application's actual screenshots recorded directly from the codebase—optimized precisely for dynamic landscape configurations:
 
 | 🌌 NEON DIGITAL CLOCK | 🎵 MUSIC CONTROLLER PAGE |
 |:---:|:---:|
-| <img src="app/src/test/screenshots/neon_digital_clock.png" width="400" alt="Cyber Neon Digital Clock Screen" /> | <img src="app/src/test/screenshots/music_player_panel.png" width="400" alt="Landscape Music Player Interface" /> |
+| <img src="screenshots/neon_digital_clock.png" width="400" alt="Cyber Neon Digital Clock Screen" /> | <img src="screenshots/music_player_panel.png" width="400" alt="Landscape Music Player Interface" /> |
 | **Cyberpunk aesthetics meet crisp timekeeping** | **Integrated media control center with radial ripples** |
 
 | ⏱️ FOCUS TIMER & STOPWATCH MATRIX | 🎛️ STANDBY DIRECTORY OVERVIEW |
 |:---:|:---:|
-| <img src="app/src/test/screenshots/focus_timer_matrix.png" width="400" alt="Draggable Pomodoro Focus State" /> | <img src="app/src/test/screenshots/standby_directory.png" width="400" alt="App Overview Matrix Grid" /> |
+| <img src="screenshots/focus_timer_matrix.png" width="400" alt="Draggable Pomodoro Focus State" /> | <img src="screenshots/standby_directory.png" width="400" alt="App Overview Matrix Grid" /> |
 | **Elegant gesture-driven Focus Ring and Millisecond Lap counter** | **Press or pinch-to-zoom directory displaying live preview metrics** |
-
-> **💡 Developer Tip:** To update or recreate these high-fidelity screenshots:
-> 1. Run standard Roborazzi recording via terminal command: `gradle :app:recordRoborazziDebug`
-> 2. The images inside `app/src/test/screenshots/` will be updated with your active styles, layouts, and clock interfaces.
-> 3. Commit the changes and push to GitHub to showcase your unique Standby customization!
 
 ---
 
@@ -105,7 +100,7 @@ To run build tasks and compile:
 gradle assembleDebug
 ```
 
-To run standard unit tests & visual integration snapshots:
+To run standard JVM unit tests:
 ```bash
 gradle :app:testDebugUnitTest
 ```

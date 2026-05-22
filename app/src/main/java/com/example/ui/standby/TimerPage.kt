@@ -386,7 +386,7 @@ fun FocusPomodoroTimer() {
         AlertDialog(
             onDismissRequest = { showConfigDialog = false },
             title = { Text("Configure Focus Length", color = Color.White) },
-            containerColor = Color(0xFF1E293B),
+            containerColor = Color.Black,
             textContentColor = Color.White,
             text = {
                 Column(
@@ -397,7 +397,8 @@ fun FocusPomodoroTimer() {
                         val isSel = focusMinutes == mins
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isSel) Color(0xFFE11D48) else Color(0xFF334155),
+                            color = if (isSel) Color(0xFFE11D48) else Color.Black,
+                            border = if (isSel) null else androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
@@ -465,7 +466,7 @@ fun HighTechStopwatch() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF090A0C)) // Slick dark cockpit color
+            .background(Color.Black) // True AMOLED Black for maximum power saving
             .padding(horizontal = 48.dp, vertical = 20.dp),
         contentAlignment = Alignment.Center
     ) {

@@ -224,7 +224,7 @@ fun WidgetContainer(
 
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF080A0D)), // Ultra-deep slate near-black
+            colors = CardDefaults.cardColors(containerColor = Color.Black), // True AMOLED Black for maximum power saving
             modifier = Modifier
                 .fillMaxSize()
                 .border(0.5.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
@@ -440,14 +440,6 @@ fun DuoAlarmWidget(viewModel: StandbyViewModel) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 12.dp)
         )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Configure & customize in the full Alarms tab.",
-            color = Color.Gray.copy(alpha = 0.4f),
-            fontSize = 9.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
     }
 }
 
@@ -496,128 +488,25 @@ fun DuoCalendarWidget(
         }
     }
 
-    if (!hasCalendarPermission) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize().padding(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Event,
-                contentDescription = null,
-                tint = Color.DarkGray,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                "Calendar Locked",
-                color = Color.LightGray,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                "Access is required",
-                color = Color.Gray,
-                fontSize = 8.sp,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { calendarPermissionState.launchPermissionRequest() },
-                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                modifier = Modifier.height(24.dp)
-            ) {
-                Text(
-                    "GRANT ACCESS",
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (accentColor == Color.White) Color.Black else Color.White
-                )
-            }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        val currentCal = remember { Calendar.getInstance() }
+        val monthName = remember(currentCal) {
+            SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(currentCal.time)
         }
-    } else if (events.isEmpty()) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Icon(
-                imageVector = Icons.Default.Event,
-                contentDescription = null,
-                tint = Color.DarkGray,
-                modifier = Modifier.size(30.dp)
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                "Agenda Empty",
-                color = Color.Gray,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                "No upcoming events",
-                color = Color.DarkGray,
-                fontSize = 9.sp
-            )
-        }
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = "UPCOMING SCHEDULE",
-                color = accentColor,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(bottom = 2.dp)
-            )
-            
-            // Show top 2 calendar events for the narrow form factor
-            events.take(2).forEach { event ->
-                Surface(
-                    color = Color.White.copy(alpha = 0.04f),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = event.title,
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(event.dtStart))
-                            Icon(
-                                imageVector = Icons.Default.Schedule,
-                                contentDescription = null,
-                                tint = Color.Gray,
-                                modifier = Modifier.size(10.dp)
-                            )
-                            Text(
-                                text = timeStr,
-                                color = Color.Gray,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        MonthlyGrid(
+            startOnMonday = false,
+            highlightDay = currentCal.get(Calendar.DAY_OF_MONTH),
+            showEventDots = true,
+            events = events,
+            accentColor = accentColor,
+            customFont = FontFamily.Default,
+            monthLabel = monthName
+        )
     }
 }
 

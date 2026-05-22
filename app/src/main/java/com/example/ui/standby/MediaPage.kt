@@ -29,6 +29,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -86,8 +93,6 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
             null
         }
     }
-
-    val isCurrentlyPlaying = isPlayingFlow || isMusicActive
 
     var installedApps by remember { mutableStateOf<List<InstalledMusicApp>>(emptyList()) }
 
@@ -167,280 +172,30 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
         }
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color(0xFF0F172A))
-            .padding(24.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
+    val isCurrentlyPlaying = isPlayingFlow || isMusicActive || (!trackTitle.isNullOrEmpty() && trackTitle != "No Track")
+
+    if (isCurrentlyPlaying) {
+        MaterialYouExpressivePlayer(
+            trackTitle = trackTitle,
+            artistName = artistName,
+            albumArt = albumArt,
+            isPlaying = isPlayingFlow,
+            appInfo = appInfo,
+            accentColor = accentColor,
+            customFont = customFont,
+            context = context
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black) // True AMOLED Black for maximum power saving
+                .padding(24.dp)
         ) {
-            Text(
-                text = "Music Player",
-                color = Color.White,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = customFont,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // Dynamic special notification access card (highest priority)
-            if (!isNotificationListenerGranted) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                        .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(accentColor.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = null,
-                                tint = accentColor,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Special Notification Access Required",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Enable Notification Sync settings to let Standby recognize and control active music applications.",
-                                color = Color.LightGray,
-                                fontSize = 11.sp
-                            )
-                        }
-                        Button(
-                            onClick = { openNotificationListenerSettings(context) },
-                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                            modifier = Modifier.defaultMinSize(minHeight = 1.dp)
-                        ) {
-                            Text(
-                                "Grant Access",
-                                color = if (accentColor == Color.White) Color.Black else Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            } else if (!hasNotificationPermission && Build.VERSION.SDK_INT >= 33) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                        .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(accentColor.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = null,
-                                tint = accentColor,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Notification Permission Recommended",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Allows the display to sync accurately with active media players.",
-                                color = Color.LightGray,
-                                fontSize = 11.sp
-                            )
-                        }
-                        Button(
-                            onClick = { notificationPermissionState?.launchPermissionRequest() },
-                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                            modifier = Modifier.defaultMinSize(minHeight = 1.dp)
-                        ) {
-                            Text(
-                                "Grant",
-                                color = if (accentColor == Color.White) Color.Black else Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (isCurrentlyPlaying) {
-                // Active State Display
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(140.dp)
-                            .clip(CircleShape)
-                            .background(accentColor.copy(alpha = 0.12f))
-                            .border(3.dp, accentColor.copy(alpha = 0.5f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (albumArt != null) {
-                            Image(
-                                bitmap = albumArt!!.asImageBitmap(),
-                                contentDescription = "Album Art",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                            )
-                        } else {
-                            val appBitmap = remember(appInfo?.second) {
-                                try {
-                                    appInfo?.second?.toBitmap()?.asImageBitmap()
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
-                            if (appBitmap != null) {
-                                Image(
-                                    bitmap = appBitmap,
-                                    contentDescription = "App Icon",
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = "Active Playing",
-                                    tint = accentColor,
-                                    modifier = Modifier.size(60.dp)
-                                )
-                            }
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Text(
-                        text = trackTitle ?: "Unknown Track",
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = customFont,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Text(
-                        text = artistName ?: "Unknown Artist",
-                        color = accentColor,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        fontFamily = customFont,
-                        modifier = Modifier.padding(top = 4.dp),
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    if (appInfo != null) {
-                        Text(
-                            text = "Playing via ${appInfo.first}".uppercase(),
-                            color = Color.LightGray.copy(alpha = 0.6f),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.sp,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    // Transport Actions
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(24.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
-                            modifier = Modifier
-                                .size(56.dp)
-                                .background(Color(0xFF1E293B), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipPrevious,
-                                contentDescription = "Previous Song",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
-                            modifier = Modifier
-                                .size(72.dp)
-                                .background(accentColor, CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = if (isPlayingFlow) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Play/Pause Song",
-                                tint = if (accentColor == Color.White) Color.Black else Color.White,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
-                            modifier = Modifier
-                                .size(56.dp)
-                                .background(Color(0xFF1E293B), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Next Song",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-                }
-            } else {
-                // Inactive State Display -> Ask to launch music applications
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -494,6 +249,28 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
                                 modifier = Modifier.padding(horizontal = 32.dp)
                             )
                         }
+                    }
+                }
+
+                if (!isNotificationListenerGranted) {
+                    Button(
+                        onClick = { openNotificationListenerSettings(context) },
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor.copy(alpha = 0.2f)),
+                        modifier = Modifier.padding(top = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Sync",
+                            tint = accentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Link System Player",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
@@ -661,3 +438,236 @@ private fun openNotificationListenerSettings(context: Context) {
         }
     }
 }
+
+private fun getDominantColor(bitmap: android.graphics.Bitmap?): Color {
+    if (bitmap == null || bitmap.isRecycled) return Color.Black // True AMOLED Black for maximum power saving
+    try {
+        if (bitmap.isRecycled) return Color.Black
+        val width = bitmap.width
+        val height = bitmap.height
+        val stepX = (width / 5).coerceAtLeast(1)
+        val stepY = (height / 5).coerceAtLeast(1)
+        var sumR = 0L
+        var sumG = 0L
+        var sumB = 0L
+        var count = 0
+        for (x in 0 until width step stepX) {
+            for (y in 0 until height step stepY) {
+                val pixel = bitmap.getPixel(x, y)
+                sumR += android.graphics.Color.red(pixel)
+                sumG += android.graphics.Color.green(pixel)
+                sumB += android.graphics.Color.blue(pixel)
+                count++
+            }
+        }
+        if (count > 0) {
+            val r = (sumR / count).toInt()
+            val g = (sumG / count).toInt()
+            val b = (sumB / count).toInt()
+            val hsv = FloatArray(3)
+            android.graphics.Color.RGBToHSV(r, g, b, hsv)
+            hsv[2] = (hsv[2] * 0.22f).coerceIn(0.12f, 0.45f)
+            hsv[1] = (hsv[1] * 1.2f).coerceIn(0.3f, 0.95f)
+            return Color(android.graphics.Color.HSVToColor(hsv))
+        }
+    } catch (e: Exception) {
+        // ignore and fallback
+    }
+    return Color.Black // True AMOLED Black for maximum power saving
+}
+
+@Composable
+fun MaterialYouExpressivePlayer(
+    trackTitle: String?,
+    artistName: String?,
+    albumArt: android.graphics.Bitmap?,
+    isPlaying: Boolean,
+    appInfo: Pair<String, android.graphics.drawable.Drawable>?,
+    accentColor: Color,
+    customFont: FontFamily,
+    context: Context
+) {
+    val pmLabel = appInfo?.first ?: "System Player"
+    val dominantColor = remember(albumArt) { getDominantColor(albumArt) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(dominantColor.copy(alpha = 0.3f), Color.Black) // True AMOLED Black base with subtle dynamic top glow
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .height(280.dp)
+                .clip(RoundedCornerShape(28.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (albumArt != null) {
+                    Image(
+                        bitmap = albumArt.asImageBitmap(),
+                        contentDescription = "Background Art",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Brush.radialGradient(listOf(accentColor.copy(alpha = 0.35f), Color.Transparent)))
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.45f),
+                                    Color.Black.copy(alpha = 0.82f)
+                                )
+                            )
+                        )
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { /* Volume decorational feedback */ },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VolumeUp,
+                                contentDescription = "Active Speaker",
+                                tint = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color.White.copy(alpha = 0.08f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Smartphone,
+                                    contentDescription = "Device",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = pmLabel,
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = customFont
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f).padding(end = 16.dp)
+                        ) {
+                            Text(
+                                text = trackTitle ?: "Unknown Track",
+                                color = Color.White,
+                                fontSize = 23.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = customFont,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = artistName ?: "Unknown Artist",
+                                color = Color.White.copy(alpha = 0.65f),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                fontFamily = customFont,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            IconButton(
+                                onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SkipPrevious,
+                                    contentDescription = "Previous",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clickable { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
+                                shape = RoundedCornerShape(16.dp),
+                                color = accentColor
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "Play/Pause",
+                                        tint = if (accentColor == Color.White) Color.Black else Color.White,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SkipNext,
+                                    contentDescription = "Next",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

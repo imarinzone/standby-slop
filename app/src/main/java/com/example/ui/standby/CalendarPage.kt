@@ -14,6 +14,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -62,6 +65,9 @@ fun CalendarPage(
     val showWeeklyFilter by viewModel.showWeekly.collectAsState()
     val showMonthlyFilter by viewModel.showMonthly.collectAsState()
     val showDemoEventsVal by viewModel.showDemoEvents.collectAsState()
+    
+    // Current active filter mode
+    var currentTab by remember { mutableStateOf(1) } // Default to 1: Week per request
 
     // Slide-Up Theme States
     var isSplitThemeExpanded by remember { mutableStateOf(false) }
@@ -101,6 +107,20 @@ fun CalendarPage(
     }
 
     var showQuickFiltersSheet by remember { mutableStateOf(false) }
+    var showCalendarSettingsDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadCalendarSources(context)
+    }
+
+    if (showCalendarSettingsDialog) {
+        CalendarSettingsDialog(
+            currentTab = currentTab,
+            onViewModeChange = { currentTab = it },
+            viewModel = viewModel,
+            onDismiss = { showCalendarSettingsDialog = false }
+        )
+    }
 
     Box(
         modifier = modifier
@@ -113,227 +133,102 @@ fun CalendarPage(
                 .fillMaxSize()
                 .padding(bottom = 44.dp) // Leave roomy space for sliding interactive trigger base
         ) {
-            // Header panel containing controls & options
+            // Header Row with Title & Settings Trigger Button (Tabs removed per user request)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF0F172A).copy(alpha = 0.5f))
                     .padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text(
-                        text = "UPCOMING SCHEDULE",
-                        color = accentColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.8.sp,
-                        fontFamily = customFont
-                    )
-                    Text(
-                        text = "Calendar",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = customFont
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Text(
+                    text = when (currentTab) {
+                        0 -> "Monthly View"
+                        1 -> "Weekly Agenda"
+                        2 -> "Daily Schedule"
+                        else -> "Weekly Agenda"
+                    }.uppercase(),
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = customFont,
+                    letterSpacing = 1.sp
+                )
+                
+                IconButton(
+                    onClick = { showCalendarSettingsDialog = true },
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    // Filter Hub toggle button
-                    IconButton(
-                        onClick = { showQuickFiltersSheet = !showQuickFiltersSheet },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(if (showQuickFiltersSheet) accentColor.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = "Event Filter Deck",
-                            tint = if (showQuickFiltersSheet) accentColor else Color.White
-                        )
-                    }
-
-                    if (hasCalendarPermission) {
-                        Button(
-                            onClick = { viewModel.loadLocalEvents(context) },
-                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "Sync",
-                                fontFamily = customFont,
-                                fontWeight = FontWeight.Bold,
-                                color = if (accentColor == Color.White) Color.Black else Color.White,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Calendar Settings",
+                        tint = accentColor
+                    )
                 }
             }
             Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
 
-            // Quick Filters Drawer (Card accordion list inside top screen panel)
-            AnimatedVisibility(
-                visible = showQuickFiltersSheet,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "CALENDAR FILTER",
-                            color = accentColor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Daily Switch
-                            FilterTagSwitch(
-                                label = "DAILY EVENTS",
-                                checked = showDailyFilter,
-                                accentColor = accentColor,
-                                onCheckedChange = { viewModel.showDaily.value = it },
-                                modifier = Modifier.weight(1f)
-                            )
-                            // Weekly Switch
-                            FilterTagSwitch(
-                                label = "WEEKLY EVENTS",
-                                checked = showWeeklyFilter,
-                                accentColor = accentColor,
-                                onCheckedChange = { viewModel.showWeekly.value = it },
-                                modifier = Modifier.weight(1f)
-                            )
-                            // Monthly Switch
-                            FilterTagSwitch(
-                                label = "MONTHLY EVENTS",
-                                checked = showMonthlyFilter,
-                                accentColor = accentColor,
-                                onCheckedChange = { viewModel.showMonthly.value = it },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-
-                    }
-                }
-            }
-
             // Events List Scrollbox
-            if (!hasCalendarPermission && !showDemoEventsVal) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = "Permission Needed",
-                        tint = accentColor.copy(alpha = 0.3f),
-                        modifier = Modifier.size(54.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Native Calendar Access Required",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = customFont
-                    )
-                    Text(
-                        text = "This app synchronizes native events to maintain beautiful standby screens. Grant access below to view your calendar details.",
-                        color = Color.Gray,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                        fontFamily = customFont,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = { calendarPermissionState.launchPermissionRequest() },
-                        colors = ButtonDefaults.buttonColors(containerColor = accentColor)
-                    ) {
-                        Text(
-                            "Authorize Calendar Provider",
-                            fontFamily = customFont,
-                            fontWeight = FontWeight.Bold,
-                            color = if (accentColor == Color.White) Color.Black else Color.White,
-                            fontSize = 12.sp
-                        )
+            when (currentTab) {
+                0 -> { 
+                     Box(
+                         modifier = Modifier
+                             .fillMaxSize()
+                             .padding(16.dp),
+                         contentAlignment = Alignment.Center
+                     ) {
+                         val currentCal = remember { Calendar.getInstance() }
+                         val monthName = remember(currentCal) {
+                             SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(currentCal.time)
+                         }
+                         val startWeekOnMonday by viewModel.startWeekOnMonday.collectAsState()
+                         val showEventDotsVal by viewModel.showEventDots.collectAsState()
+
+                         MonthlyGrid(
+                             startOnMonday = startWeekOnMonday, 
+                             highlightDay = currentCal.get(Calendar.DAY_OF_MONTH), 
+                             showEventDots = showEventDotsVal, 
+                             events = events, 
+                             accentColor = accentColor, 
+                             customFont = customFont, 
+                             monthLabel = monthName
+                         )
+                     }
+                }
+                1 -> {
+                    // Week / Existing list
+                    if (!hasCalendarPermission && !showDemoEventsVal) {
+                        EmptyCalendarView(accentColor, customFont, calendarPermissionState)
+                    } else if (error != null && !showDemoEventsVal) {
+                        ErrorView(error!!, customFont)
+                    } else if (events.isEmpty()) {
+                        EmptyAgendaView(customFont)
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(vertical = 20.dp, horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(events, key = { it.id }) { event ->
+                                LocalEventItem(event, customFont, accentColor)
+                            }
+                        }
                     }
                 }
-            } else {
-                if (error != null && !showDemoEventsVal) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = error!!,
-                            color = Color.Red,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center,
-                            fontFamily = customFont
+                2 -> {
+                    // Daily View
+                    if (!hasCalendarPermission && !showDemoEventsVal) {
+                        EmptyCalendarView(accentColor, customFont, calendarPermissionState)
+                    } else if (error != null && !showDemoEventsVal) {
+                        ErrorView(error!!, customFont)
+                    } else if (events.isEmpty()) {
+                        EmptyAgendaView(customFont)
+                    } else {
+                        DailyTimelineView(
+                            events = events,
+                            customFont = customFont,
+                            accentColor = accentColor
                         )
-                    }
-                } else if (events.isEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FreeBreakfast,
-                            contentDescription = "Clear agenda",
-                            tint = Color.DarkGray,
-                            modifier = Modifier.size(44.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Your Standby Schedule looks empty",
-                            color = Color.LightGray,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = customFont
-                        )
-                        Text(
-                            text = "Try enabling 'Show Demo Schedules' or activating event category options above.",
-                            color = Color.Gray,
-                            fontSize = 11.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 2.dp)
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        contentPadding = PaddingValues(vertical = 20.dp, horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(events, key = { it.id }) { event ->
-                            LocalEventItem(event, customFont, accentColor)
-                        }
                     }
                 }
             }
@@ -363,25 +258,6 @@ fun CalendarPage(
                 },
             contentAlignment = Alignment.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardDoubleArrowUp,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = "SWIPE UP OR TAP FOR SPLIT MONTH THEME",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 10.sp,
-                    letterSpacing = 1.5.sp,
-                    fontFamily = customFont
-                )
-            }
         }
 
         // SLIDABLE OVERLAY THEME (SLIDES UP FROM BOTTOM OF VIEWPORT)
@@ -401,7 +277,8 @@ fun CalendarPage(
                 standbyViewModel = standbyViewModel,
                 accentColor = accentColor,
                 customFont = customFont,
-                onDismiss = { isSplitThemeExpanded = false }
+                onDismiss = { isSplitThemeExpanded = false },
+                onOpenSettings = { showCalendarSettingsDialog = true }
             )
         }
     }
@@ -459,7 +336,8 @@ fun SplitMonthTheme(
     standbyViewModel: StandbyViewModel,
     accentColor: Color,
     customFont: androidx.compose.ui.text.font.FontFamily,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val events by viewModel.events.collectAsState()
     
@@ -484,13 +362,10 @@ fun SplitMonthTheme(
         events.filter { it.category == "Daily" }
     }
 
-    // Local configuration drawer in overlay
-    var showInlineConfigDeck by remember { mutableStateOf(false) }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF020617)) // Extra cinematic obsidian black
+            .background(Color.Black) // True AMOLED Black for maximum power saving
             .pointerInput(Unit) {
                 // Intercept any clicks to prevent parent interaction
                 detectDragGestures(
@@ -560,7 +435,7 @@ fun SplitMonthTheme(
                         .weight(1.1f)
                         .fillMaxHeight(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A).copy(alpha = 0.4f)),
+                    colors = CardDefaults.cardColors(containerColor = Color.Black), // True AMOLED Black for maximum power saving
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
                 ) {
                     Column(
@@ -631,7 +506,7 @@ fun SplitMonthTheme(
                         .weight(0.9f)
                         .fillMaxHeight(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0B0F19)),
+                    colors = CardDefaults.cardColors(containerColor = Color.Black), // True AMOLED Black for maximum power saving
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.04f))
                 ) {
                     Column(
@@ -783,107 +658,6 @@ fun SplitMonthTheme(
                 }
             }
 
-            // INLINE ACCORDION DECK PREFERENCES ROW (CONFIGURABILITY ON FLY)
-            AnimatedVisibility(
-                visible = showInlineConfigDeck,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "SPLIT THEME PREFERENCES",
-                            color = accentColor,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Week Starter Config
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("WEEK START DAY", color = Color.Gray, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    PresetSelectTag(
-                                        label = "Sun",
-                                        isSelected = !startOnMon,
-                                        accentColor = accentColor,
-                                        onClick = { viewModel.startWeekOnMonday.value = false }
-                                    )
-                                    PresetSelectTag(
-                                        label = "Mon",
-                                        isSelected = startOnMon,
-                                        accentColor = accentColor,
-                                        onClick = { viewModel.startWeekOnMonday.value = true }
-                                    )
-                                }
-                            }
-
-                            // Event Dot indicators Config
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("EVENT INDICATORS", color = Color.Gray, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    PresetSelectTag(
-                                        label = "Show",
-                                        isSelected = showDots,
-                                        accentColor = accentColor,
-                                        onUncheckText = "Hide",
-                                        onClick = { viewModel.showEventDots.value = true }
-                                    )
-                                    PresetSelectTag(
-                                        label = "Hide",
-                                        isSelected = !showDots,
-                                        accentColor = accentColor,
-                                        onClick = { viewModel.showEventDots.value = false }
-                                    )
-                                }
-                            }
-
-                            // Theme Split panel layouts Config
-                            Column(modifier = Modifier.weight(1.5f)) {
-                                Text("LEFT DISPLAY", color = Color.Gray, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    PresetSelectTag(
-                                        label = "Both",
-                                        isSelected = leftStyle == 0,
-                                        accentColor = accentColor,
-                                        onClick = { viewModel.leftThemeStyle.value = 0 }
-                                    )
-                                    PresetSelectTag(
-                                        label = "Month Only",
-                                        isSelected = leftStyle == 1,
-                                        accentColor = accentColor,
-                                        onClick = { viewModel.leftThemeStyle.value = 1 }
-                                    )
-                                    PresetSelectTag(
-                                        label = "Date Only",
-                                        isSelected = leftStyle == 2,
-                                        accentColor = accentColor,
-                                        onClick = { viewModel.leftThemeStyle.value = 2 }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
             // Overlay Bottom Action Deck
             Row(
                 modifier = Modifier
@@ -893,26 +667,26 @@ fun SplitMonthTheme(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Settings adjust button
+                // Settings Config button triggers unified calendar dialog
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { showInlineConfigDeck = !showInlineConfigDeck }
+                        .clickable { onOpenSettings() }
                         .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .background(if (showInlineConfigDeck) accentColor.copy(alpha = 0.1f) else Color.Transparent)
+                        .background(Color.White.copy(alpha = 0.05f))
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = null,
-                        tint = if (showInlineConfigDeck) accentColor else Color.White,
+                        contentDescription = "Theme Configurations",
+                        tint = accentColor,
                         modifier = Modifier.size(12.dp)
                     )
                     Text(
-                        text = "THEME CONTROLS",
-                        color = if (showInlineConfigDeck) Color.White else Color.Gray,
+                        text = "THEME SETTINGS",
+                        color = Color.White,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1112,10 +886,11 @@ fun MonthlyGrid(
     }
 }
 
+
 @Composable
 fun LocalEventItem(
-    event: LocalCalendarEvent, 
-    customFont: androidx.compose.ui.text.font.FontFamily = androidx.compose.ui.text.font.FontFamily.Default, 
+    event: LocalCalendarEvent,
+    customFont: androidx.compose.ui.text.font.FontFamily = androidx.compose.ui.text.font.FontFamily.Default,
     accentColor: Color = Color.White
 ) {
     val startFormat = remember { SimpleDateFormat("EEE, MMM dd 'at' hh:mm a", Locale.getDefault()) }
@@ -1140,8 +915,8 @@ fun LocalEventItem(
         val code = event.title.hashCode()
         val absCode = if (code < 0) -code else code
         val colors = listOf(
-            Color(0xFF38BDF8), // Sky/Light Blue (Matches Niten Singh's birthday)
-            Color(0xFF34D399), // Emerald/Mint (Matches Bakrid tentative)
+            Color(0xFF38BDF8), // Sky/Light Blue
+            Color(0xFF34D399), // Emerald/Mint
             Color(0xFFFB923C), // Orange
             Color(0xFFC084FC), // Lavender / Purple
             Color(0xFFF472B6)  // Muted Rose Pink
@@ -1246,4 +1021,443 @@ fun LocalEventItem(
         }
     }
 }
+@Composable
+fun ErrorView(error: String, customFont: FontFamily) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(text = error, color = Color.Red, fontSize = 14.sp, textAlign = TextAlign.Center, fontFamily = customFont)
+    }
+}
+
+@Composable
+fun EmptyAgendaView(customFont: FontFamily) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(Icons.Default.FreeBreakfast, null, tint = Color.DarkGray.copy(alpha = 0.5f), modifier = Modifier.size(44.dp))
+    }
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+fun EmptyCalendarView( accentColor: Color, customFont: FontFamily, calendarPermissionState: com.google.accompanist.permissions.PermissionState) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(Icons.Default.CalendarToday, "Permission Needed", tint = accentColor.copy(alpha = 0.3f), modifier = Modifier.size(54.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+        Text("Native Calendar Access Required", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = customFont)
+        Text("This app synchronizes native events to maintain beautiful standby screens. Grant access below to view your calendar details.", color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center, fontFamily = customFont, modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+        Button(onClick = { calendarPermissionState.launchPermissionRequest() }, colors = ButtonDefaults.buttonColors(containerColor = accentColor)) {
+            Text("Authorize Calendar Provider", fontFamily = customFont, fontWeight = FontWeight.Bold, color = if (accentColor == Color.White) Color.Black else Color.White, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+fun DailyTimelineView(
+    events: List<LocalCalendarEvent>,
+    customFont: FontFamily,
+    accentColor: Color
+) {
+    val hours = (0..23).toList()
+    val scrollState = rememberScrollState()
+    
+    // Auto scroll to current hour of the day
+    val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    LaunchedEffect(Unit) {
+        scrollState.animateScrollTo((currentHour * 80).coerceAtMost(scrollState.maxValue))
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(vertical = 12.dp, horizontal = 20.dp)
+    ) {
+        hours.forEach { hour ->
+            val amPm = if (hour < 12) "AM" else "PM"
+            val hourLabel = when {
+                hour == 0 -> "12 AM"
+                hour == 12 -> "12 PM"
+                hour > 12 -> "${hour - 12} $amPm"
+                else -> "$hour $amPm"
+            }
+
+            val hourEvents = events.filter { event ->
+                val cal = Calendar.getInstance().apply { timeInMillis = event.dtStart }
+                cal.get(Calendar.HOUR_OF_DAY) == hour
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = hourLabel,
+                    color = Color.Gray,
+                    fontSize = 11.sp,
+                    fontFamily = customFont,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(54.dp).padding(top = 8.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Color.White.copy(alpha = 0.08f))
+                    )
+
+                    if (hourEvents.isEmpty()) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                    } else {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        hourEvents.forEach { event ->
+                            val startTimeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(event.dtStart))
+                            val endTimeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(event.dtEnd))
+                            
+                            val eventColor = remember(event.title) {
+                                val code = event.title.hashCode()
+                                val absCode = java.lang.Math.abs(code)
+                                val colors = listOf(
+                                    Color(0xFF38BDF8),
+                                    Color(0xFF34D399),
+                                    Color(0xFFFB923C),
+                                    Color(0xFFC084FC),
+                                    Color(0xFFF472B6)
+                                )
+                                colors[absCode % colors.size]
+                            }
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = eventColor.copy(alpha = 0.12f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, eventColor.copy(alpha = 0.3f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(3.dp)
+                                            .height(36.dp)
+                                            .background(eventColor, RoundedCornerShape(1.5.dp))
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    
+                                    Column {
+                                        Text(
+                                            text = event.title,
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = customFont
+                                        )
+                                        Text(
+                                            text = "$startTimeStr - $endTimeStr",
+                                            color = Color.LightGray.copy(alpha = 0.7f),
+                                            fontSize = 11.sp,
+                                            fontFamily = customFont,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                        if (!event.description.isNullOrEmpty()) {
+                                            Text(
+                                                text = event.description,
+                                                color = Color.Gray,
+                                                fontSize = 10.sp,
+                                                fontFamily = customFont,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CalendarSettingsDialog(
+    currentTab: Int,
+    onViewModeChange: (Int) -> Unit,
+    viewModel: CalendarViewModel,
+    onDismiss: () -> Unit
+) {
+    val sources by viewModel.calendarSources.collectAsState()
+    val selectedIds by viewModel.selectedCalendarIds.collectAsState()
+    val startOnMon by viewModel.startWeekOnMonday.collectAsState()
+    val showDots by viewModel.showEventDots.collectAsState()
+    val leftStyle by viewModel.leftThemeStyle.collectAsState()
+    val showDemoEventsVal by viewModel.showDemoEvents.collectAsState()
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Calendar Settings",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = Color.White
+            )
+        },
+        containerColor = Color.Black, // True AMOLED Black for maximum power saving
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // VIEW MODE SECTION
+                Text(
+                    "View Mode".uppercase(),
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    letterSpacing = 1.sp
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("Month" to 0, "Week" to 1, "Day" to 2).forEach { (label, index) ->
+                        val isSelected = currentTab == index
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) Color.White.copy(alpha = 0.12f) else Color.Transparent)
+                                .border(1.dp, if (isSelected) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                .clickable { onViewModeChange(index) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                label,
+                                color = if (isSelected) Color.White else Color.Gray,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+                
+                Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+
+                // THEME PREFERENCES SECTION
+                Text(
+                    "Theme Preferences".uppercase(),
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    letterSpacing = 1.sp
+                )
+
+                // Week start day selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Week Starts On", color = Color.White, fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (!startOnMon) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                                .clickable { viewModel.startWeekOnMonday.value = false }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text("Sunday", color = if (!startOnMon) Color.White else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (startOnMon) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                                .clickable { viewModel.startWeekOnMonday.value = true }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text("Monday", color = if (startOnMon) Color.White else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Monthly calendar event dots selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Event Dot Indicators", color = Color.White, fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (showDots) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                                .clickable { viewModel.showEventDots.value = true }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text("Show", color = if (showDots) Color.White else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (!showDots) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                                .clickable { viewModel.showEventDots.value = false }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text("Hide", color = if (!showDots) Color.White else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Split Left Display style selector
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Split Left Panel Display", color = Color.White, fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("Both Grid" to 0, "Month Only" to 1, "Date Only" to 2).forEach { (label, index) ->
+                            val isStyleSelected = leftStyle == index
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isStyleSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                                    .border(1.dp, if (isStyleSelected) Color.White.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f), RoundedCornerShape(6.dp))
+                                    .clickable { viewModel.leftThemeStyle.value = index }
+                                    .padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    label,
+                                    color = if (isStyleSelected) Color.White else Color.Gray,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+
+                // DEMO/MOCK SWITCH SECTION
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Use Offline Mock Data", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Populates custom offline demo schedules", color = Color.Gray, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = showDemoEventsVal,
+                        onCheckedChange = { viewModel.showDemoEvents.value = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = Color.White,
+                            uncheckedThumbColor = Color.Gray,
+                            uncheckedTrackColor = Color.Black
+                        )
+                    )
+                }
+
+                Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+
+                // CALENDAR SOURCES SECTION
+                Text(
+                    "Calendar Sources".uppercase(),
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    letterSpacing = 1.sp
+                )
+
+                if (sources.isEmpty()) {
+                    Text(
+                        "No system calendars found. Please allow Calendar Access or add an account calendar in device settings.",
+                        color = Color.Gray,
+                        fontSize = 11.sp
+                    )
+                } else {
+                    sources.forEach { source ->
+                        val isSelected = selectedIds.contains(source.id)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { 
+                                    viewModel.toggleCalendarSource(source.id)
+                                    viewModel.loadLocalEvents(context)
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = {
+                                    viewModel.toggleCalendarSource(source.id)
+                                    viewModel.loadLocalEvents(context)
+                                },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = Color.White,
+                                    uncheckedColor = Color.Gray,
+                                    checkmarkColor = Color.Black
+                                )
+                            )
+                            Column {
+                                Text(
+                                    text = source.name,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = source.account,
+                                    color = Color.Gray,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
 

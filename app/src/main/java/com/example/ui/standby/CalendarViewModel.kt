@@ -22,7 +22,14 @@ data class LocalCalendarEvent(
     val dtEnd: Long,
     val eventLocation: String?,
     val allDay: Boolean,
-    val category: String // "Daily", "Weekly", or "Monthly"
+    val category: String, // "Daily", "Weekly", or "Monthly"
+    val calendarId: Long = 0L
+)
+
+data class CalendarSource(
+    val id: Long,
+    val name: String,
+    val account: String
 )
 
 class CalendarViewModel : ViewModel() {
@@ -31,6 +38,53 @@ class CalendarViewModel : ViewModel() {
     
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
+
+    val calendarSources = MutableStateFlow<List<CalendarSource>>(emptyList())
+    val selectedCalendarIds = MutableStateFlow<Set<Long>>(emptySet())
+
+    fun loadCalendarSources(context: Context) {
+        viewModelScope.launch {
+            try {
+                val sources = withContext(Dispatchers.IO) {
+                    val uri = CalendarContract.Calendars.CONTENT_URI
+                    val projection = arrayOf(
+                        CalendarContract.Calendars._ID,
+                        CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+                        CalendarContract.Calendars.ACCOUNT_NAME
+                    )
+                    val list = mutableListOf<CalendarSource>()
+                    context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                        val idIdx = cursor.getColumnIndex(CalendarContract.Calendars._ID)
+                        val nameIdx = cursor.getColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+                        val accIdx = cursor.getColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
+                        while (cursor.moveToNext()) {
+                            val id = if (idIdx >= 0) cursor.getLong(idIdx) else 0L
+                            val name = if (nameIdx >= 0) cursor.getString(nameIdx) ?: "Primary" else "Primary"
+                            val account = if (accIdx >= 0) cursor.getString(accIdx) ?: "Local" else "Local"
+                            list.add(CalendarSource(id, name, account))
+                        }
+                    }
+                    list
+                }
+                calendarSources.value = sources
+                if (selectedCalendarIds.value.isEmpty() && sources.isNotEmpty()) {
+                    selectedCalendarIds.value = sources.map { it.id }.toSet()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("CalendarViewModel", "Failed to query calendar sources", e)
+            }
+        }
+    }
+
+    fun toggleCalendarSource(id: Long) {
+        val current = selectedCalendarIds.value.toMutableSet()
+        if (current.contains(id)) {
+            current.remove(id)
+        } else {
+            current.add(id)
+        }
+        selectedCalendarIds.value = current
+    }
 
     // Filtering preferences
     val showDaily = MutableStateFlow(true)
@@ -130,14 +184,22 @@ class CalendarViewModel : ViewModel() {
         )
     )
 
-    // Expose final events combined dynamically from settings filters
+    // Expose final events combined dynamically from settings filters and calendar selections
     val events: StateFlow<List<LocalCalendarEvent>> = combine(
         _deviceEvents,
         showDaily,
         showWeekly,
         showMonthly,
-        showDemoEvents
-    ) { deviceList, daily, weekly, monthly, useDemo ->
+        showDemoEvents,
+        selectedCalendarIds
+    ) { args: Array<Any> ->
+        val deviceList = args[0] as List<LocalCalendarEvent>
+        val daily = args[1] as Boolean
+        val weekly = args[2] as Boolean
+        val monthly = args[3] as Boolean
+        val useDemo = args[4] as Boolean
+        val activeIds = args[5] as Set<Long>
+
         val fullList = mutableListOf<LocalCalendarEvent>()
         if (useDemo) {
             fullList.addAll(demoEventsList)
@@ -147,9 +209,11 @@ class CalendarViewModel : ViewModel() {
         // Remove duplicates if any (matching by ID)
         val deduplicated = fullList.distinctBy { it.id }
 
-        // Filter based on configuration
+        // Filter based on configuration & selected calendar accounts
         deduplicated.filter { event ->
-            when (event.category) {
+            val isCalendarActive = if (event.id >= 0) activeIds.isEmpty() || activeIds.contains(event.calendarId) else true
+            
+            isCalendarActive && when (event.category) {
                 "Daily" -> daily
                 "Weekly" -> weekly
                 "Monthly" -> monthly
@@ -175,7 +239,8 @@ class CalendarViewModel : ViewModel() {
                         CalendarContract.Events.DTSTART,
                         CalendarContract.Events.DTEND,
                         CalendarContract.Events.EVENT_LOCATION,
-                        CalendarContract.Events.ALL_DAY
+                        CalendarContract.Events.ALL_DAY,
+                        CalendarContract.Events.CALENDAR_ID
                     )
 
                     val selection = "${CalendarContract.Events.DTSTART} >= ?"
@@ -198,6 +263,7 @@ class CalendarViewModel : ViewModel() {
                         val endIdx = cursor.getColumnIndex(CalendarContract.Events.DTEND)
                         val locIdx = cursor.getColumnIndex(CalendarContract.Events.EVENT_LOCATION)
                         val allDayIdx = cursor.getColumnIndex(CalendarContract.Events.ALL_DAY)
+                        val calendarIdIdx = cursor.getColumnIndex(CalendarContract.Events.CALENDAR_ID)
 
                         while (cursor.moveToNext()) {
                             val id = if (idIdx >= 0) cursor.getLong(idIdx) else 0L
@@ -207,6 +273,7 @@ class CalendarViewModel : ViewModel() {
                             val end = if (endIdx >= 0) cursor.getLong(endIdx) else 0L
                             val loc = if (locIdx >= 0) cursor.getString(locIdx) else null
                             val allDay = if (allDayIdx >= 0) cursor.getInt(allDayIdx) == 1 else false
+                            val calendarId = if (calendarIdIdx >= 0) cursor.getLong(calendarIdIdx) else 0L
 
                             val category = calculateCategory(start)
 
@@ -219,7 +286,8 @@ class CalendarViewModel : ViewModel() {
                                     dtEnd = end,
                                     eventLocation = loc,
                                     allDay = allDay,
-                                    category = category
+                                    category = category,
+                                    calendarId = calendarId
                                 )
                             )
                         }
