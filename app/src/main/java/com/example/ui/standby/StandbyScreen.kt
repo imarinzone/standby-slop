@@ -1247,6 +1247,48 @@ fun StandbyCustomizationDialog(
                                             colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
                                         )
                                     }
+
+                                    // Split Left Panel Display style
+                                    val leftStyle by calendarViewModel.leftThemeStyle.collectAsState()
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Column {
+                                            Text("Split Left Panel Display", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("Adjust left panel to show both calendar and date, or focus on one.", color = Color.Gray, fontSize = 9.sp)
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            listOf("Both Layouts" to 0, "Cal Grid Only" to 1, "Bold Date Only" to 2).forEach { (label, index) ->
+                                                val isStyleSelected = leftStyle == index
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(if (isStyleSelected) pageColor.copy(alpha = 0.15f) else Color.Transparent)
+                                                        .border(1.dp, if (isStyleSelected) pageColor.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.05f), RoundedCornerShape(6.dp))
+                                                        .clickable { calendarViewModel.leftThemeStyle.value = index }
+                                                        .padding(vertical = 8.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        label,
+                                                        color = if (isStyleSelected) Color.White else Color.Gray,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2049,19 +2091,10 @@ fun PreviewDuoPage(fontFamily: FontFamily) {
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF0F172A))
-                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "AMBIENT DUO",
-                        color = Color(0xFF3B82F6),
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "10:24",
                         color = Color.White,
@@ -2076,6 +2109,25 @@ fun PreviewDuoPage(fontFamily: FontFamily) {
                         fontSize = 8.sp
                     )
                 }
+
+                // Page indicators representing screens count
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    for (i in 0 until 5) {
+                        val isSelected = i == 0
+                        Box(
+                            modifier = Modifier
+                                .size(if (isSelected) 5.dp else 2.5.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.25f))
+                        )
+                    }
+                }
             }
 
             Box(
@@ -2084,19 +2136,10 @@ fun PreviewDuoPage(fontFamily: FontFamily) {
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF0F172A))
-                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.Start) {
-                    Text(
-                        text = "UPCOMING",
-                        color = Color(0xFF2DD4BF),
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
                     Text(
                         text = "• Tea Ceremony",
                         color = Color.White,
@@ -2117,6 +2160,25 @@ fun PreviewDuoPage(fontFamily: FontFamily) {
                         fontSize = 9.sp,
                         maxLines = 1
                     )
+                }
+
+                // Page indicators representing screens count
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    for (i in 0 until 5) {
+                        val isSelected = i == 2
+                        Box(
+                            modifier = Modifier
+                                .size(if (isSelected) 5.dp else 2.5.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.25f))
+                        )
+                    }
                 }
             }
         }

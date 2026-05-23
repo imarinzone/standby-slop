@@ -83,8 +83,6 @@ fun DuoPage(
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 WidgetContainer(
-                    title = getWidgetTitle(page),
-                    icon = getWidgetIcon(page),
                     pageIndex = page,
                     isLeft = true
                 ) {
@@ -97,43 +95,36 @@ fun DuoPage(
                 }
             }
 
-            // Up-Down visual helper indicator
+            // Left Pager vertical dots indicator (as in clock screen representing screen count)
             Column(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 12.dp),
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Slide Up",
-                    tint = Color.White.copy(alpha = 0.25f),
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(width = 3.dp, height = 24.dp)
-                        .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Slide Down",
-                    tint = Color.White.copy(alpha = 0.25f),
-                    modifier = Modifier.size(16.dp)
-                )
+                for (i in 0 until 5) {
+                    val isSelected = i == leftPagerState.currentPage
+                    Box(
+                        modifier = Modifier
+                            .size(if (isSelected) 8.dp else 4.2.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) Color.White.copy(alpha = 0.9f)
+                                else Color.White.copy(alpha = 0.25f)
+                            )
+                            .clickable {
+                                coroutineScope.launch {
+                                    leftPagerState.animateScrollToPage(i)
+                                }
+                            }
+                    )
+                }
             }
         }
 
-        // Soft, ultra-subtle vertical separator in between to keep a clean, modern aesthetic
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(1.dp)
-                .background(Color.White.copy(alpha = 0.04f))
-        )
+        // Soft, ultra-subtle vertical space instead of borders per user request
+        Spacer(modifier = Modifier.width(4.dp))
 
         // RIGHT HALF PANELS
         Box(
@@ -146,8 +137,6 @@ fun DuoPage(
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 WidgetContainer(
-                    title = getWidgetTitle(page),
-                    icon = getWidgetIcon(page),
                     pageIndex = page,
                     isLeft = false
                 ) {
@@ -160,33 +149,31 @@ fun DuoPage(
                 }
             }
 
-            // Up-Down visual helper indicator
+            // Right Pager vertical dots indicator (as in clock screen representing screen count)
             Column(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 12.dp),
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Slide Up",
-                    tint = Color.White.copy(alpha = 0.25f),
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(width = 3.dp, height = 24.dp)
-                        .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Slide Down",
-                    tint = Color.White.copy(alpha = 0.25f),
-                    modifier = Modifier.size(16.dp)
-                )
+                for (i in 0 until 5) {
+                    val isSelected = i == rightPagerState.currentPage
+                    Box(
+                        modifier = Modifier
+                            .size(if (isSelected) 8.dp else 4.2.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) Color.White.copy(alpha = 0.9f)
+                                else Color.White.copy(alpha = 0.25f)
+                            )
+                            .clickable {
+                                coroutineScope.launch {
+                                    rightPagerState.animateScrollToPage(i)
+                                }
+                            }
+                    )
+                }
             }
         }
     }
@@ -194,8 +181,6 @@ fun DuoPage(
 
 @Composable
 fun WidgetContainer(
-    title: String,
-    icon: ImageVector,
     pageIndex: Int,
     isLeft: Boolean,
     content: @Composable () -> Unit
@@ -205,10 +190,10 @@ fun WidgetContainer(
             .fillMaxSize()
             .background(Color.Black) // AMOLED True Black Background
             .padding(
-                start = if (isLeft) 12.dp else 4.dp,
-                end = if (isLeft) 4.dp else 12.dp,
-                top = 12.dp,
-                bottom = 12.dp
+                start = if (isLeft) 6.dp else 2.dp,
+                end = if (isLeft) 2.dp else 6.dp,
+                top = 6.dp,
+                bottom = 6.dp
             )
     ) {
         // High-contrast subtle ambient glow for premium AMOLED vibes
@@ -225,64 +210,15 @@ fun WidgetContainer(
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color.Black), // True AMOLED Black for maximum power saving
-            modifier = Modifier
-                .fillMaxSize()
-                .border(0.5.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Header Bar showing current active module
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.02f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = when (pageIndex) {
-                                0 -> Color(0xFF60A5FA)
-                                1 -> Color(0xFFFB7185)
-                                2 -> Color(0xFF2DD4BF)
-                                3 -> Color(0xFFC084FC)
-                                else -> Color(0xFFFDBA74)
-                            },
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = title,
-                            color = Color.LightGray.copy(alpha = 0.8f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
-                        )
-                    }
-                    
-                    Text(
-                        text = "WIDGET 0${pageIndex + 1}",
-                        color = Color.White.copy(alpha = 0.15f),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
-                    )
-                }
-
-                // Main Widget Page content
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    content()
-                }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                content()
             }
         }
     }

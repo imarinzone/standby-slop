@@ -48,6 +48,14 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 
 data class InstalledMusicApp(
     val name: String,
@@ -477,6 +485,91 @@ private fun getDominantColor(bitmap: android.graphics.Bitmap?): Color {
 }
 
 @Composable
+fun SquigglySeekBar(
+    progress: Float,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    onSeek: ((Float) -> Unit)? = null
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "squiggly")
+    val phaseShift by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(26.dp)
+            .pointerInput(onSeek) {
+                if (onSeek != null) {
+                    detectTapGestures { offset ->
+                        val clickedProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                        onSeek.invoke(clickedProgress)
+                    }
+                }
+            }
+    ) {
+        val width = constraints.maxWidth.toFloat()
+        val height = constraints.maxHeight.toFloat()
+        val centerY = height / 2f
+        
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val progressX = width * progress
+            
+            // Draw played (squiggly) part
+            if (progressX > 0f) {
+                val sqPath = Path()
+                val wavelength = 24.dp.toPx()
+                val amplitude = 3.5.dp.toPx()
+                
+                sqPath.moveTo(0f, centerY)
+                var x = 0f
+                while (x < progressX) {
+                    val relativeX = x / wavelength
+                    val y = centerY + amplitude * kotlin.math.sin(relativeX * 2 * kotlin.math.PI.toFloat() - phaseShift)
+                    sqPath.lineTo(x, y)
+                    x += 2f // high resolution
+                }
+                sqPath.lineTo(progressX, centerY) // snap to center before thumb
+                
+                drawPath(
+                    path = sqPath,
+                    color = accentColor,
+                    style = Stroke(
+                        width = 3.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                )
+            }
+            
+            // Draw track (remaining part) - straight line
+            if (progressX < width) {
+                drawLine(
+                    color = Color.White.copy(alpha = 0.2f),
+                    start = Offset(progressX, centerY),
+                    end = Offset(width, centerY),
+                    strokeWidth = 3.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+            
+            // Draw Thumb
+            drawCircle(
+                color = accentColor,
+                radius = 6.dp.toPx(),
+                center = Offset(progressX, centerY)
+            )
+        }
+    }
+}
+
+@Composable
 fun MaterialYouExpressivePlayer(
     trackTitle: String?,
     artistName: String?,
@@ -530,8 +623,8 @@ fun MaterialYouExpressivePlayer(
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.Black.copy(alpha = 0.45f),
-                                    Color.Black.copy(alpha = 0.82f)
+                                    Color.Black.copy(alpha = 0.55f),
+                                    Color.Black.copy(alpha = 0.88f)
                                 )
                             )
                         )
@@ -540,9 +633,10 @@ fun MaterialYouExpressivePlayer(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
+                        .padding(20.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
+                    // Header Row with Connected Speaker & Device Label Pill
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -587,82 +681,134 @@ fun MaterialYouExpressivePlayer(
                         }
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    // Metadata Titles and Seek progress
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(
-                            modifier = Modifier.weight(1f).padding(end = 16.dp)
-                        ) {
-                            Text(
-                                text = trackTitle ?: "Unknown Track",
-                                color = Color.White,
-                                fontSize = 23.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = customFont,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = artistName ?: "Unknown Artist",
-                                color = Color.White.copy(alpha = 0.65f),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                fontFamily = customFont,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
+                        Text(
+                            text = trackTitle ?: "Unknown Track",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = customFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = artistName ?: "Unknown Artist",
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = customFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            IconButton(
-                                onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SkipPrevious,
-                                    contentDescription = "Previous",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                            }
-
-                            Surface(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clickable { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
-                                shape = RoundedCornerShape(16.dp),
-                                color = accentColor
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "Play/Pause",
-                                        tint = if (accentColor == Color.White) Color.Black else Color.White,
-                                        modifier = Modifier.size(28.dp)
-                                    )
+                            var simulatedProgress by remember { mutableStateOf(0.35f) }
+                            
+                            LaunchedEffect(isPlaying) {
+                                if (isPlaying) {
+                                    while (true) {
+                                        delay(1000)
+                                        simulatedProgress = (simulatedProgress + 0.005f).coerceAtMost(1f)
+                                        if (simulatedProgress >= 1f) {
+                                            simulatedProgress = 0f
+                                        }
+                                    }
                                 }
                             }
 
-                            IconButton(
-                                onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
-                                modifier = Modifier.size(44.dp)
+                            val elapsedSeconds = (simulatedProgress * 225).toInt() // Assume a 3m45s track length
+                            val minutesVal = elapsedSeconds / 60
+                            val secondsVal = elapsedSeconds % 60
+                            val elapsedMinutesStr = "$minutesVal:${secondsVal.toString().padStart(2, '0')}"
+
+                            Text(
+                                text = elapsedMinutesStr,
+                                color = Color.Gray,
+                                fontSize = 9.sp,
+                                fontFamily = customFont
+                            )
+
+                            SquigglySeekBar(
+                                progress = simulatedProgress,
+                                accentColor = accentColor,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 10.dp),
+                                onSeek = { newProgress ->
+                                    simulatedProgress = newProgress
+                                }
+                            )
+
+                            Text(
+                                text = "3:45",
+                                color = Color.Gray,
+                                fontSize = 9.sp,
+                                fontFamily = customFont
+                            )
+                        }
+                    }
+
+                    // Media Action Controls Area
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipPrevious,
+                                contentDescription = "Previous",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Surface(
+                            modifier = Modifier
+                                .size(54.dp)
+                                .clickable { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = accentColor
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.SkipNext,
-                                    contentDescription = "Next",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(26.dp)
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "Play/Pause",
+                                    tint = if (accentColor == Color.White) Color.Black else Color.White,
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        IconButton(
+                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipNext,
+                                contentDescription = "Next",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
                         }
                     }
                 }

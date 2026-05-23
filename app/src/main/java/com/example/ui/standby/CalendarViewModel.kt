@@ -90,99 +90,11 @@ class CalendarViewModel : ViewModel() {
     val showDaily = MutableStateFlow(true)
     val showWeekly = MutableStateFlow(true)
     val showMonthly = MutableStateFlow(true)
-    val showDemoEvents = MutableStateFlow(false) // Enables rich default demo calendar data if system calendar is empty
     
     // Split View (Slide-Up) Theme Preferences
     val startWeekOnMonday = MutableStateFlow(false)
     val showEventDots = MutableStateFlow(true)
     val leftThemeStyle = MutableStateFlow(0) // 0 = Both Date & Month Grid, 1 = Month Grid Only, 2 = Large Date Only
-
-    // Comprehensive list of realistic Demo/Mock Standby Events
-    private val demoEventsList = listOf(
-        // Daily
-        LocalCalendarEvent(
-            id = -101,
-            title = "Standup Scrum Sync",
-            description = "Daily huddle to align on layout visual assets and bug verification steps.",
-            dtStart = getRelativeTimeOffset(0, 10, 0),
-            dtEnd = getRelativeTimeOffset(0, 10, 45),
-            eventLocation = "Huddle Room Delta",
-            allDay = false,
-            category = "Daily"
-        ),
-        LocalCalendarEvent(
-            id = -102,
-            title = "Lunch with Design Guild",
-            description = "Unwinding with discussions over modern typography pairings and sliding spring animations.",
-            dtStart = getRelativeTimeOffset(0, 12, 30),
-            dtEnd = getRelativeTimeOffset(0, 13, 30),
-            eventLocation = "Velvet Bistro",
-            allDay = false,
-            category = "Daily"
-        ),
-        LocalCalendarEvent(
-            id = -103,
-            title = "Deep Work Session",
-            description = "Zero disturbance coding block to construct elegant Material 3 widgets.",
-            dtStart = getRelativeTimeOffset(0, 15, 0),
-            dtEnd = getRelativeTimeOffset(0, 17, 0),
-            eventLocation = "Quiet Pod 4B",
-            allDay = false,
-            category = "Daily"
-        ),
-        // Weekly
-        LocalCalendarEvent(
-            id = -201,
-            title = "Weekly Clock Engine Review",
-            description = "Analyze clock frame performance and calibration offset accuracy.",
-            dtStart = getRelativeTimeOffset(1, 14, 0),
-            dtEnd = getRelativeTimeOffset(1, 15, 0),
-            eventLocation = "Technical Lab",
-            allDay = false,
-            category = "Weekly"
-        ),
-        LocalCalendarEvent(
-            id = -202,
-            title = "Acoustic Sunset Concert",
-            description = "Unwind at the skyline deck with live acoustic sessions.",
-            dtStart = getRelativeTimeOffset(3, 18, 0),
-            dtEnd = getRelativeTimeOffset(3, 20, 30),
-            eventLocation = "Skyline Garden",
-            allDay = false,
-            category = "Weekly"
-        ),
-        LocalCalendarEvent(
-            id = -203,
-            title = "Weekend Mountain Outing",
-            description = "Hiking adventure to summit with the local mountain club.",
-            dtStart = getRelativeTimeOffset(4, 8, 0),
-            dtEnd = getRelativeTimeOffset(4, 16, 0),
-            eventLocation = "Ridge Summit Trail",
-            allDay = true,
-            category = "Weekly"
-        ),
-        // Monthly
-        LocalCalendarEvent(
-            id = -301,
-            title = "Monthly Project Retrospective",
-            description = "Reflect on design achievements and consolidate development logs.",
-            dtStart = getRelativeTimeOffset(12, 11, 0),
-            dtEnd = getRelativeTimeOffset(12, 13, 15),
-            eventLocation = "Virtual Dome 1",
-            allDay = false,
-            category = "Monthly"
-        ),
-        LocalCalendarEvent(
-            id = -302,
-            title = "Alarms & Custom Sounds Benchmark",
-            description = "Audit sound design benchmarks, classic alarm sweeps, and buzz waveforms.",
-            dtStart = getRelativeTimeOffset(22, 13, 0),
-            dtEnd = getRelativeTimeOffset(22, 15, 30),
-            eventLocation = "Acoustics Sandbox",
-            allDay = false,
-            category = "Monthly"
-        )
-    )
 
     // Expose final events combined dynamically from settings filters and calendar selections
     val events: StateFlow<List<LocalCalendarEvent>> = combine(
@@ -190,28 +102,11 @@ class CalendarViewModel : ViewModel() {
         showDaily,
         showWeekly,
         showMonthly,
-        showDemoEvents,
         selectedCalendarIds
-    ) { args: Array<Any> ->
-        val deviceList = args[0] as List<LocalCalendarEvent>
-        val daily = args[1] as Boolean
-        val weekly = args[2] as Boolean
-        val monthly = args[3] as Boolean
-        val useDemo = args[4] as Boolean
-        val activeIds = args[5] as Set<Long>
-
-        val fullList = mutableListOf<LocalCalendarEvent>()
-        if (useDemo) {
-            fullList.addAll(demoEventsList)
-        }
-        fullList.addAll(deviceList)
-        
-        // Remove duplicates if any (matching by ID)
-        val deduplicated = fullList.distinctBy { it.id }
-
-        // Filter based on configuration & selected calendar accounts
-        deduplicated.filter { event ->
-            val isCalendarActive = if (event.id >= 0) activeIds.isEmpty() || activeIds.contains(event.calendarId) else true
+    ) { deviceList, daily, weekly, monthly, activeIds ->
+        // Direct non-mock filter logic
+        deviceList.filter { event ->
+            val isCalendarActive = activeIds.isEmpty() || activeIds.contains(event.calendarId)
             
             isCalendarActive && when (event.category) {
                 "Daily" -> daily
@@ -223,7 +118,7 @@ class CalendarViewModel : ViewModel() {
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = demoEventsList.sortedBy { it.dtStart }
+        initialValue = emptyList()
     )
 
     fun loadLocalEvents(context: Context) {
