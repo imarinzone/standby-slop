@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -582,104 +583,108 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
             }
         }
     } else {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+        Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-            ) {
-                // Spinning Classic Record Disk or Album Artwork!
+            // Background album art similar to main music screen
+            if (albumArt != null) {
+                Image(
+                    bitmap = albumArt!!.asImageBitmap(),
+                    contentDescription = "Background Art",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.65f)))
+            } else {
                 Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black)
-                        .border(2.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                        .rotate(rotationAngle.value),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (albumArt != null) {
-                        Image(
-                            bitmap = albumArt!!.asImageBitmap(),
-                            contentDescription = "Album Art",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape)
-                        )
-                    } else {
-                        // Draws circles representing ridges on record disk
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            drawCircle(color = Color.DarkGray.copy(alpha = 0.8f), radius = size.minDimension / 2.3f, style = Stroke(width = 1.dp.toPx()))
-                            drawCircle(color = Color.DarkGray.copy(alpha = 0.5f), radius = size.minDimension / 3.4f, style = Stroke(width = 1.dp.toPx()))
-                            drawCircle(color = accentColor, radius = size.minDimension / 6f)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(Color(0xFF151D2A), CircleShape)
-                        )
-                    }
-                }
+                    Modifier.fillMaxSize().background(
+                        Brush.radialGradient(listOf(accentColor.copy(alpha = 0.35f), Color.Transparent))
+                    )
+                )
+            }
 
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 // Media Title Metadata
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
                         text = trackTitle ?: "No Track Playing",
                         color = Color.White,
-                        fontSize = 12.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = artistName ?: "Unknown Artist",
-                        color = accentColor.copy(alpha = 0.9f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Action Deck buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
-                    modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.05f), CircleShape)
-                ) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Prev", tint = Color.LightGray, modifier = Modifier.size(16.dp))
-                }
-
-                IconButton(
-                    onClick = { 
-                        triggerMediaKey(context, if (isCurrentlyPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY)
-                    },
-                    modifier = Modifier.size(44.dp).background(accentColor, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = if (isCurrentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Toggle",
-                        tint = if (accentColor == Color.White) Color.Black else Color.White,
-                        modifier = Modifier.size(22.dp)
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
 
-                IconButton(
-                    onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
-                    modifier = Modifier.size(36.dp).background(Color.White.copy(alpha = 0.05f), CircleShape)
+                // Action Deck buttons upscaled
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                    IconButton(
+                        onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.SkipPrevious,
+                            contentDescription = "Prev",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clickable { 
+                                triggerMediaKey(context, if (isCurrentlyPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY)
+                            },
+                        shape = RoundedCornerShape(22.dp),
+                        color = accentColor
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isCurrentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Toggle",
+                                tint = if (accentColor == Color.White) Color.Black else Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.SkipNext,
+                            contentDescription = "Next",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
         }

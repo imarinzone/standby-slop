@@ -182,24 +182,41 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
 
     val isCurrentlyPlaying = isPlayingFlow || isMusicActive || (!trackTitle.isNullOrEmpty() && trackTitle != "No Track")
 
-    if (isCurrentlyPlaying) {
-        MaterialYouExpressivePlayer(
-            trackTitle = trackTitle,
-            artistName = artistName,
-            albumArt = albumArt,
-            isPlaying = isPlayingFlow,
-            appInfo = appInfo,
-            accentColor = accentColor,
-            customFont = customFont,
-            context = context
-        )
-    } else {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(Color.Black) // True AMOLED Black for maximum power saving
-                .padding(24.dp)
-        ) {
+    val bgUri by standbyViewModel.getBgUriFlow(3).collectAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        if (bgUri != null) {
+            coil.compose.AsyncImage(
+                model = bgUri,
+                contentDescription = "Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
+        }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (isCurrentlyPlaying) {
+                MaterialYouExpressivePlayer(
+                    trackTitle = trackTitle,
+                    artistName = artistName,
+                    albumArt = albumArt,
+                    isPlaying = isPlayingFlow,
+                    appInfo = appInfo,
+                    accentColor = accentColor,
+                    customFont = customFont,
+                    context = context
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp)
+                ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -284,6 +301,8 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
             }
         }
     }
+}
+}
 }
 
 @Composable
@@ -636,7 +655,7 @@ fun MaterialYouExpressivePlayer(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Header Row with Connected Speaker & Device Label Pill
+                    // Header Row with Connected Speaker
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -651,33 +670,6 @@ fun MaterialYouExpressivePlayer(
                                 contentDescription = "Active Speaker",
                                 tint = Color.White.copy(alpha = 0.8f)
                             )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = Color.White.copy(alpha = 0.08f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Smartphone,
-                                    contentDescription = "Device",
-                                    tint = accentColor,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Text(
-                                    text = pmLabel,
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = customFont
-                                )
-                            }
                         }
                     }
 
@@ -765,23 +757,23 @@ fun MaterialYouExpressivePlayer(
                     ) {
                         IconButton(
                             onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(64.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous",
                                 tint = Color.White,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(36.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(24.dp))
 
                         Surface(
                             modifier = Modifier
-                                .size(54.dp)
+                                .size(76.dp)
                                 .clickable { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(26.dp),
                             color = accentColor
                         ) {
                             Box(
@@ -792,22 +784,22 @@ fun MaterialYouExpressivePlayer(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = "Play/Pause",
                                     tint = if (accentColor == Color.White) Color.Black else Color.White,
-                                    modifier = Modifier.size(28.dp)
+                                    modifier = Modifier.size(42.dp)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(24.dp))
 
                         IconButton(
                             onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(64.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next",
                                 tint = Color.White,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(36.dp)
                             )
                         }
                     }

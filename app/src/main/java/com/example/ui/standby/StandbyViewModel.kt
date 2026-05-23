@@ -24,6 +24,7 @@ import java.util.Locale
 
 class StandbyViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
+    private val prefs = application.getSharedPreferences("standby_prefs", Context.MODE_PRIVATE)
     
     val alarms: StateFlow<List<Alarm>> = db.alarmDao().getAllAlarms()
         .stateIn(
@@ -35,47 +36,70 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     private val _nextSystemAlarm = MutableStateFlow<String?>("No Alarm")
     val nextSystemAlarm: StateFlow<String?> = _nextSystemAlarm
 
-    val selectedColorIndex = MutableStateFlow(0)
-    val selectedFontIndex = MutableStateFlow(0)
-    val showWeather = MutableStateFlow(false)
-    val clockScale = MutableStateFlow(1.2f)
+    val selectedColorIndex = MutableStateFlow(prefs.getInt("selectedColorIndex", 0))
+    val selectedFontIndex = MutableStateFlow(prefs.getInt("selectedFontIndex", 0))
+    val showWeather = MutableStateFlow(prefs.getBoolean("showWeather", false))
+    val clockScale = MutableStateFlow(prefs.getFloat("clockScale", 1.2f))
 
     // Per-page customized settings (Page 0: Clock, 1: Alarm, 2: Calendar, 3: Music, 4: Timer)
-    val colorPage0 = MutableStateFlow(0)
-    val colorPage1 = MutableStateFlow(2)
-    val colorPage2 = MutableStateFlow(3)
-    val colorPage3 = MutableStateFlow(1)
-    val colorPage4 = MutableStateFlow(2)
+    val colorPage0 = MutableStateFlow(prefs.getInt("colorPage0", 0))
+    val colorPage1 = MutableStateFlow(prefs.getInt("colorPage1", 2))
+    val colorPage2 = MutableStateFlow(prefs.getInt("colorPage2", 3))
+    val colorPage3 = MutableStateFlow(prefs.getInt("colorPage3", 1))
+    val colorPage4 = MutableStateFlow(prefs.getInt("colorPage4", 2))
 
-    val fontPage0 = MutableStateFlow(0)
-    val fontPage1 = MutableStateFlow(1)
-    val fontPage2 = MutableStateFlow(2)
-    val fontPage3 = MutableStateFlow(0)
-    val fontPage4 = MutableStateFlow(0)
+    val fontPage0 = MutableStateFlow(prefs.getInt("fontPage0", 0))
+    val fontPage1 = MutableStateFlow(prefs.getInt("fontPage1", 1))
+    val fontPage2 = MutableStateFlow(prefs.getInt("fontPage2", 2))
+    val fontPage3 = MutableStateFlow(prefs.getInt("fontPage3", 0))
+    val fontPage4 = MutableStateFlow(prefs.getInt("fontPage4", 0))
 
-    val showWeatherPage0 = MutableStateFlow(false)
-    val showWeatherPage1 = MutableStateFlow(false)
-    val showWeatherPage2 = MutableStateFlow(false)
-    val showWeatherPage3 = MutableStateFlow(false)
-    val showWeatherPage4 = MutableStateFlow(false)
+    val showWeatherPage0 = MutableStateFlow(prefs.getBoolean("showWeatherPage0", false))
+    val showWeatherPage1 = MutableStateFlow(prefs.getBoolean("showWeatherPage1", false))
+    val showWeatherPage2 = MutableStateFlow(prefs.getBoolean("showWeatherPage2", false))
+    val showWeatherPage3 = MutableStateFlow(prefs.getBoolean("showWeatherPage3", false))
+    val showWeatherPage4 = MutableStateFlow(prefs.getBoolean("showWeatherPage4", false))
 
-    val scalePage0 = MutableStateFlow(1.2f)
-    val scalePage1 = MutableStateFlow(1.0f)
-    val scalePage2 = MutableStateFlow(1.0f)
-    val scalePage3 = MutableStateFlow(1.0f)
-    val scalePage4 = MutableStateFlow(1.0f)
+    val scalePage0 = MutableStateFlow(prefs.getFloat("scalePage0", 1.2f))
+    val scalePage1 = MutableStateFlow(prefs.getFloat("scalePage1", 1.0f))
+    val scalePage2 = MutableStateFlow(prefs.getFloat("scalePage2", 1.0f))
+    val scalePage3 = MutableStateFlow(prefs.getFloat("scalePage3", 1.0f))
+    val scalePage4 = MutableStateFlow(prefs.getFloat("scalePage4", 1.0f))
 
     // Setting to remove animation for distraction-free theme (per screen)
-    val animPage0 = MutableStateFlow(true)
-    val animPage1 = MutableStateFlow(true)
-    val animPage2 = MutableStateFlow(true)
-    val animPage3 = MutableStateFlow(true)
-    val animPage4 = MutableStateFlow(true)
+    val animPage0 = MutableStateFlow(prefs.getBoolean("animPage0", true))
+    val animPage1 = MutableStateFlow(prefs.getBoolean("animPage1", true))
+    val animPage2 = MutableStateFlow(prefs.getBoolean("animPage2", true))
+    val animPage3 = MutableStateFlow(prefs.getBoolean("animPage3", true))
+    val animPage4 = MutableStateFlow(prefs.getBoolean("animPage4", true))
 
-    // Clock general options (12/24 hour, AM/PM visibility, Seconds visibility)
-    val use24HourFormat = MutableStateFlow(false) // default to 12-hour or false for user choice, let's look at standard default
-    val showAmPm = MutableStateFlow(false)
-    val showSeconds = MutableStateFlow(false)
+    // Custom visual overrides
+    val textGlowPage0 = MutableStateFlow(prefs.getBoolean("textGlowPage0", true))
+    val textGlowPage1 = MutableStateFlow(prefs.getBoolean("textGlowPage1", true))
+    val textGlowPage2 = MutableStateFlow(prefs.getBoolean("textGlowPage2", true))
+    val textGlowPage3 = MutableStateFlow(prefs.getBoolean("textGlowPage3", true))
+    val textGlowPage4 = MutableStateFlow(prefs.getBoolean("textGlowPage4", true))
+
+    val textOutlineOnlyPage0 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage0", false))
+    val textOutlineOnlyPage1 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage1", false))
+    val textOutlineOnlyPage2 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage2", false))
+    val textOutlineOnlyPage3 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage3", false))
+    val textOutlineOnlyPage4 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage4", false))
+
+    val textGradientPage0 = MutableStateFlow(prefs.getInt("textGradientPage0", -1))
+    val textGradientPage1 = MutableStateFlow(prefs.getInt("textGradientPage1", -1))
+    val textGradientPage2 = MutableStateFlow(prefs.getInt("textGradientPage2", -1))
+    val textGradientPage3 = MutableStateFlow(prefs.getInt("textGradientPage3", -1))
+    val textGradientPage4 = MutableStateFlow(prefs.getInt("textGradientPage4", -1))
+
+    val bgUriPage0 = MutableStateFlow<String?>(prefs.getString("bgUriPage0", null))
+    val bgUriPage1 = MutableStateFlow<String?>(prefs.getString("bgUriPage1", null))
+    val bgUriPage2 = MutableStateFlow<String?>(prefs.getString("bgUriPage2", null))
+    val bgUriPage3 = MutableStateFlow<String?>(prefs.getString("bgUriPage3", null))
+    val bgUriPage4 = MutableStateFlow<String?>(prefs.getString("bgUriPage4", null))
+    val use24HourFormat = MutableStateFlow(prefs.getBoolean("use24HourFormat", false))
+    val showAmPm = MutableStateFlow(prefs.getBoolean("showAmPm", false))
+    val showSeconds = MutableStateFlow(prefs.getBoolean("showSeconds", false))
 
     init {
         // Automatically re-calculate our custom next alarm whenever the list or time format preferences change
@@ -141,14 +165,17 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
 
     fun setUse24HourFormat(use24Hour: Boolean) {
         use24HourFormat.value = use24Hour
+        prefs.edit().putBoolean("use24HourFormat", use24Hour).apply()
     }
 
     fun setShowAmPm(show: Boolean) {
         showAmPm.value = show
+        prefs.edit().putBoolean("showAmPm", show).apply()
     }
 
     fun setShowSeconds(show: Boolean) {
         showSeconds.value = show
+        prefs.edit().putBoolean("showSeconds", show).apply()
     }
 
     fun getColorFlow(page: Int): MutableStateFlow<Int> {
@@ -206,37 +233,119 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun getGlowFlow(page: Int): MutableStateFlow<Boolean> {
+        return when (page) {
+            0 -> textGlowPage0
+            1 -> textGlowPage1
+            2 -> textGlowPage2
+            3 -> textGlowPage3
+            4 -> textGlowPage4
+            else -> textGlowPage0
+        }
+    }
+
+    fun getOutlineFlow(page: Int): MutableStateFlow<Boolean> {
+        return when (page) {
+            0 -> textOutlineOnlyPage0
+            1 -> textOutlineOnlyPage1
+            2 -> textOutlineOnlyPage2
+            3 -> textOutlineOnlyPage3
+            4 -> textOutlineOnlyPage4
+            else -> textOutlineOnlyPage0
+        }
+    }
+
+    fun getGradientFlow(page: Int): MutableStateFlow<Int> {
+        return when (page) {
+            0 -> textGradientPage0
+            1 -> textGradientPage1
+            2 -> textGradientPage2
+            3 -> textGradientPage3
+            4 -> textGradientPage4
+            else -> textGradientPage0
+        }
+    }
+
+    fun getBgUriFlow(page: Int): MutableStateFlow<String?> {
+        return when (page) {
+            0 -> bgUriPage0
+            1 -> bgUriPage1
+            2 -> bgUriPage2
+            3 -> bgUriPage3
+            4 -> bgUriPage4
+            else -> bgUriPage0
+        }
+    }
+
     fun setColorIndexForPage(page: Int, index: Int) {
         getColorFlow(page).value = index
+        prefs.edit().putInt("colorPage$page", index).apply()
         if (page == 0) {
             selectedColorIndex.value = index
+            prefs.edit().putInt("selectedColorIndex", index).apply()
         }
     }
 
     fun setFontIndexForPage(page: Int, index: Int) {
         getFontFlow(page).value = index
+        prefs.edit().putInt("fontPage$page", index).apply()
         if (page == 0) {
             selectedFontIndex.value = index
+            prefs.edit().putInt("selectedFontIndex", index).apply()
         }
     }
 
     fun setShowWeatherForPage(page: Int, show: Boolean) {
         getWeatherFlow(page).value = show
+        prefs.edit().putBoolean("showWeatherPage$page", show).apply()
         if (page == 0) {
             showWeather.value = show
+            prefs.edit().putBoolean("showWeather", show).apply()
         }
     }
 
     fun setClockScaleForPage(page: Int, scale: Float) {
         getScaleFlow(page).value = scale
+        prefs.edit().putFloat("scalePage$page", scale).apply()
         if (page == 0) {
             clockScale.value = scale
+            prefs.edit().putFloat("clockScale", scale).apply()
         }
     }
 
     fun setAnimationsEnabledForPage(page: Int, enabled: Boolean) {
         getAnimFlow(page).value = enabled
+        prefs.edit().putBoolean("animPage$page", enabled).apply()
     }
+
+    fun setTextGlowForPage(page: Int, enabled: Boolean) {
+        getGlowFlow(page).value = enabled
+        prefs.edit().putBoolean("textGlowPage$page", enabled).apply()
+    }
+
+    fun setTextOutlineForPage(page: Int, outline: Boolean) {
+        getOutlineFlow(page).value = outline
+        prefs.edit().putBoolean("textOutlineOnlyPage$page", outline).apply()
+    }
+
+    fun setTextGradientForPage(page: Int, index: Int) {
+        getGradientFlow(page).value = index
+        prefs.edit().putInt("textGradientPage$page", index).apply()
+    }
+
+    fun setBgUriForPage(page: Int, uri: String?) {
+        getBgUriFlow(page).value = uri
+        prefs.edit().putString("bgUriPage$page", uri).apply()
+    }
+
+    val gradients = listOf(
+        "None" to listOf(Color.Transparent, Color.Transparent),
+        "Cyberpunk" to listOf(Color(0xFFFF007F), Color(0xFF00F0FF)),
+        "Sunset" to listOf(Color(0xFFFF5E3A), Color(0xFFFF2A6D)),
+        "Ocean" to listOf(Color(0xFF2E3192), Color(0xFF1BFFFF)),
+        "Forest" to listOf(Color(0xFF11998E), Color(0xFF38EF7D)),
+        "Gold" to listOf(Color(0xFFF9D423), Color(0xFFFF4E50))
+    )
 
     val colors = listOf(
         Color.White to "Crystal White",
@@ -262,21 +371,25 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     fun setColorIndex(index: Int) {
         selectedColorIndex.value = index
         colorPage0.value = index
+        prefs.edit().putInt("selectedColorIndex", index).putInt("colorPage0", index).apply()
     }
 
     fun setFontIndex(index: Int) {
         selectedFontIndex.value = index
         fontPage0.value = index
+        prefs.edit().putInt("selectedFontIndex", index).putInt("fontPage0", index).apply()
     }
 
     fun setShowWeather(show: Boolean) {
         showWeather.value = show
         showWeatherPage0.value = show
+        prefs.edit().putBoolean("showWeather", show).putBoolean("showWeatherPage0", show).apply()
     }
 
     fun setClockScale(scale: Float) {
         clockScale.value = scale
         scalePage0.value = scale
+        prefs.edit().putFloat("clockScale", scale).putFloat("scalePage0", scale).apply()
     }
         
     fun addAlarm(hour: Int, minute: Int, label: String, snooze: Int, toneUri: String = "alarm_beep") {

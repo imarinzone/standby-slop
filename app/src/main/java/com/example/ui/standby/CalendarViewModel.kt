@@ -1,8 +1,9 @@
 package com.example.ui.standby
 
+import android.app.Application
 import android.content.Context
 import android.provider.CalendarContract
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +33,9 @@ data class CalendarSource(
     val account: String
 )
 
-class CalendarViewModel : ViewModel() {
+class CalendarViewModel(application: Application) : AndroidViewModel(application) {
+    private val prefs = application.getSharedPreferences("calendar_prefs", Context.MODE_PRIVATE)
+
     private val _deviceEvents = MutableStateFlow<List<LocalCalendarEvent>>(emptyList())
     val deviceEvents: StateFlow<List<LocalCalendarEvent>> = _deviceEvents
     
@@ -87,33 +90,35 @@ class CalendarViewModel : ViewModel() {
     }
 
     // Filtering preferences
-    val showDaily = MutableStateFlow(true)
-    val showWeekly = MutableStateFlow(true)
-    val showMonthly = MutableStateFlow(true)
+    val calendarFilter = MutableStateFlow(prefs.getInt("calendarFilter", 0)) // 0 = Daily, 1 = Weekly, 2 = Monthly
     
     // Split View (Slide-Up) Theme Preferences
-    val startWeekOnMonday = MutableStateFlow(false)
-    val showEventDots = MutableStateFlow(true)
-    val leftThemeStyle = MutableStateFlow(0) // 0 = Both Date & Month Grid, 1 = Month Grid Only, 2 = Large Date Only
+    val startWeekOnMonday = MutableStateFlow(prefs.getBoolean("startWeekOnMonday", false))
+    val showEventDots = MutableStateFlow(prefs.getBoolean("showEventDots", true))
+    val leftThemeStyle = MutableStateFlow(prefs.getInt("leftThemeStyle", 1)) // 0 = Cal Grid Only, 1 = Bold Date Only
+
+    fun setCalendarFilter(filter: Int) { calendarFilter.value = filter; prefs.edit().putInt("calendarFilter", filter).apply() }
+    fun setStartWeekOnMonday(start: Boolean) { startWeekOnMonday.value = start; prefs.edit().putBoolean("startWeekOnMonday", start).apply() }
+    fun setShowEventDots(show: Boolean) { showEventDots.value = show; prefs.edit().putBoolean("showEventDots", show).apply() }
+    fun setLeftThemeStyle(style: Int) { leftThemeStyle.value = style; prefs.edit().putInt("leftThemeStyle", style).apply() }
 
     // Expose final events combined dynamically from settings filters and calendar selections
     val events: StateFlow<List<LocalCalendarEvent>> = combine(
         _deviceEvents,
-        showDaily,
-        showWeekly,
-        showMonthly,
+        calendarFilter,
         selectedCalendarIds
-    ) { deviceList, daily, weekly, monthly, activeIds ->
+    ) { deviceList, filterVal, activeIds ->
         // Direct non-mock filter logic
         deviceList.filter { event ->
             val isCalendarActive = activeIds.isEmpty() || activeIds.contains(event.calendarId)
             
-            isCalendarActive && when (event.category) {
-                "Daily" -> daily
-                "Weekly" -> weekly
-                "Monthly" -> monthly
+            val matchesFilter = when (filterVal) {
+                0 -> event.category == "Daily"
+                1 -> event.category == "Weekly"
+                2 -> event.category == "Monthly"
                 else -> true
             }
+            isCalendarActive && matchesFilter
         }.sortedBy { it.dtStart }
     }.stateIn(
         scope = viewModelScope,

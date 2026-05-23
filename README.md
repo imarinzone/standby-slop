@@ -5,6 +5,13 @@ Welcome to **Standby**, a highly aesthetic, premium, and fully-customizable land
 This repository is now fully open-source! We welcome developers, designers, and contributors to help build the ultimate ambient screen experience.
 
 ---
+## 📣 Changelog
+### **v2.0 Modernization Major Update**
+*   **Modern Music Player UI:** Reworked the standalone Music Controller Page with upscaled media buttons, full-screen album artwork focus, and removed the redundant 'System Player' text pill for a cleaner, premium design centered entirely around your music.
+*   **Duo Music Widget Permissions Clarification:** By popular demand, developers noted the Duo Music player widget requires different permissions (Notification vs MediaSession). This is because the standalone player relies strictly on generic media control broadcasts (like key events) and active MediaSession bindings, whereas the Duo widget relies on our background `MediaStateHolder`, which actively intercepts and syncs Notification Listener Service metadata updates globally to provide rich track data synchronously across varying layout scales!
+*   **Weather Service (Planned):** Disabled the experimental live weather toggle in settings and added a "Coming Soon" label as we prepare the next-generation meteorological layout overlay!
+
+---
 
 ## 📸 Product Showroom & Live Gallery
 

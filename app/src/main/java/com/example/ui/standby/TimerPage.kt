@@ -31,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -55,8 +57,8 @@ fun TimerPage(
             modifier = Modifier.fillMaxSize()
         ) { page ->
             when (page) {
-                0 -> FocusPomodoroTimer()
-                1 -> HighTechStopwatch()
+                0 -> FocusPomodoroTimer(viewModel)
+                1 -> HighTechStopwatch(viewModel)
             }
         }
 
@@ -91,7 +93,18 @@ fun TimerPage(
 
 // Sub-Tab 0: Focus Pomodoro Timer
 @Composable
-fun FocusPomodoroTimer() {
+fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
+    val selectedColorIdx by viewModel.colorPage4.collectAsState()
+    val selectedFontIdx by viewModel.fontPage4.collectAsState()
+    val glowVal by viewModel.getGlowFlow(4).collectAsState()
+    val outlineVal by viewModel.getOutlineFlow(4).collectAsState()
+    val gradientIdx by viewModel.getGradientFlow(4).collectAsState()
+    val bgUri by viewModel.getBgUriFlow(4).collectAsState()
+
+    val accentColor = viewModel.colors[selectedColorIdx].first
+    val customFont = viewModel.fonts[selectedFontIdx].first
+    val gradientColors = if (gradientIdx > 0 && gradientIdx < viewModel.gradients.size) viewModel.gradients[gradientIdx].second else null
+
     var focusMinutes by remember { mutableStateOf(25) }
     var currentSegmentIndex by remember { mutableStateOf(0) }
     
@@ -138,22 +151,40 @@ fun FocusPomodoroTimer() {
         }
     }
 
-    // Gorgeous Magenta-Orange Gradient Background (as depicted in image 1)
+    val backgroundBrush = remember(accentColor, gradientColors) {
+        if (gradientColors != null) {
+            Brush.linearGradient(gradientColors)
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    accentColor.copy(alpha = 0.45f),
+                    accentColor,
+                    Color.Black
+                )
+            )
+        }
+    }
+
+    // Gorgeous Gradient Background (styled according to theme index)
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF881337), // Dark deep rose/magenta
-                        Color(0xFFE11D48), // Rose red
-                        Color(0xFFF97316), // Vivid orange
-                    )
-                )
+            .then(
+                if (bgUri != null) Modifier else Modifier.background(brush = backgroundBrush)
             )
             .padding(horizontal = 48.dp, vertical = 24.dp),
         contentAlignment = Alignment.Center
     ) {
+        if (bgUri != null) {
+            coil.compose.AsyncImage(
+                model = bgUri,
+                contentDescription = "Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            // Add a dark overlay just to make sure timer remains readable
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
+        }
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
@@ -181,7 +212,7 @@ fun FocusPomodoroTimer() {
                         )
                         // Active countdown sweep
                         drawArc(
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = accentColor,
                             startAngle = -90f,
                             sweepAngle = 360f * (1f - progress),
                             useCenter = false,
@@ -198,12 +229,28 @@ fun FocusPomodoroTimer() {
                         val secs = secondsLeft % 60
                         val timerString = String.format("%02d:%02d", minutes, secs)
                         
-                        Text(
-                            text = timerString,
-                            color = Color.White,
+                        val pomodoroTextStyle = androidx.compose.ui.text.TextStyle(
+                            color = if (gradientColors == null && !outlineVal) Color.White else Color.Unspecified,
                             fontSize = 68.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-1).sp
+                            fontFamily = customFont,
+                            drawStyle = if (outlineVal) androidx.compose.ui.graphics.drawscope.Stroke(width = 3f) else androidx.compose.ui.graphics.drawscope.Fill,
+                            shadow = if (glowVal && !outlineVal) androidx.compose.ui.graphics.Shadow(color = accentColor, offset = Offset(0f, 0f), blurRadius = 20f) else null
+                        )
+                        val textGradientModifier = if (gradientColors != null) {
+                            Modifier.graphicsLayer(alpha = 0.99f).drawWithCache {
+                                val brush = Brush.linearGradient(gradientColors)
+                                onDrawWithContent {
+                                    drawContent()
+                                    drawRect(brush, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                                }
+                            }
+                        } else Modifier
+
+                        Text(
+                            text = timerString,
+                            style = pomodoroTextStyle,
+                            modifier = textGradientModifier
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -243,7 +290,7 @@ fun FocusPomodoroTimer() {
                                 ) {
                                     Text(
                                         text = if (isRunning) "Pause" else "Start",
-                                        color = Color(0xFFE11D48),
+                                        color = accentColor,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -433,7 +480,18 @@ fun FocusPomodoroTimer() {
 
 // Sub-Tab 1: High Tech Stopwatch View
 @Composable
-fun HighTechStopwatch() {
+fun HighTechStopwatch(viewModel: StandbyViewModel) {
+    val selectedColorIdx by viewModel.colorPage4.collectAsState()
+    val selectedFontIdx by viewModel.fontPage4.collectAsState()
+    val glowVal by viewModel.getGlowFlow(4).collectAsState()
+    val outlineVal by viewModel.getOutlineFlow(4).collectAsState()
+    val gradientIdx by viewModel.getGradientFlow(4).collectAsState()
+    val bgUri by viewModel.getBgUriFlow(4).collectAsState()
+
+    val accentColor = viewModel.colors[selectedColorIdx].first
+    val customFont = viewModel.fonts[selectedFontIdx].first
+    val gradientColors = if (gradientIdx > 0 && gradientIdx < viewModel.gradients.size) viewModel.gradients[gradientIdx].second else null
+
     var isRunning by remember { mutableStateOf(false) }
     var timeMillis by remember { mutableStateOf(0L) }
     val laps = remember { mutableStateListOf<Long>() }
@@ -470,12 +528,22 @@ fun HighTechStopwatch() {
             .padding(horizontal = 48.dp, vertical = 20.dp),
         contentAlignment = Alignment.Center
     ) {
+        if (bgUri != null) {
+            coil.compose.AsyncImage(
+                model = bgUri,
+                contentDescription = "Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            // Add a dark overlay just to make sure stopwatch remains readable
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
+        }
         // Ticking radial lines around the top/bottom as in image 2
         Canvas(modifier = Modifier.fillMaxSize()) {
             val h = size.height
             val w = size.width
-            val colorMajor = Color.White.copy(alpha = 0.15f)
-            val colorMinor = Color.White.copy(alpha = 0.05f)
+            val colorMajor = accentColor.copy(alpha = 0.28f)
+            val colorMinor = accentColor.copy(alpha = 0.12f)
             val strokeMajor = 2.dp.toPx()
             val strokeMinor = 1.dp.toPx()
 
@@ -489,7 +557,7 @@ fun HighTechStopwatch() {
                 val startY = 12.dp.toPx()
                 val len = if (isMajor) 18.dp.toPx() else 10.dp.toPx()
                 drawLine(
-                    color = if (isMajor) Color.White.copy(alpha = 0.22f) else colorMinor,
+                    color = if (isMajor) colorMajor else colorMinor,
                     start = Offset(valX, startY),
                     end = Offset(valX + (len * angleCoeff), startY + len),
                     strokeWidth = if (isMajor) strokeMajor else strokeMinor,
@@ -506,7 +574,7 @@ fun HighTechStopwatch() {
                 val startY = h - 12.dp.toPx()
                 val len = if (isMajor) 18.dp.toPx() else 10.dp.toPx()
                 drawLine(
-                    color = if (isMajor) Color.White.copy(alpha = 0.22f) else colorMinor,
+                    color = if (isMajor) colorMajor else colorMinor,
                     start = Offset(valX, startY),
                     end = Offset(valX - (len * angleCoeff), startY - len),
                     strokeWidth = if (isMajor) strokeMajor else strokeMinor,
@@ -523,25 +591,47 @@ fun HighTechStopwatch() {
             Spacer(modifier = Modifier.height(18.dp)) // clear top bars
 
             // Huge Display: minutes:seconds & centiseconds (offset sizes exactly as layout 2)
+            val stopwatchGradientModifier = if (gradientColors != null) {
+                Modifier.graphicsLayer(alpha = 0.99f).drawWithCache {
+                    val brush = androidx.compose.ui.graphics.Brush.linearGradient(gradientColors)
+                    onDrawWithContent {
+                        drawContent()
+                        drawRect(brush, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                    }
+                }
+            } else Modifier
+
+            val mainTextStyle = androidx.compose.ui.text.TextStyle(
+                color = if (gradientColors == null && !outlineVal) accentColor else Color.Unspecified,
+                fontSize = 72.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = customFont,
+                drawStyle = if (outlineVal) androidx.compose.ui.graphics.drawscope.Stroke(width = 3f) else androidx.compose.ui.graphics.drawscope.Fill,
+                shadow = if (glowVal && !outlineVal) androidx.compose.ui.graphics.Shadow(color = accentColor, offset = Offset(0f, 0f), blurRadius = 20f) else null
+            )
+            val centisTextStyle = androidx.compose.ui.text.TextStyle(
+                color = if (gradientColors == null && !outlineVal) accentColor.copy(alpha = 0.7f) else Color.Unspecified,
+                fontSize = 38.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = customFont,
+                drawStyle = if (outlineVal) androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f) else androidx.compose.ui.graphics.drawscope.Fill,
+                shadow = if (glowVal && !outlineVal) androidx.compose.ui.graphics.Shadow(color = accentColor, offset = Offset(0f, 0f), blurRadius = 15f) else null
+            )
+
             Row(
                 verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier
+                    .padding(bottom = 8.dp)
+                    .then(stopwatchGradientModifier)
             ) {
                 val formatted = formatDisplayTime(timeMillis)
                 Text(
                     text = formatted.first,
-                    color = Color(0xFFC1C7D0),
-                    fontSize = 72.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-1).sp
+                    style = mainTextStyle
                 )
                 Text(
                     text = formatted.second,
-                    color = Color(0xFF7F8B9B),
-                    fontSize = 38.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
+                    style = centisTextStyle,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
@@ -577,7 +667,7 @@ fun HighTechStopwatch() {
                         Icon(
                             imageVector = Icons.Default.Timer,
                             contentDescription = "Active lap indicator",
-                            tint = Color(0xFF4C8DFF),
+                            tint = accentColor,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -635,7 +725,8 @@ fun HighTechStopwatch() {
                 // Button 2: PRIMARY PLAY / PAUSE (Large rounded purple button) Match image 2!
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFF382F45), // Deep purple backplate matching mockup
+                    color = accentColor.copy(alpha = 0.15f), // Matching active accent color backplate
+                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .clickable { isRunning = !isRunning }
                         .size(width = 84.dp, height = 72.dp)
@@ -647,7 +738,7 @@ fun HighTechStopwatch() {
                         Icon(
                             imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Toggle Stopwatch",
-                            tint = Color(0xFFE4DAF2),
+                            tint = accentColor,
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -667,12 +758,13 @@ fun HighTechStopwatch() {
                     modifier = Modifier
                         .size(54.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF232D3F)) // Sleek dark slate tint
+                        .background(accentColor.copy(alpha = 0.1f))
+                        .border(1.dp, accentColor.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Timer,
                         contentDescription = "Record Lap Split",
-                        tint = Color(0xFF90C2FF),
+                        tint = accentColor,
                         modifier = Modifier.size(24.dp)
                     )
                 }

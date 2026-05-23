@@ -35,6 +35,8 @@ import com.example.api.CurrentWeather
 import com.example.data.Alarm
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 
@@ -59,6 +61,12 @@ fun ClockFaceRenderer(
     val showAmPm by standbyViewModel.showAmPm.collectAsState()
     val showSeconds by standbyViewModel.showSeconds.collectAsState()
 
+    val bgUri by standbyViewModel.getBgUriFlow(0).collectAsState()
+    val glowVal by standbyViewModel.getGlowFlow(0).collectAsState()
+    val outlineVal by standbyViewModel.getOutlineFlow(0).collectAsState()
+    val gradientIdx by standbyViewModel.getGradientFlow(0).collectAsState()
+    val gradientColors = if (gradientIdx > 0 && gradientIdx < standbyViewModel.gradients.size) standbyViewModel.gradients[gradientIdx].second else null
+
     val customColor = standbyViewModel.colors[selectedColorIdx].first
     val customFont = standbyViewModel.fonts[selectedFontIdx].first
 
@@ -70,20 +78,43 @@ fun ClockFaceRenderer(
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            when (themeIndex % 12) {
-                0 -> DigitalMinimal(currentTime, customColor, customFont, clockScaleValue, animsEnabled, use24Hour, showAmPm, showSeconds)
+        if (bgUri != null) {
+            coil.compose.AsyncImage(
+                model = bgUri,
+                contentDescription = "Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            // Add a dark overlay just to make sure clocks remain readable
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
+        }
+        val clockGradientModifier = if (gradientColors != null) {
+            Modifier.graphicsLayer(alpha = 0.99f).drawWithCache {
+                val brush = androidx.compose.ui.graphics.Brush.linearGradient(gradientColors)
+                onDrawWithContent {
+                    drawContent()
+                    drawRect(brush, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                }
+            }
+        } else Modifier
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(clockGradientModifier),
+            contentAlignment = Alignment.Center
+        ) {
+            when (themeIndex % 10) {
+                0 -> DigitalMinimal(currentTime, customColor, customFont, clockScaleValue, animsEnabled, use24Hour, showAmPm, showSeconds, glowVal, outlineVal, gradientColors)
                 1 -> AnalogClassic(currentTime, customColor, clockScaleValue, animsEnabled, true)
-                2 -> DigitalNeon(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                3 -> RetroFlip(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                4 -> BinaryStyle(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                5 -> ModernBoldTextClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                6 -> LargeSidebarClock(currentTime, customColor, customFont, nextSystemAlarm, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                7 -> ContrastingSplitClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                8 -> AnalogDashboard(currentTime, customColor, customFont, clockScaleValue, animsEnabled, true)
-                9 -> BubblePastelClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                10 -> AmbientGradientClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
-                11 -> NixieTubeClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                2 -> RetroFlip(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                3 -> BinaryStyle(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                4 -> ModernBoldTextClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                5 -> ContrastingSplitClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                6 -> AnalogDashboard(currentTime, customColor, customFont, clockScaleValue, animsEnabled, true)
+                7 -> BubblePastelClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                8 -> AmbientGradientClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
+                9 -> NixieTubeClock(currentTime, customColor, customFont, clockScaleValue, use24Hour, showAmPm, showSeconds)
             }
         }
         
@@ -112,18 +143,39 @@ fun DigitalMinimal(
     animationsEnabled: Boolean = true,
     use24Hour: Boolean = false,
     showAmPm: Boolean = true,
-    showSeconds: Boolean = true
+    showSeconds: Boolean = true,
+    glow: Boolean = false,
+    outline: Boolean = false,
+    gradientColors: List<Color>? = null
 ) {
     val format = remember(use24Hour, showAmPm, showSeconds) {
         val pattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
         SimpleDateFormat(pattern, Locale.getDefault())
     }
-    Text(
-        text = format.format(calendar.time),
-        color = color,
+    
+    val textStyle = androidx.compose.ui.text.TextStyle(
+        color = if (gradientColors == null && !outline) color else Color.Unspecified,
         fontSize = (110 * scale).sp,
         fontWeight = FontWeight.Thin,
-        fontFamily = fontFamily
+        fontFamily = fontFamily,
+        drawStyle = if (outline) androidx.compose.ui.graphics.drawscope.Stroke(width = 4f * scale) else androidx.compose.ui.graphics.drawscope.Fill,
+        shadow = if (glow && !outline) androidx.compose.ui.graphics.Shadow(color = color, offset = Offset(0f, 0f), blurRadius = 20f * scale) else null
+    )
+    
+    val brushModifier = if (gradientColors != null) {
+        Modifier.graphicsLayer(alpha = 0.99f).drawWithCache {
+            val brush = androidx.compose.ui.graphics.Brush.linearGradient(gradientColors)
+            onDrawWithContent {
+                drawContent()
+                drawRect(brush, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+            }
+        }
+    } else Modifier
+    
+    Text(
+        text = format.format(calendar.time),
+        style = textStyle,
+        modifier = brushModifier
     )
 }
 
@@ -731,17 +783,20 @@ fun LargeSidebarClock(
     }
 }
 
-class DiagonalSplitShape : Shape {
+class ClockHandsWedgeShape(private val startAngle: Float, private val sweepAngle: Float) : Shape {
     override fun createOutline(
         size: androidx.compose.ui.geometry.Size,
         layoutDirection: LayoutDirection,
         density: androidx.compose.ui.unit.Density
     ): Outline {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val radius = maxOf(size.width, size.height)
+        
         val path = Path().apply {
-            moveTo(size.width * 0.52f, 0f)
-            lineTo(size.width, 0f)
-            lineTo(size.width, size.height)
-            lineTo(size.width * 0.72f, size.height)
+            moveTo(cx, cy)
+            val rect = androidx.compose.ui.geometry.Rect(cx - radius, cy - radius, cx + radius, cy + radius)
+            arcTo(rect, startAngle - 90f, sweepAngle, false)
             close()
         }
         return Outline.Generic(path)
@@ -763,6 +818,15 @@ fun ContrastingSplitClock(
     val timeText = format.format(calendar.time)
     val actualFontSize = if (showSeconds || (!use24Hour && showAmPm)) 110 * scale else 150 * scale
 
+    val hour = calendar.get(Calendar.HOUR)
+    val minute = calendar.get(Calendar.MINUTE)
+    val second = calendar.get(Calendar.SECOND)
+    
+    val minuteAngle = minute * 6f + second * 0.1f
+    val hourAngle = hour * 30f + minute * 0.5f
+    var sweepAngle = minuteAngle - hourAngle
+    if (sweepAngle < 0) sweepAngle += 360f
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -781,7 +845,7 @@ fun ContrastingSplitClock(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(DiagonalSplitShape())
+                .clip(ClockHandsWedgeShape(hourAngle, sweepAngle))
                 .background(color),
             contentAlignment = Alignment.Center
         ) {
@@ -1158,355 +1222,53 @@ fun NixieTubeClock(
     showAmPm: Boolean = true,
     showSeconds: Boolean = true
 ) {
-    val hh = SimpleDateFormat(if (use24Hour) "HH" else "h", Locale.getDefault()).format(calendar.time)
-    val mm = SimpleDateFormat("mm", Locale.getDefault()).format(calendar.time)
-    val ss = SimpleDateFormat("ss", Locale.getDefault()).format(calendar.time)
-    val amPmText = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
+    val pattern = (if (use24Hour) "HH" else "hh") + ":mm" + (if (showSeconds) ":ss" else "") 
+    val timeStr = SimpleDateFormat(pattern, Locale.getDefault()).format(calendar.time)
     
-    val hourDigits = hh.padStart(if (use24Hour) 2 else 1, ' ').map { it.toString() }
-    val minuteDigits = mm.map { it.toString() }
-    val secondDigits = ss.map { it.toString() }
-
-    val actualScale = if (showSeconds) scale * 0.75f else scale
+    val displayColor = if (color == Color.White) Color(0xFFFFB300) else color
+    
+    // Convert Compose Color to Android Color Int
+    val androidColor = android.graphics.Color.argb(
+        (displayColor.alpha * 255).toInt(),
+        (displayColor.red * 255).toInt(),
+        (displayColor.green * 255).toInt(),
+        (displayColor.blue * 255).toInt()
+    )
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxSize()
     ) {
-        // Main container representing the tubes standing on the chassis
-        Box(
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            // Under-chassis glowing light spill
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .height((45 * actualScale).dp)
-                    .background(
-                        androidx.compose.ui.graphics.Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFFF4800).copy(alpha = 0.15f),
-                                Color.Transparent
-                            )
-                        )
-                    )
+        androidx.compose.ui.viewinterop.AndroidView(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .height((150 * scale).dp),
+            factory = { context ->
+                NixieClockView(context, null).apply {
+                    setGlowColor(androidColor)
+                }
+            },
+            update = { view ->
+                view.setTime(timeStr)
+                view.setGlowColor(androidColor)
+            }
+        )
+        
+        if (!use24Hour && showAmPm) {
+            val amPmText = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
+            Text(
+                text = amPmText.uppercase(),
+                color = color.copy(alpha = 0.5f),
+                fontSize = (24 * scale).sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = fontFamily,
+                modifier = Modifier.padding(top = (8 * scale).dp)
             )
-
-            // Transparent Acrylic & Exposed Green Glass-Epoxy PCB chassis base block at the bottom
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.95f)
-                    .padding(horizontal = (6 * actualScale).dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // 1. Dual-layer vintage PCB layout
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height((28 * actualScale).dp)
-                        .border(
-                            width = (1 * actualScale).dp,
-                            color = Color.White.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape((6 * actualScale).dp)
-                        )
-                        .background(Color.Black) // clear background
-                ) {
-                    // Green printed circuit board substrate
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape((6 * actualScale).dp))
-                            .background(
-                                androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color(0xFF0F2B19), // Classy vintage dark solder-mask green
-                                        Color(0xFF08180E)
-                                    )
-                                )
-                            )
-                    ) {
-                        // Drawing copper tracks and circular solder pads under the tubes
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val trackColor = Color(0xFFC5A059).copy(alpha = 0.35f) // copper gold
-                            
-                            // Horizontal main bus tracks
-                            drawLine(
-                                color = trackColor,
-                                start = Offset(0f, size.height * 0.45f),
-                                end = Offset(size.width, size.height * 0.45f),
-                                strokeWidth = 1.5.dp.toPx()
-                            )
-                            drawLine(
-                                color = trackColor,
-                                start = Offset(0f, size.height * 0.65f),
-                                end = Offset(size.width, size.height * 0.65f),
-                                strokeWidth = 1.dp.toPx()
-                            )
-                            
-                            // Concentric pads & connecting routing tracks
-                            for (i in 0..12) {
-                                val xPos = size.width * (i.toFloat() / 12f)
-                                drawCircle(
-                                    color = trackColor,
-                                    radius = 5.dp.toPx(),
-                                    center = Offset(xPos, size.height * 0.55f),
-                                    style = Stroke(width = 1.dp.toPx())
-                                )
-                                drawCircle(
-                                    color = Color(0xFFD4AF37).copy(alpha = 0.4f),
-                                    radius = 1.8.dp.toPx(),
-                                    center = Offset(xPos, size.height * 0.55f)
-                                )
-                                drawLine(
-                                    color = trackColor,
-                                    start = Offset(xPos, size.height * 0.55f),
-                                    end = Offset(xPos + 10.dp.toPx(), size.height * 0.2f),
-                                    strokeWidth = 1.dp.toPx()
-                                )
-                            }
-                        }
-                    }
-
-                    // Soft warm neon amber LED under-chassis spill that lights up the tracks
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                androidx.compose.ui.graphics.Brush.radialGradient(
-                                    colors = listOf(
-                                        Color(0xFFFF5200).copy(alpha = 0.18f),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
-
-                    // Acrylic top protective transparent plate with glass bevel reflections
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.08f),
-                                        Color.White.copy(alpha = 0.01f),
-                                        Color.White.copy(alpha = 0.04f)
-                                    )
-                                )
-                            )
-                    ) {
-                        // Polished corner spacer bolts holding the transparent acrylic sheets together
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = (10 * actualScale).dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Left spacer bolt
-                            Box(
-                                modifier = Modifier
-                                    .size((6 * actualScale).dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFB5B8B1)) // Silver structural bolt
-                                    .border(0.5.dp, Color.White, CircleShape)
-                            )
-                            // Right spacer bolt
-                            Box(
-                                modifier = Modifier
-                                    .size((6 * actualScale).dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFB5B8B1))
-                                    .border(0.5.dp, Color.White, CircleShape)
-                            )
-                        }
-                    }
-                }
-
-                // 2. Heavy burnished gold metal accent strip base
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height((3 * actualScale).dp)
-                        .background(
-                            androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color(0xFF8B7355), // Vintage bronze
-                                    Color(0xFFD4AF37), // Polished brass highlight
-                                    Color(0xFF8B7355)
-                                )
-                            )
-                        )
-                )
-            }
-
-            // Tubes Row standing proudly on top of the PCB base block
-            Row(
-                horizontalArrangement = Arrangement.spacedBy((6 * actualScale).dp),
-                verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.padding(bottom = (24 * actualScale).dp) // Raised slightly above the PCB base
-            ) {
-                // Hour tubes
-                hourDigits.forEach { digit ->
-                    if (digit == " ") {
-                        NixieDigitTube("0", color, fontFamily, actualScale, isDimmed = true)
-                    } else {
-                        NixieDigitTube(digit, color, fontFamily, actualScale, isDimmed = false)
-                    }
-                }
-
-                // Colon
-                NixieColon(color, actualScale, isTicking = true)
-
-                // Minute tubes
-                minuteDigits.forEach { digit ->
-                    NixieDigitTube(digit, color, fontFamily, actualScale, isDimmed = false)
-                }
-
-                // Colon & Seconds
-                if (showSeconds) {
-                    NixieColon(color, actualScale, isTicking = true)
-                    secondDigits.forEach { digit ->
-                        NixieDigitTube(digit, color, fontFamily, actualScale, isDimmed = false)
-                    }
-                }
-
-                // AM/PM Tube
-                if (!use24Hour && showAmPm) {
-                    Box(
-                        modifier = Modifier
-                            .width((62 * actualScale).dp)
-                            .height((176 * actualScale).dp)
-                            .padding(horizontal = (2 * actualScale).dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            // Glass dome envelope
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
-                                    .clip(
-                                        RoundedCornerShape(
-                                            topStart = (31 * actualScale).dp,
-                                            topEnd = (31 * actualScale).dp,
-                                            bottomStart = (4 * actualScale).dp,
-                                            bottomEnd = (4 * actualScale).dp
-                                        )
-                                    )
-                                    .background(
-                                        androidx.compose.ui.graphics.Brush.linearGradient(
-                                            colors = listOf(
-                                                Color(0xFF0F0B09),
-                                                Color(0xFF160E0A)
-                                            )
-                                        )
-                                    )
-                                    .border(
-                                        width = (1.5f * actualScale).dp,
-                                        color = Color.White.copy(alpha = 0.14f),
-                                        shape = RoundedCornerShape(
-                                            topStart = (31 * actualScale).dp,
-                                            topEnd = (31 * actualScale).dp,
-                                            bottomStart = (4 * actualScale).dp,
-                                            bottomEnd = (4 * actualScale).dp
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // Background mesh
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    val step = (12f * actualScale).dp.toPx()
-                                    var y = 0f
-                                    while (y < size.height) {
-                                        drawLine(
-                                            color = Color.White.copy(alpha = 0.04f),
-                                            start = Offset(0f, y),
-                                            end = Offset(size.width, y),
-                                            strokeWidth = 1f
-                                        )
-                                        y += step
-                                    }
-                                }
-
-                                // Glowing active filament letters showing AM or PM
-                                val activeGlowColor = Color(0xFFFF5200)
-                                val activeCoreColor = Color(0xFFFFE599)
-                                val ambientHaloColor = Color(0xFFFF3300)
-
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Text(
-                                        text = amPmText.uppercase().substring(0, 1),
-                                        color = activeCoreColor,
-                                        fontSize = (22 * actualScale).sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Serif,
-                                        textAlign = TextAlign.Center,
-                                        style = androidx.compose.ui.text.TextStyle(
-                                            shadow = androidx.compose.ui.graphics.Shadow(
-                                                color = activeGlowColor,
-                                                offset = Offset(0f, 0f),
-                                                blurRadius = (12 * actualScale)
-                                            )
-                                        )
-                                    )
-                                    Text(
-                                        text = amPmText.uppercase().substring(1, 2),
-                                        color = activeCoreColor,
-                                        fontSize = (22 * actualScale).sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Serif,
-                                        textAlign = TextAlign.Center,
-                                        style = androidx.compose.ui.text.TextStyle(
-                                            shadow = androidx.compose.ui.graphics.Shadow(
-                                                color = activeGlowColor,
-                                                offset = Offset(0f, 0f),
-                                                blurRadius = (12 * actualScale)
-                                            )
-                                        )
-                                    )
-                                }
-
-                                // Specular glass reflections
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopStart)
-                                        .fillMaxHeight()
-                                        .width((4 * actualScale).dp)
-                                        .padding(top = (16 * actualScale).dp, bottom = (8 * actualScale).dp, start = (4 * actualScale).dp)
-                                        .clip(RoundedCornerShape(30))
-                                        .background(Color.White.copy(alpha = 0.18f))
-                                )
-                            }
-
-                            // Mounting base
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.85f)
-                                    .height((12 * actualScale).dp)
-                                    .clip(RoundedCornerShape(topStart = (3 * actualScale).dp, topEnd = (3 * actualScale).dp))
-                                    .background(Color(0xFF2C2C2E))
-                                    .border(
-                                        width = (1 * actualScale).dp,
-                                        color = Color(0xFF4A4A4F),
-                                        shape = RoundedCornerShape(topStart = (3 * actualScale).dp, topEnd = (3 * actualScale).dp)
-                                    )
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
+
 
 @Composable
 fun NixieDigitTube(

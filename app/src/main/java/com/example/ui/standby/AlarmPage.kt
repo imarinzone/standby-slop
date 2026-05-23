@@ -39,6 +39,8 @@ fun AlarmPage(modifier: Modifier = Modifier, viewModel: StandbyViewModel = viewM
     val customFont = viewModel.fonts[viewModel.fontPage1.collectAsState().value].first
     val accentColor = viewModel.colors[selectedColorIdx].first
 
+    val bgUri by viewModel.getBgUriFlow(1).collectAsState()
+
     val alarms by viewModel.alarms.collectAsState()
     val use24Hour by viewModel.use24HourFormat.collectAsState()
 
@@ -48,27 +50,21 @@ fun AlarmPage(modifier: Modifier = Modifier, viewModel: StandbyViewModel = viewM
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
-            .padding(vertical = 16.dp, horizontal = 24.dp)
     ) {
-        // High-fidelity background radial glow matching active app accent color
-        Box(
-            modifier = Modifier
-                .size(450.dp)
-                .align(Alignment.Center)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            accentColor.copy(alpha = 0.04f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
+        if (bgUri != null) {
+            coil.compose.AsyncImage(
+                model = bgUri,
+                contentDescription = "Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
+        }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 16.dp)
+                .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 16.dp)
         ) {
             // Screen Header Title & Add Button Row
             Row(

@@ -66,7 +66,7 @@ fun StandbyScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val horizontalPagerState = rememberPagerState(pageCount = { 6 })
-    val verticalPagerState = rememberPagerState(pageCount = { 12 })
+    val verticalPagerState = rememberPagerState(pageCount = { 10 })
 
     var isHudVisible by remember { mutableStateOf(true) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -103,6 +103,20 @@ fun StandbyScreen(
                 )
             }
     ) {
+        val currentTabForBg = if (!isOverviewMode) horizontalPagerState.currentPage else 0
+        val currentBgUri by viewModel.getBgUriFlow(currentTabForBg).collectAsState()
+
+        if (currentBgUri != null) {
+            coil.compose.AsyncImage(
+                model = currentBgUri,
+                contentDescription = "Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            // Tint overlay
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
+        }
+
         if (!isOverviewMode) {
             HorizontalPager(
                 state = horizontalPagerState,
@@ -155,7 +169,7 @@ fun StandbyScreen(
                 ) {
                     VerticalThemeIndicator(
                         currentIndex = verticalPagerState.currentPage,
-                        pageCount = 12,
+                        pageCount = 10,
                         onDotClicked = { selectedIdx ->
                             isHudVisible = true
                             coroutineScope.launch {
@@ -583,6 +597,11 @@ fun StandbyCustomizationDialog(
     val clockScaleVal by viewModel.getScaleFlow(activeTab).collectAsState()
     val animationsEnabledVal by viewModel.getAnimFlow(activeTab).collectAsState()
 
+    val glowVal by viewModel.getGlowFlow(activeTab).collectAsState()
+    val outlineVal by viewModel.getOutlineFlow(activeTab).collectAsState()
+    val gradientIdx by viewModel.getGradientFlow(activeTab).collectAsState()
+    val bgUri by viewModel.getBgUriFlow(activeTab).collectAsState()
+
     val use24Hour by viewModel.use24HourFormat.collectAsState()
     val showAmPm by viewModel.showAmPm.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
@@ -959,17 +978,20 @@ fun StandbyCustomizationDialog(
                                                 fontWeight = FontWeight.SemiBold
                                             )
                                             Text(
-                                                "Overlays current weather metrics on compatible layouts",
+                                                "Coming Soon - Overlays current weather metrics on compatible layouts",
                                                 color = Color.Gray,
                                                 fontSize = 9.sp
                                             )
                                         }
                                         Switch(
-                                            checked = showWeatherVal,
-                                            onCheckedChange = { viewModel.setShowWeatherForPage(activeTab, it) },
+                                            checked = false,
+                                            onCheckedChange = null,
+                                            enabled = false,
                                             colors = SwitchDefaults.colors(
                                                 checkedThumbColor = Color.Black,
-                                                checkedTrackColor = pageColor
+                                                checkedTrackColor = pageColor,
+                                                disabledCheckedTrackColor = Color.DarkGray,
+                                                disabledUncheckedTrackColor = Color.Black
                                             )
                                         )
                                     }
@@ -1102,12 +1124,191 @@ fun StandbyCustomizationDialog(
                             }
                         }
 
+                        // Advanced Text Effects
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF0C111D))
+                                .border(1.dp, Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                                .padding(16.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Text(
+                                    "ADVANCED STYLING",
+                                    color = pageColor,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.2.sp
+                                )
+
+                                // Glow Toggle
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF131A26))
+                                        .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Text Ambient Glow", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Adds a soft blurred glow around text", color = Color.Gray, fontSize = 9.sp)
+                                    }
+                                    Switch(
+                                        checked = glowVal,
+                                        onCheckedChange = { viewModel.setTextGlowForPage(activeTab, it) },
+                                        colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                    )
+                                }
+                                
+                                // Outline Only Toggle
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF131A26))
+                                        .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Stroke Outline Only", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Removes solid fill, drawing only borders", color = Color.Gray, fontSize = 9.sp)
+                                    }
+                                    Switch(
+                                        checked = outlineVal,
+                                        onCheckedChange = { viewModel.setTextOutlineForPage(activeTab, it) },
+                                        colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                    )
+                                }
+                                
+                                Text(
+                                    "TEXT GRADIENTS",
+                                    color = pageColor,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.2.sp,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                )
+                                
+                                androidx.compose.foundation.lazy.LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(viewModel.gradients.size) { index ->
+                                        val gradientPair = viewModel.gradients[index]
+                                        val isSelected = index == gradientIdx
+                                        val brush = if (index == 0) {
+                                            androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color.White, Color.White))
+                                        } else {
+                                            androidx.compose.ui.graphics.Brush.linearGradient(gradientPair.second)
+                                        }
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .size(60.dp, 40.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(brush)
+                                                .border(
+                                                    width = if (isSelected) 2.dp else 1.dp,
+                                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.1f),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                )
+                                                .clickable { viewModel.setTextGradientForPage(activeTab, if (isSelected) -1 else index) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (index == 0) {
+                                                Text("X", color = Color.Black, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Custom Background
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+                            androidx.activity.result.contract.ActivityResultContracts.GetContent()
+                        ) { uri ->
+                            if (uri != null) {
+                                try {
+                                    context.contentResolver.takePersistableUriPermission(
+                                        uri,
+                                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    )
+                                } catch (e: Exception) {
+                                    // Ignore if persist fails
+                                }
+                                viewModel.setBgUriForPage(activeTab, uri.toString())
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF0C111D))
+                                .border(1.dp, Color.White.copy(alpha = 0.03f), RoundedCornerShape(12.dp))
+                                .padding(16.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Text(
+                                    "CUSTOM BACKGROUND",
+                                    color = pageColor,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.2.sp
+                                )
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF131A26))
+                                        .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Select Local Image", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Replace pure black background with an image", color = Color.Gray, fontSize = 9.sp)
+                                        if (bgUri != null) {
+                                            Text("Image selected", color = pageColor, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                                        }
+                                    }
+                                    
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (bgUri != null) {
+                                            Button(
+                                                onClick = { viewModel.setBgUriForPage(activeTab, null) },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha=0.15f), contentColor = Color.Red),
+                                                contentPadding = PaddingValues(horizontal = 12.dp)
+                                            ) {
+                                                Text("Clear")
+                                            }
+                                        }
+                                        Button(
+                                            onClick = { launcher.launch("image/*") },
+                                            colors = ButtonDefaults.buttonColors(containerColor = pageColor, contentColor = if(pageColor == Color.White) Color.Black else Color.White),
+                                            contentPadding = PaddingValues(horizontal = 12.dp)
+                                        ) {
+                                            Text("Pick")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Calendar Display Preferences (Only for activeTab == 2)
                         if (activeTab == 2) {
                             val calendarViewModel: CalendarViewModel = viewModel()
-                            val showDaily by calendarViewModel.showDaily.collectAsState()
-                            val showWeekly by calendarViewModel.showWeekly.collectAsState()
-                            val showMonthly by calendarViewModel.showMonthly.collectAsState()
+                            val calendarFilter by calendarViewModel.calendarFilter.collectAsState()
                             
                             val startOnMon by calendarViewModel.startWeekOnMonday.collectAsState()
                             val showDots by calendarViewModel.showEventDots.collectAsState()
@@ -1129,70 +1330,46 @@ fun StandbyCustomizationDialog(
                                         letterSpacing = 1.2.sp
                                     )
 
-                                    // Daily toggles
-                                    Row(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(Color(0xFF131A26))
                                             .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
                                             .padding(12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Column {
-                                            Text("Show Daily Events", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                            Text("Shows schedules listed on current day", color = Color.Gray, fontSize = 9.sp)
-                                        }
-                                        Switch(
-                                            checked = showDaily,
-                                            onCheckedChange = { calendarViewModel.showDaily.value = it },
-                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                        Text(
+                                            "Active View Selection",
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold
                                         )
-                                    }
-
-                                    // Weekly toggles
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(Color(0xFF131A26))
-                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
-                                            .padding(12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-                                            Text("Show Weekly Events", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                            Text("Shows schedules starting in the next 7 days", color = Color.Gray, fontSize = 9.sp)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            listOf("Daily" to 0, "Weekly" to 1, "Monthly" to 2).forEach { (label, filterVal) ->
+                                                val isSelected = calendarFilter == filterVal
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(if (isSelected) pageColor.copy(alpha = 0.15f) else Color.Transparent)
+                                                        .border(1.dp, if (isSelected) pageColor.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.05f), RoundedCornerShape(6.dp))
+                                                        .clickable { calendarViewModel.setCalendarFilter(filterVal) }
+                                                        .padding(vertical = 10.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        label,
+                                                        color = if (isSelected) Color.White else Color.Gray,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
                                         }
-                                        Switch(
-                                            checked = showWeekly,
-                                            onCheckedChange = { calendarViewModel.showWeekly.value = it },
-                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
-                                        )
-                                    }
-
-                                    // Monthly toggles
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(Color(0xFF131A26))
-                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
-                                            .padding(12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-                                            Text("Show Monthly Events", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                            Text("Shows future events further than a week ahead", color = Color.Gray, fontSize = 9.sp)
-                                        }
-                                        Switch(
-                                            checked = showMonthly,
-                                            onCheckedChange = { calendarViewModel.showMonthly.value = it },
-                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
-                                        )
                                     }
 
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -1221,7 +1398,7 @@ fun StandbyCustomizationDialog(
                                         }
                                         Switch(
                                             checked = startOnMon,
-                                            onCheckedChange = { calendarViewModel.startWeekOnMonday.value = it },
+                                            onCheckedChange = { calendarViewModel.setStartWeekOnMonday(it) },
                                             colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
                                         )
                                     }
@@ -1243,51 +1420,9 @@ fun StandbyCustomizationDialog(
                                         }
                                         Switch(
                                             checked = showDots,
-                                            onCheckedChange = { calendarViewModel.showEventDots.value = it },
+                                            onCheckedChange = { calendarViewModel.setShowEventDots(it) },
                                             colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
                                         )
-                                    }
-
-                                    // Split Left Panel Display style
-                                    val leftStyle by calendarViewModel.leftThemeStyle.collectAsState()
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(Color(0xFF131A26))
-                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
-                                            .padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Column {
-                                            Text("Split Left Panel Display", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                            Text("Adjust left panel to show both calendar and date, or focus on one.", color = Color.Gray, fontSize = 9.sp)
-                                        }
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            listOf("Both Layouts" to 0, "Cal Grid Only" to 1, "Bold Date Only" to 2).forEach { (label, index) ->
-                                                val isStyleSelected = leftStyle == index
-                                                Box(
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(if (isStyleSelected) pageColor.copy(alpha = 0.15f) else Color.Transparent)
-                                                        .border(1.dp, if (isStyleSelected) pageColor.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.05f), RoundedCornerShape(6.dp))
-                                                        .clickable { calendarViewModel.leftThemeStyle.value = index }
-                                                        .padding(vertical = 8.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        label,
-                                                        color = if (isStyleSelected) Color.White else Color.Gray,
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -1448,16 +1583,14 @@ fun AppOverviewLayout(
             val clockThemes = listOf(
                 "Minimal Digital Clock" to "01 | DIGITAL MINIMAL",
                 "Classic Analog Clock" to "02 | ANALOG CLASSIC",
-                "Cyber Neon Clock" to "03 | DIGITAL NEON",
-                "Retro Flip Card Clock" to "04 | RETRO FLIP CARD",
-                "Binary Dots Matrix" to "05 | BINARY STYLE",
-                "Modern Bold Typography" to "06 | MODERN BOLD TEXT",
-                "Large Sidebar Alarm Clock" to "07 | LARGE SIDEBAR",
-                "Contrasting Split Color" to "08 | CONTRASTING SPLIT",
-                "Analog Motor Dashboard" to "09 | ANALOG DASHBOARD",
-                "Pastel Bubbles Clock" to "10 | BUBBLE PASTEL",
-                "Ambient Horizon Gradient" to "11 | AMBIENT GRADIENT",
-                "High-Tech Nixie Tube" to "12 | NIXIE TUBE"
+                "Retro Flip Card Clock" to "03 | RETRO FLIP CARD",
+                "Binary Dots Matrix" to "04 | BINARY STYLE",
+                "Modern Bold Typography" to "05 | MODERN BOLD TEXT",
+                "Contrasting Split Color" to "06 | CONTRASTING SPLIT",
+                "Analog Motor Dashboard" to "07 | ANALOG DASHBOARD",
+                "Pastel Bubbles Clock" to "08 | BUBBLE PASTEL",
+                "Ambient Horizon Gradient" to "09 | AMBIENT GRADIENT",
+                "High-Tech Nixie Tube" to "10 | NIXIE TUBE"
             )
 
             val utilityPages = listOf(
