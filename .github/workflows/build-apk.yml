@@ -44,8 +44,8 @@ jobs:
           if [ -f debug.keystore.base64 ]; then
             base64 -d debug.keystore.base64 > debug.keystore
           else
-            # Secure debug keystore fallback to make sure config phase doesn't crash on missing file
-            touch debug.keystore
+            # Generate a debug keystore to prevent Gradle from failing with Invalid keystore format
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "cn=Unknown, ou=Unknown, o=Unknown, c=Unknown"
           fi
           # Touch release keystore placeholder to satisfy AGP evaluation phase safely
           touch my-upload-key.jks
