@@ -22,11 +22,16 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Brush
@@ -50,6 +55,8 @@ import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -108,6 +115,7 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
     val selectedFontIdx by standbyViewModel.fontPage3.collectAsState()
     val accentColor = standbyViewModel.colors[selectedColorIdx].first
     val customFont = standbyViewModel.fonts[selectedFontIdx].first
+    val isClassicTheme by standbyViewModel.useClassicMediaTheme.collectAsState()
 
     // Notification Permission Handling for Android 13+
     val notificationPermissionState = if (Build.VERSION.SDK_INT >= 33) {
@@ -199,18 +207,58 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(isClassicTheme) {
+                    var verticalDragAccumulator = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = {
+                            verticalDragAccumulator = 0f
+                        },
+                        onDragEnd = {
+                            if (verticalDragAccumulator < -80f) {
+                                if (!isClassicTheme) {
+                                    standbyViewModel.setUseClassicMediaTheme(true)
+                                }
+                            } else if (verticalDragAccumulator > 80f) {
+                                if (isClassicTheme) {
+                                    standbyViewModel.setUseClassicMediaTheme(false)
+                                }
+                            }
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            verticalDragAccumulator += dragAmount
+                        }
+                    )
+                }
+        ) {
             if (isCurrentlyPlaying) {
-                MaterialYouExpressivePlayer(
-                    trackTitle = trackTitle,
-                    artistName = artistName,
-                    albumArt = albumArt,
-                    isPlaying = isPlayingFlow,
-                    appInfo = appInfo,
-                    accentColor = accentColor,
-                    customFont = customFont,
-                    context = context
-                )
+                if (isClassicTheme) {
+                    CinematicRetroPlayer(
+                        trackTitle = trackTitle,
+                        artistName = artistName,
+                        albumArt = albumArt,
+                        isPlaying = isPlayingFlow,
+                        accentColor = accentColor,
+                        customFont = customFont,
+                        context = context,
+                        standbyViewModel = standbyViewModel
+                    )
+                } else {
+                    MaterialYouExpressivePlayer(
+                        trackTitle = trackTitle,
+                        artistName = artistName,
+                        albumArt = albumArt,
+                        isPlaying = isPlayingFlow,
+                        appInfo = appInfo,
+                        accentColor = accentColor,
+                        customFont = customFont,
+                        context = context,
+                        standbyViewModel = standbyViewModel
+                    )
+                }
             } else {
                 Box(
                     modifier = Modifier
@@ -597,7 +645,8 @@ fun MaterialYouExpressivePlayer(
     appInfo: Pair<String, android.graphics.drawable.Drawable>?,
     accentColor: Color,
     customFont: FontFamily,
-    context: Context
+    context: Context,
+    standbyViewModel: StandbyViewModel
 ) {
     val pmLabel = appInfo?.first ?: "System Player"
     val dominantColor = remember(albumArt) { getDominantColor(albumArt) }
@@ -655,7 +704,7 @@ fun MaterialYouExpressivePlayer(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Header Row with Connected Speaker
+                    // Header Row with Connected Speaker & Swipe Guide
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -669,6 +718,30 @@ fun MaterialYouExpressivePlayer(
                                 imageVector = Icons.Default.VolumeUp,
                                 contentDescription = "Active Speaker",
                                 tint = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+
+                        // Theme indicator & trigger
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .clickable { standbyViewModel.setUseClassicMediaTheme(true) }
+                                .padding(4.dp)
+                        ) {
+                            Text(
+                                "SWIPE UP FOR CLASSIC THEME",
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = customFont,
+                                letterSpacing = 1.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Classic Theme",
+                                tint = Color.White.copy(alpha = 0.4f),
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
@@ -717,7 +790,7 @@ fun MaterialYouExpressivePlayer(
                                 }
                             }
 
-                            val elapsedSeconds = (simulatedProgress * 225).toInt() // Assume a 3m45s track length
+                            val elapsedSeconds = (simulatedProgress * 225).toInt() 
                             val minutesVal = elapsedSeconds / 60
                             val secondsVal = elapsedSeconds % 60
                             val elapsedMinutesStr = "$minutesVal:${secondsVal.toString().padStart(2, '0')}"
@@ -806,6 +879,401 @@ fun MaterialYouExpressivePlayer(
                 }
             }
         }
+
+        // Equalizer bits jumping at the bottom of the card/screen based on the music playing
+        EqualizerJumpingBars(
+            isPlaying = isPlaying,
+            accentColor = accentColor,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(24.dp)
+                .padding(horizontal = 24.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+fun EqualizerJumpingBars(
+    isPlaying: Boolean,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    barCount: Int = 32
+) {
+    val transition = rememberInfiniteTransition(label = "equalizer")
+    
+    // Create height animations for each bar to jump asynchronously
+    val animations = (0 until barCount).map { index ->
+        if (isPlaying) {
+            val duration = remember { (400 + (index % 5) * 120 + (index % 3) * 70) }
+            transition.animateFloat(
+                initialValue = 0.1f,
+                targetValue = 0.95f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = duration
+                        0.1f at 0
+                        0.8f at (duration * 0.3).toInt()
+                        0.2f at (duration * 0.5).toInt()
+                        0.95f at (duration * 0.75).toInt()
+                        0.1f at duration
+                    },
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "bar_$index"
+            )
+        } else {
+            remember { mutableStateOf(0.12f) }
+        }
+    }
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        animations.forEach { animState ->
+            val heightFraction = animState.value
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(heightFraction)
+                    .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                accentColor,
+                                accentColor.copy(alpha = 0.25f)
+                            )
+                        )
+                    )
+            )
+        }
+    }
+}
+
+@Composable
+fun CinematicRetroPlayer(
+    trackTitle: String?,
+    artistName: String?,
+    albumArt: android.graphics.Bitmap?,
+    isPlaying: Boolean,
+    accentColor: Color,
+    customFont: FontFamily,
+    context: Context,
+    standbyViewModel: StandbyViewModel
+) {
+    var simulatedProgress by remember { mutableStateOf(0.35f) }
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (true) {
+                delay(1000)
+                simulatedProgress = (simulatedProgress + 0.005f).coerceAtMost(1f)
+                if (simulatedProgress >= 1f) {
+                    simulatedProgress = 0f
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF04141A), // Moody deep teal
+                        Color(0xFF010608)  // Atmospheric rich black
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        // Overlay elegant classic vinyl contours in background using a custom Canvas
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val centerY = size.height * 0.5f
+            
+            // Decorative audio waves representing the melodic raga lines
+            val ragaLine = Path()
+            ragaLine.moveTo(0f, centerY)
+            for (x in 0..size.width.toInt() step 6) {
+                val y = centerY + 24.dp.toPx() * kotlin.math.sin(x * 0.004f)
+                ragaLine.lineTo(x.toFloat(), y)
+            }
+            drawPath(
+                path = ragaLine,
+                color = Color(0xFFD4AF37).copy(alpha = 0.05f), // Pale classical gold string
+                style = Stroke(width = 1.dp.toPx())
+            )
+
+            // Dynamic golden aura centered around controls
+            drawCircle(
+                color = Color(0xFF00D1FF).copy(alpha = 0.03f),
+                radius = 150.dp.toPx(),
+                center = Offset(size.width * 0.72f, centerY)
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            
+            // Left Content: Classical typography + Artist
+            Column(
+                modifier = Modifier
+                    .weight(1.3f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.Start
+            ) {
+                // Return trigger hint
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { standbyViewModel.setUseClassicMediaTheme(false) }
+                        .padding(bottom = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Swipe Down",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "SWIPE DOWN FOR MODERN THEME",
+                        color = Color.White.copy(alpha = 0.35f),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        fontFamily = customFont
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Uppercased track text exactly matching retro cinema layout
+                Text(
+                    text = (trackTitle ?: "MAYABONO BIHARINI").uppercase(),
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = customFont,
+                    lineHeight = 34.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Artist description or Mohai Minul reference
+                Text(
+                    text = if (artistName != null) "BY ${artistName.uppercase()}" else "BY MOHAI MINUL",
+                    color = Color(0xFF00D1FF),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                    fontFamily = customFont,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Cinematic Retro metadata note
+                Text(
+                    text = "BENGALI CINEMATIC CLASSIC",
+                    color = Color(0xFFD4AF37).copy(alpha = 0.65f), // Soft classical gold
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.sp,
+                    fontFamily = customFont
+                )
+            }
+
+            // Right Content: Bespoke circular control wheel layout
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(160.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
+                        .background(Color(0xFF051114))
+                ) {
+                    if (albumArt != null) {
+                        Image(
+                            bitmap = albumArt.asImageBitmap(),
+                            contentDescription = "Raga Master Art",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .alpha(0.6f)
+                        )
+                    } else {
+                        // Classical Indian vector Canvas representation drawing a graceful lady in teal saree with flowers
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            // Silk pleat flowing arc (teal saree)
+                            val sareePath = Path().apply {
+                                moveTo(size.width * 0.25f, size.height * 0.85f)
+                                cubicTo(
+                                    size.width * 0.35f, size.height * 0.45f,
+                                    size.width * 0.68f, size.height * 0.35f,
+                                    size.width * 0.8f, size.height * 0.65f
+                                )
+                                cubicTo(
+                                    size.width * 0.68f, size.height * 0.82f,
+                                    size.width * 0.45f, size.height * 0.92f,
+                                    size.width * 0.25f, size.height * 0.85f
+                                )
+                            }
+                            drawPath(
+                                path = sareePath,
+                                color = Color(0xFF0C7A93).copy(alpha = 0.55f) // Teal saree
+                            )
+
+                            // Saree crimson border ribbon
+                            drawPath(
+                                path = sareePath,
+                                color = Color(0xFFDC2626).copy(alpha = 0.35f), // Crimson red border
+                                style = Stroke(width = 2.5.dp.toPx())
+                            )
+
+                            // Minimalist golden halo
+                            drawCircle(
+                                color = Color(0xFFFBBF24).copy(alpha = 0.25f),
+                                radius = 20.dp.toPx(),
+                                center = Offset(size.width * 0.55f, size.height * 0.38f)
+                            )
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        
+                        // Center Play Button (blue filled with white indicator)
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .align(Alignment.Center)
+                                .clip(CircleShape)
+                                .background(Color(0xFF3B82F6)) // Bright classical blue
+                                .clickable { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Play/Pause",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+
+                        // Circular seeking border dynamic arc surrounding Play/Pause button
+                        Canvas(
+                            modifier = Modifier
+                                .size(70.dp)
+                                .align(Alignment.Center)
+                        ) {
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.12f),
+                                radius = 32.dp.toPx(),
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+                            drawArc(
+                                color = Color(0xFF00D1FF),
+                                startAngle = -90f,
+                                sweepAngle = 360f * simulatedProgress,
+                                useCenter = false,
+                                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                        }
+
+                        // Top: Shuffle helper
+                        IconButton(
+                            onClick = { /* Simulated shuffle button */ },
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 6.dp)
+                                .size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shuffle,
+                                contentDescription = "Shuffle",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+
+                        // Bottom: Repeat helper
+                        IconButton(
+                            onClick = { /* Simulated repeat button */ },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 6.dp)
+                                .size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Repeat,
+                                contentDescription = "Repeat",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+
+                        // Left: Skip Previous
+                        IconButton(
+                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 6.dp)
+                                .size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipPrevious,
+                                contentDescription = "Previous",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        // Right: Skip Next
+                        IconButton(
+                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 6.dp)
+                                .size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipNext,
+                                contentDescription = "Next",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Jumping equalizer bars at bottom of cinematic module
+        EqualizerJumpingBars(
+            isPlaying = isPlaying,
+            accentColor = Color(0xFF00D1FF), // Dynamic cyan equalizer
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(24.dp)
+                .padding(horizontal = 24.dp, vertical = 2.dp)
+        )
     }
 }
 

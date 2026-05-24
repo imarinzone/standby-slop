@@ -100,6 +100,12 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     val use24HourFormat = MutableStateFlow(prefs.getBoolean("use24HourFormat", false))
     val showAmPm = MutableStateFlow(prefs.getBoolean("showAmPm", false))
     val showSeconds = MutableStateFlow(prefs.getBoolean("showSeconds", false))
+    val useClassicMediaTheme = MutableStateFlow(prefs.getBoolean("useClassicMediaTheme", false))
+
+    fun setUseClassicMediaTheme(enabled: Boolean) {
+        useClassicMediaTheme.value = enabled
+        prefs.edit().putBoolean("useClassicMediaTheme", enabled).apply()
+    }
 
     init {
         // Automatically re-calculate our custom next alarm whenever the list or time format preferences change

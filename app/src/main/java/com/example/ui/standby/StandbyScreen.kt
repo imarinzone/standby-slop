@@ -1424,6 +1424,29 @@ fun StandbyCustomizationDialog(
                                             colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
                                         )
                                     }
+
+                                    // 24-Hour Calendar Format
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0xFF131A26))
+                                            .border(1.dp, Color.White.copy(alpha = 0.02f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("24-Hour Calendar Format", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("Display Calendar hours in 24-hour style vs AM/PM", color = Color.Gray, fontSize = 9.sp)
+                                        }
+                                        val use24HourVal by calendarViewModel.use24HourFormat.collectAsState()
+                                        Switch(
+                                            checked = use24HourVal,
+                                            onCheckedChange = { calendarViewModel.setUse24HourFormat(it) },
+                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = pageColor)
+                                        )
+                                    }
                                 }
                             }
                         }

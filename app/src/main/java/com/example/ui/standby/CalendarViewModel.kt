@@ -96,11 +96,13 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     val startWeekOnMonday = MutableStateFlow(prefs.getBoolean("startWeekOnMonday", false))
     val showEventDots = MutableStateFlow(prefs.getBoolean("showEventDots", true))
     val leftThemeStyle = MutableStateFlow(prefs.getInt("leftThemeStyle", 1)) // 0 = Cal Grid Only, 1 = Bold Date Only
+    val use24HourFormat = MutableStateFlow(prefs.getBoolean("use24HourFormat", false))
 
     fun setCalendarFilter(filter: Int) { calendarFilter.value = filter; prefs.edit().putInt("calendarFilter", filter).apply() }
     fun setStartWeekOnMonday(start: Boolean) { startWeekOnMonday.value = start; prefs.edit().putBoolean("startWeekOnMonday", start).apply() }
     fun setShowEventDots(show: Boolean) { showEventDots.value = show; prefs.edit().putBoolean("showEventDots", show).apply() }
     fun setLeftThemeStyle(style: Int) { leftThemeStyle.value = style; prefs.edit().putInt("leftThemeStyle", style).apply() }
+    fun setUse24HourFormat(use24Hour: Boolean) { use24HourFormat.value = use24Hour; prefs.edit().putBoolean("use24HourFormat", use24Hour).apply() }
 
     // Expose final events combined dynamically from settings filters and calendar selections
     val events: StateFlow<List<LocalCalendarEvent>> = combine(

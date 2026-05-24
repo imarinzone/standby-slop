@@ -1,5 +1,8 @@
 package com.example.ui.standby
 
+import android.content.ContentUris
+import android.content.Intent
+import android.provider.CalendarContract
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -18,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -127,10 +131,12 @@ fun SplitMonthThemeContent(
     customFont: FontFamily,
     events: List<LocalCalendarEvent>
 ) {
+    val context = LocalContext.current
     val startOnMon by viewModel.startWeekOnMonday.collectAsState()
     val showDots by viewModel.showEventDots.collectAsState()
     val leftStyle by viewModel.leftThemeStyle.collectAsState()
     val filterVal by viewModel.calendarFilter.collectAsState()
+    val use24Hour by viewModel.use24HourFormat.collectAsState()
 
     // Get current calendar info
     val todayCal = remember { Calendar.getInstance() }
@@ -321,17 +327,43 @@ fun SplitMonthThemeContent(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             items(24) { hour ->
-                                val hourLabel = String.format("%02d00", hour)
+                                val now = Calendar.getInstance()
+                                val currentHour = now.get(Calendar.HOUR_OF_DAY)
+                                val isPastHour = hour < currentHour
+                                val isCurrentHour = hour == currentHour
+
                                 val eventsInHour = dailyEvents.filter { isEventInHour(it, hour) }
+
+                                val itemAlpha = if (isPastHour) 0.5f else 1.0f
+                                val rowBgColor = when {
+                                    isCurrentHour -> accentColor.copy(alpha = 0.12f)
+                                    eventsInHour.isNotEmpty() -> accentColor.copy(alpha = 0.08f)
+                                    else -> Color.White.copy(alpha = 0.015f)
+                                }
+                                val borderColor = when {
+                                    isCurrentHour -> accentColor.copy(alpha = 0.45f)
+                                    eventsInHour.isNotEmpty() -> accentColor.copy(alpha = 0.2f)
+                                    else -> Color.White.copy(alpha = 0.03f)
+                                }
+                                val borderWidth = if (isCurrentHour) 1.dp else 0.5.dp
+
+                                val hourLabel = if (use24Hour) {
+                                    String.format("%02d00", hour)
+                                } else {
+                                    val ampm = if (hour >= 12) "PM" else "AM"
+                                    val displayH = if (hour == 0) 12 else if (hour > 12) hour - 12 else hour
+                                    "$displayH $ampm"
+                                }
                                 
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .alpha(itemAlpha)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(if (eventsInHour.isNotEmpty()) accentColor.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.015f))
+                                        .background(rowBgColor)
                                         .border(
-                                            width = 0.5.dp, 
-                                            color = if (eventsInHour.isNotEmpty()) accentColor.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.03f), 
+                                            width = borderWidth, 
+                                            color = borderColor, 
                                             shape = RoundedCornerShape(8.dp)
                                         )
                                         .padding(vertical = 10.dp, horizontal = 12.dp),
@@ -339,13 +371,13 @@ fun SplitMonthThemeContent(
                                 ) {
                                     // Hour Label
                                     Column(
-                                        modifier = Modifier.width(52.dp),
+                                        modifier = Modifier.width(64.dp),
                                         verticalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = hourLabel,
                                             color = if (eventsInHour.isNotEmpty()) accentColor else Color.Gray,
-                                            fontSize = 13.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace
                                         )
@@ -357,32 +389,52 @@ fun SplitMonthThemeContent(
                                     Box(
                                         modifier = Modifier
                                             .width(1.dp)
-                                            .height(24.dp)
+                                            .height(30.dp)
                                             .background(if (eventsInHour.isNotEmpty()) accentColor.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.08f))
                                     )
                                     
                                     Spacer(modifier = Modifier.width(10.dp))
                                     
                                     if (eventsInHour.isEmpty()) {
-                                        Text(
-                                            text = "Free Slot",
-                                            color = Color.Gray.copy(alpha = 0.35f),
-                                            fontSize = 10.sp,
-                                            fontFamily = customFont
-                                        )
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            if (isCurrentHour) {
+                                                CurrentTimeIndicator(use24Hour = use24Hour)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                            }
+                                            Text(
+                                                text = "Free Slot",
+                                                color = Color.Gray.copy(alpha = 0.35f),
+                                                fontSize = 10.sp,
+                                                fontFamily = customFont
+                                            )
+                                        }
                                     } else {
                                         Column(
                                             modifier = Modifier.weight(1f),
                                             verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
+                                            if (isCurrentHour) {
+                                                CurrentTimeIndicator(use24Hour = use24Hour)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                            }
                                             eventsInHour.forEach { event ->
-                                                val startFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-                                                val endFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+                                                val startFormat = remember(use24Hour) { SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault()) }
+                                                val endFormat = remember(use24Hour) { SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault()) }
                                                 val timePeriod = if (event.allDay) "All Day" else {
                                                     "${startFormat.format(Date(event.dtStart))} - ${endFormat.format(Date(event.dtEnd))}"
                                                 }
                                                 
-                                                Column {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(Color.White.copy(alpha = 0.04f))
+                                                        .clickable { openEventInCalendar(context, event.id) }
+                                                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                                                ) {
                                                     Text(
                                                         text = event.title,
                                                         color = Color.White,
@@ -392,12 +444,37 @@ fun SplitMonthThemeContent(
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis
                                                     )
-                                                    Text(
-                                                        text = timePeriod,
-                                                        color = accentColor.copy(alpha = 0.8f),
-                                                        fontSize = 8.sp,
-                                                        fontFamily = FontFamily.Monospace
-                                                    )
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = timePeriod,
+                                                            color = accentColor.copy(alpha = 0.8f),
+                                                            fontSize = 8.sp,
+                                                            fontFamily = FontFamily.Monospace
+                                                        )
+                                                        if (!event.eventLocation.isNullOrBlank()) {
+                                                            Text(
+                                                                text = "•",
+                                                                color = Color.Gray,
+                                                                fontSize = 8.sp
+                                                            )
+                                                            Icon(
+                                                                imageVector = Icons.Default.Place,
+                                                                contentDescription = null,
+                                                                tint = accentColor.copy(alpha = 0.7f),
+                                                                modifier = Modifier.size(8.dp)
+                                                            )
+                                                            Text(
+                                                                text = event.eventLocation,
+                                                                color = Color.Gray,
+                                                                fontSize = 8.sp,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -416,13 +493,13 @@ fun SplitMonthThemeContent(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(
-                                        modifier = Modifier.width(52.dp),
+                                        modifier = Modifier.width(64.dp),
                                         verticalArrangement = Arrangement.Center
                                     ) {
                                         Text(
-                                            text = "2400",
+                                            text = if (use24Hour) "2400" else "12 AM",
                                             color = Color.Gray,
-                                            fontSize = 13.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace
                                         )
@@ -450,11 +527,13 @@ fun SplitMonthThemeContent(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(dailyEvents, key = { "${it.id}_${it.dtStart}" }) { event ->
-                                val startFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
-                                val endFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
+                                val startFormat = remember(use24Hour) { SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault()) }
+                                val endFormat = remember(use24Hour) { SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault()) }
                                 val timeLabel = if (event.allDay) "All Day" else {
                                     "${startFormat.format(Date(event.dtStart))} - ${endFormat.format(Date(event.dtEnd))}"
                                 }
+                                val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+                                val dateLabel = dateFormat.format(Date(event.dtStart))
 
                                 Column(
                                     modifier = Modifier
@@ -462,6 +541,7 @@ fun SplitMonthThemeContent(
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color.White.copy(alpha = 0.03f))
                                         .border(0.5.dp, Color.White.copy(alpha = 0.04f), RoundedCornerShape(10.dp))
+                                        .clickable { openEventInCalendar(context, event.id) }
                                         .padding(10.dp)
                                 ) {
                                     Text(
@@ -473,25 +553,48 @@ fun SplitMonthThemeContent(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AccessTime,
-                                            contentDescription = null,
-                                            tint = Color.Gray,
-                                            modifier = Modifier.size(10.dp)
-                                        )
-                                        Text(
-                                            text = timeLabel,
-                                            color = Color.Gray,
-                                            fontSize = 9.sp
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.CalendarToday,
+                                                contentDescription = null,
+                                                tint = accentColor.copy(alpha = 0.8f),
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                            Text(
+                                                text = dateLabel,
+                                                color = Color.LightGray,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AccessTime,
+                                                contentDescription = null,
+                                                tint = Color.Gray,
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                            Text(
+                                                text = timeLabel,
+                                                color = Color.Gray,
+                                                fontSize = 9.sp
+                                            )
+                                        }
                                     }
                                     if (!event.eventLocation.isNullOrBlank()) {
-                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Spacer(modifier = Modifier.height(4.dp))
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -722,5 +825,72 @@ fun EmptyCalendarView(
                 fontSize = 12.sp
             )
         }
+    }
+}
+
+fun openEventInCalendar(context: android.content.Context, eventId: Long) {
+    try {
+        val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            data = uri
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                val builder = CalendarContract.CONTENT_URI.buildUpon()
+                builder.appendPath("time")
+                ContentUris.appendId(builder, System.currentTimeMillis())
+                data = builder.build()
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (ex: Exception) {
+            android.util.Log.e("CalendarPage", "Could not open calendar", ex)
+        }
+    }
+}
+
+@Composable
+fun CurrentTimeIndicator(use24Hour: Boolean, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        val liveTime = remember(use24Hour) {
+            val formatPattern = if (use24Hour) "HH:mm" else "h:mm a"
+            SimpleDateFormat(formatPattern, Locale.getDefault())
+        }
+        val currentTimeStr = liveTime.format(Date())
+        
+        Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFFF453A),
+            modifier = Modifier.padding(end = 2.dp)
+        ) {
+            Text(
+                text = "NOW ($currentTimeStr)",
+                color = Color.White,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.5.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFFF453A),
+                            Color(0xFFFF453A).copy(alpha = 0f)
+                        )
+                    )
+                )
+        )
     }
 }

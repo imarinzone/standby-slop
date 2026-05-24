@@ -1,31 +1,23 @@
-# 🌌 Standby: Landscape Ambient Smart Display
+# 🌌 Standby-SLOP
 
-Welcome to **Standby**, a highly aesthetic, premium, and fully-customizable landscape ambient smart display application for Android. Inspired by modern smart-clocks and elegant dock systems, Standby transforms your Android device into a gorgeous bedside or desk-hub display when placed in landscape mode.
+Welcome to **Standby-SLOP**, a highly aesthetic, premium, and fully-customizable landscape ambient smart display application for Android. Inspired by modern smart-clocks and elegant dock systems, Standby transforms your Android device into a gorgeous bedside or desk-hub display when placed in landscape mode.
 
 This repository is now fully open-source! We welcome developers, designers, and contributors to help build the ultimate ambient screen experience.
-
----
-## 📣 Changelog
-### **v2.0 Modernization Major Update**
-*   **Modern Music Player UI:** Reworked the standalone Music Controller Page with upscaled media buttons, full-screen album artwork focus, and removed the redundant 'System Player' text pill for a cleaner, premium design centered entirely around your music.
-*   **Duo Music Widget Permissions Clarification:** By popular demand, developers noted the Duo Music player widget requires different permissions (Notification vs MediaSession). This is because the standalone player relies strictly on generic media control broadcasts (like key events) and active MediaSession bindings, whereas the Duo widget relies on our background `MediaStateHolder`, which actively intercepts and syncs Notification Listener Service metadata updates globally to provide rich track data synchronously across varying layout scales!
-*   **Weather Service (Planned):** Disabled the experimental live weather toggle in settings and added a "Coming Soon" label as we prepare the next-generation meteorological layout overlay!
-
----
+Inspired by the work of Zetabit Tecnologia, I wanted to build a version that was lightweight, open-source, and perfectly optimized for landscape docking.
 
 ## 📸 Product Showroom & Live Gallery
 
 Below is a curated layout of the application's actual screenshots recorded directly from the codebase—optimized precisely for dynamic landscape configurations:
 
-| 🌌 NEON DIGITAL CLOCK | 🎵 MUSIC CONTROLLER PAGE |
+| 🌌 NIXIE DIGITAL CLOCK | 🎵 MULTI-WIDGET DUO MUSIC PLAYER |
 |:---:|:---:|
-| <img src="screenshots/neon_digital_clock.png" width="400" alt="Cyber Neon Digital Clock Screen" /> | <img src="screenshots/music_player_panel.png" width="400" alt="Landscape Music Player Interface" /> |
-| **Cyberpunk aesthetics meet crisp timekeeping** | **Integrated media control center with radial ripples** |
+| <img src="screenshots/nixie_clock.png" width="400" alt="Aesthetic Nixie Tube Digital Clock" /> | <img src="screenshots/media_player_duo.png" width="400" alt="Split Screen Duo Media Widgets Interface" /> |
+| **Tactile retro nixie-glowing digits** | **Split-screen layouts syncing live media metadata** |
 
-| ⏱️ FOCUS TIMER & STOPWATCH MATRIX | 🎛️ STANDBY DIRECTORY OVERVIEW |
+| ⏱️ CLASSIC ANALOG CLOCK | 🎛️ MINIMALIST ANALOG DISPLAY |
 |:---:|:---:|
-| <img src="screenshots/focus_timer_matrix.png" width="400" alt="Draggable Pomodoro Focus State" /> | <img src="screenshots/standby_directory.png" width="400" alt="App Overview Matrix Grid" /> |
-| **Elegant gesture-driven Focus Ring and Millisecond Lap counter** | **Press or pinch-to-zoom directory displaying live preview metrics** |
+| <img src="screenshots/analog_clock.png" width="400" alt="Classic Sweep Tick Chronometer" /> | <img src="screenshots/normal_analog_clock.png" width="400" alt="Minimal Analog Clock View" /> |
+| **Traditional sweep-tick dials with custom accents** | **Clean visual aesthetics and balanced negative space** |
 
 ---
 
@@ -98,8 +90,8 @@ Standby is engineered using modern, industry-standard Android architectures:
 ### Commands to Run the Project Locally
 Clone the repository:
 ```bash
-git clone https://github.com/yourusername/standby-ambient.git
-cd standby-ambient
+git clone https://github.com/yourusername/standby-slop.git
+cd standby-slop
 ```
 
 To run build tasks and compile:
@@ -135,8 +127,8 @@ To add a custom clock face layout to the rendering pipeline:
 
 ## 📄 License
 
-This project is licensed under the Apache License 2.0. Feel free to use, modify, and distribute it in your personal and commercial projects. Ambient design belongs to everyone!
+This project is licensed under the MIT. Feel free to use, modify, and distribute it in your personal and commercial projects.
 
 ---
 
-*Made with 🌌 by the Standby Open Source community.*
+*Made with 🌌 by the @imarinzone.*
