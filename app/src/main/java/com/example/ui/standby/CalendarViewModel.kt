@@ -70,7 +70,10 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                     list
                 }
                 calendarSources.value = sources
-                if (selectedCalendarIds.value.isEmpty() && sources.isNotEmpty()) {
+                val savedIds = prefs.getStringSet("selectedCalendarIds", null)?.mapNotNull { it.toLongOrNull() }?.toSet()
+                if (!savedIds.isNullOrEmpty()) {
+                    selectedCalendarIds.value = savedIds
+                } else if (selectedCalendarIds.value.isEmpty() && sources.isNotEmpty()) {
                     selectedCalendarIds.value = sources.map { it.id }.toSet()
                 }
             } catch (e: Exception) {
@@ -87,6 +90,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             current.add(id)
         }
         selectedCalendarIds.value = current
+        prefs.edit().putStringSet("selectedCalendarIds", current.map { it.toString() }.toSet()).apply()
     }
 
     // Filtering preferences

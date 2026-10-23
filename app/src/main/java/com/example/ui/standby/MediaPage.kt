@@ -3,12 +3,17 @@ package com.example.ui.standby
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
-import android.view.KeyEvent
 import android.os.Build
+import android.view.KeyEvent
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -16,32 +21,27 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Album
+import androidx.compose.material.icons.outlined.LibraryMusic
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,16 +53,6 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.delay
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
 
 data class InstalledMusicApp(
     val name: String,
@@ -72,8 +62,14 @@ data class InstalledMusicApp(
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel = viewModel()) {
+fun MediaPage(
+    modifier: Modifier = Modifier,
+    standbyViewModel: StandbyViewModel = viewModel()
+) {
     val context = LocalContext.current
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
+
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
     var isMusicActive by remember {
         mutableStateOf(
@@ -85,14 +81,12 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
         )
     }
 
-    // Dynamic states from live notification observer & media sessions
     val trackTitle by MediaStateHolder.trackTitle.collectAsState()
     val artistName by MediaStateHolder.artistName.collectAsState()
     val isPlayingFlow by MediaStateHolder.isPlaying.collectAsState()
     val albumArt by MediaStateHolder.albumArt.collectAsState()
     val activeAppPackage by MediaStateHolder.activeAppPackage.collectAsState()
 
-    // Query active application metadata
     val appInfo = remember(activeAppPackage) {
         if (activeAppPackage != null) {
             try {
@@ -117,7 +111,6 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
     val customFont = standbyViewModel.fonts[selectedFontIdx].first
     val isClassicTheme by standbyViewModel.useClassicMediaTheme.collectAsState()
 
-    // Notification Permission Handling for Android 13+
     val notificationPermissionState = if (Build.VERSION.SDK_INT >= 33) {
         rememberPermissionState(android.Manifest.permission.POST_NOTIFICATIONS)
     } else {
@@ -147,20 +140,10 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
                 context,
                 android.Manifest.permission.POST_NOTIFICATIONS
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED) ||
-                    (notificationPermissionState?.status?.isGranted == true)
+                (notificationPermissionState?.status?.isGranted == true)
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= 33) {
-            hasNotificationPermission = androidx.core.content.ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    // Query installed music apps
     LaunchedEffect(Unit) {
         installedApps = try {
             getInstalledMusicApps(context)
@@ -169,7 +152,6 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
         }
     }
 
-    // Monitor playback activity & permissions periodic sync
     LaunchedEffect(Unit) {
         while (true) {
             isMusicActive = try {
@@ -189,185 +171,244 @@ fun MediaPage(modifier: Modifier = Modifier, standbyViewModel: StandbyViewModel 
     }
 
     val isCurrentlyPlaying = isPlayingFlow || isMusicActive || (!trackTitle.isNullOrEmpty() && trackTitle != "No Track")
-
     val bgUri by standbyViewModel.getBgUriFlow(3).collectAsState()
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = colorScheme.surface
     ) {
-        if (bgUri != null) {
-            coil.compose.AsyncImage(
-                model = bgUri,
-                contentDescription = "Background",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-            )
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
-        }
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (bgUri != null) {
+                coil.compose.AsyncImage(
+                    model = bgUri,
+                    contentDescription = "Background",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(Modifier.fillMaxSize().background(colorScheme.surface.copy(alpha = 0.72f)))
+            }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(isClassicTheme) {
-                    var verticalDragAccumulator = 0f
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            verticalDragAccumulator = 0f
-                        },
-                        onDragEnd = {
-                            if (verticalDragAccumulator < -80f) {
-                                if (!isClassicTheme) {
-                                    standbyViewModel.setUseClassicMediaTheme(true)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(isClassicTheme) {
+                        var verticalDragAccumulator = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                verticalDragAccumulator = 0f
+                            },
+                            onDragEnd = {
+                                if (verticalDragAccumulator < -80f) {
+                                    if (!isClassicTheme) {
+                                        haptics.tick()
+                                        standbyViewModel.setUseClassicMediaTheme(true)
+                                    }
+                                } else if (verticalDragAccumulator > 80f) {
+                                    if (isClassicTheme) {
+                                        haptics.tick()
+                                        standbyViewModel.setUseClassicMediaTheme(false)
+                                    }
                                 }
-                            } else if (verticalDragAccumulator > 80f) {
-                                if (isClassicTheme) {
-                                    standbyViewModel.setUseClassicMediaTheme(false)
-                                }
+                            },
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                verticalDragAccumulator += dragAmount
                             }
-                        },
-                        onVerticalDrag = { change, dragAmount ->
-                            change.consume()
-                            verticalDragAccumulator += dragAmount
-                        }
-                    )
-                }
-        ) {
-            if (isCurrentlyPlaying) {
-                if (isClassicTheme) {
-                    CinematicRetroPlayer(
-                        trackTitle = trackTitle,
-                        artistName = artistName,
-                        albumArt = albumArt,
-                        isPlaying = isPlayingFlow,
-                        accentColor = accentColor,
-                        customFont = customFont,
-                        context = context,
-                        standbyViewModel = standbyViewModel
-                    )
-                } else {
-                    MaterialYouExpressivePlayer(
-                        trackTitle = trackTitle,
-                        artistName = artistName,
-                        albumArt = albumArt,
-                        isPlaying = isPlayingFlow,
-                        appInfo = appInfo,
-                        accentColor = accentColor,
-                        customFont = customFont,
-                        context = context,
-                        standbyViewModel = standbyViewModel
-                    )
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp)
-                ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "No music is currently playing locally.",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 16.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    if (installedApps.isNotEmpty()) {
-                        Text(
-                            text = "Launch a music player to start playback:",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier
-                                .align(Alignment.Start)
-                                .padding(vertical = 8.dp)
                         )
-
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                    }
+            ) {
+                if (isCurrentlyPlaying) {
+                    if (isClassicTheme) {
+                        CinematicRetroPlayer(
+                            trackTitle = trackTitle,
+                            artistName = artistName,
+                            albumArt = albumArt,
+                            isPlaying = isPlayingFlow,
+                            accentColor = accentColor,
+                            customFont = customFont,
+                            context = context,
+                            standbyViewModel = standbyViewModel
+                        )
+                    } else {
+                        MaterialYouExpressivePlayer(
+                            trackTitle = trackTitle,
+                            artistName = artistName,
+                            albumArt = albumArt,
+                            isPlaying = isPlayingFlow,
+                            appInfo = appInfo,
+                            accentColor = accentColor,
+                            customFont = customFont,
+                            context = context,
+                            standbyViewModel = standbyViewModel
+                        )
+                    }
+                } else {
+                    // Material 3 Media Launcher Hub when no track is playing
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 28.dp, vertical = 20.dp)
+                    ) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f)
+                                .padding(bottom = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            items(installedApps) { app ->
-                                MusicAppItem(app = app) {
-                                    launchMusicApp(context, app.packageName)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = colorScheme.primaryContainer
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.LibraryMusic,
+                                        contentDescription = null,
+                                        tint = colorScheme.onPrimaryContainer,
+                                        modifier = Modifier
+                                            .padding(10.dp)
+                                            .size(24.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Media Hub",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        color = colorScheme.onSurface,
+                                        fontFamily = customFont,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "No active playback session detected",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            if (!isNotificationListenerGranted) {
+                                FilledTonalButton(
+                                    onClick = {
+                                        haptics.confirm()
+                                        openNotificationListenerSettings(context)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = "Link System Player",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Link System Player",
+                                        fontFamily = customFont,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                             }
                         }
-                    } else {
-                        // Display placeholder instruction
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Install or open a music app (Spotify, YT Music, etc.) on your device to enable Standby media controls.",
-                                color = Color.Gray,
-                                fontSize = 15.sp,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 32.dp)
-                            )
-                        }
-                    }
-                }
 
-                if (!isNotificationListenerGranted) {
-                    Button(
-                        onClick = { openNotificationListenerSettings(context) },
-                        colors = ButtonDefaults.buttonColors(containerColor = accentColor.copy(alpha = 0.2f)),
-                        modifier = Modifier.padding(top = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Sync,
-                            contentDescription = "Sync",
-                            tint = accentColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "Link System Player",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
+                        if (installedApps.isNotEmpty()) {
+                            Text(
+                                text = "Launch an installed music app to start listening",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 156.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            ) {
+                                items(installedApps) { app ->
+                                    MusicAppItem(app = app) {
+                                        haptics.tick()
+                                        launchMusicApp(context, app.packageName)
+                                    }
+                                }
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                ElevatedCard(
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = CardDefaults.elevatedCardColors(
+                                        containerColor = colorScheme.surfaceContainerLow
+                                    ),
+                                    modifier = Modifier.widthIn(max = 460.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Surface(
+                                            modifier = Modifier.size(64.dp),
+                                            shape = CircleShape,
+                                            color = colorScheme.secondaryContainer
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Album,
+                                                    contentDescription = null,
+                                                    tint = colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "Ready for Playback",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = colorScheme.onSurface,
+                                            fontFamily = customFont,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "Start playing audio in Spotify, YouTube Music, or any media app to control playback from Standby.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
-}
-}
 
 @Composable
 fun MusicAppItem(app: InstalledMusicApp, onClick: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
+    val colorScheme = MaterialTheme.colorScheme
+    ElevatedCard(
+        onClick = onClick,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = colorScheme.surfaceContainerLow
+        ),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .padding(12.dp)
+                .padding(14.dp)
                 .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val bitmap = remember(app.icon) {
                 try {
@@ -381,33 +422,32 @@ fun MusicAppItem(app: InstalledMusicApp, onClick: () -> Unit) {
                     bitmap = bitmap,
                     contentDescription = app.name,
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF334155)),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    modifier = Modifier.size(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = colorScheme.secondaryContainer
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = "App Icon Placeholder",
-                        tint = Color.White
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = "App Icon",
+                            tint = colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = app.name,
-                color = Color.White,
-                fontSize = 12.sp,
+                color = colorScheme.onSurface,
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -428,7 +468,6 @@ private fun getInstalledMusicApps(context: Context): List<InstalledMusicApp> {
         apps.add(InstalledMusicApp(name, packageName, icon))
     }
 
-    // Common music packages backup
     val commonPackages = listOf(
         "com.spotify.music" to "Spotify",
         "com.google.android.apps.youtube.music" to "YouTube Music",
@@ -439,14 +478,13 @@ private fun getInstalledMusicApps(context: Context): List<InstalledMusicApp> {
     )
 
     if (apps.isEmpty()) {
-        for ((pkg, name) in commonPackages) {
+        for ((pkg, _) in commonPackages) {
             try {
                 val info = pm.getApplicationInfo(pkg, 0)
                 val icon = pm.getApplicationIcon(info)
                 val appLabel = pm.getApplicationLabel(info).toString()
                 apps.add(InstalledMusicApp(appLabel, pkg, icon))
-            } catch (e: Exception) {
-                // Not found
+            } catch (_: Exception) {
             }
         }
     }
@@ -515,9 +553,9 @@ private fun openNotificationListenerSettings(context: Context) {
 }
 
 private fun getDominantColor(bitmap: android.graphics.Bitmap?): Color {
-    if (bitmap == null || bitmap.isRecycled) return Color.Black // True AMOLED Black for maximum power saving
+    if (bitmap == null || bitmap.isRecycled) return Color(0xFF1E293B)
     try {
-        if (bitmap.isRecycled) return Color.Black
+        if (bitmap.isRecycled) return Color(0xFF1E293B)
         val width = bitmap.width
         val height = bitmap.height
         val stepX = (width / 5).coerceAtLeast(1)
@@ -541,14 +579,13 @@ private fun getDominantColor(bitmap: android.graphics.Bitmap?): Color {
             val b = (sumB / count).toInt()
             val hsv = FloatArray(3)
             android.graphics.Color.RGBToHSV(r, g, b, hsv)
-            hsv[2] = (hsv[2] * 0.22f).coerceIn(0.12f, 0.45f)
-            hsv[1] = (hsv[1] * 1.2f).coerceIn(0.3f, 0.95f)
+            hsv[2] = (hsv[2] * 0.35f).coerceIn(0.15f, 0.55f)
+            hsv[1] = (hsv[1] * 1.15f).coerceIn(0.25f, 0.9f)
             return Color(android.graphics.Color.HSVToColor(hsv))
         }
-    } catch (e: Exception) {
-        // ignore and fallback
+    } catch (_: Exception) {
     }
-    return Color.Black // True AMOLED Black for maximum power saving
+    return Color(0xFF1E293B)
 }
 
 @Composable
@@ -558,6 +595,7 @@ fun SquigglySeekBar(
     modifier: Modifier = Modifier,
     onSeek: ((Float) -> Unit)? = null
 ) {
+    val haptics = rememberStandbyHaptics()
     val infiniteTransition = rememberInfiniteTransition(label = "squiggly")
     val phaseShift by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -572,10 +610,11 @@ fun SquigglySeekBar(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(26.dp)
+            .height(28.dp)
             .pointerInput(onSeek) {
                 if (onSeek != null) {
                     detectTapGestures { offset ->
+                        haptics.step()
                         val clickedProgress = (offset.x / size.width).coerceIn(0f, 1f)
                         onSeek.invoke(clickedProgress)
                     }
@@ -585,51 +624,48 @@ fun SquigglySeekBar(
         val width = constraints.maxWidth.toFloat()
         val height = constraints.maxHeight.toFloat()
         val centerY = height / 2f
-        
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             val progressX = width * progress
-            
-            // Draw played (squiggly) part
+
             if (progressX > 0f) {
                 val sqPath = Path()
                 val wavelength = 24.dp.toPx()
                 val amplitude = 3.5.dp.toPx()
-                
+
                 sqPath.moveTo(0f, centerY)
                 var x = 0f
                 while (x < progressX) {
                     val relativeX = x / wavelength
                     val y = centerY + amplitude * kotlin.math.sin(relativeX * 2 * kotlin.math.PI.toFloat() - phaseShift)
                     sqPath.lineTo(x, y)
-                    x += 2f // high resolution
+                    x += 2f
                 }
-                sqPath.lineTo(progressX, centerY) // snap to center before thumb
-                
+                sqPath.lineTo(progressX, centerY)
+
                 drawPath(
                     path = sqPath,
                     color = accentColor,
                     style = Stroke(
-                        width = 3.dp.toPx(),
+                        width = 3.5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                 )
             }
-            
-            // Draw track (remaining part) - straight line
+
             if (progressX < width) {
                 drawLine(
-                    color = Color.White.copy(alpha = 0.2f),
+                    color = Color.White.copy(alpha = 0.25f),
                     start = Offset(progressX, centerY),
                     end = Offset(width, centerY),
-                    strokeWidth = 3.dp.toPx(),
+                    strokeWidth = 3.5.dp.toPx(),
                     cap = StrokeCap.Round
                 )
             }
-            
-            // Draw Thumb
+
             drawCircle(
                 color = accentColor,
-                radius = 6.dp.toPx(),
+                radius = 7.dp.toPx(),
                 center = Offset(progressX, centerY)
             )
         }
@@ -648,112 +684,135 @@ fun MaterialYouExpressivePlayer(
     context: Context,
     standbyViewModel: StandbyViewModel
 ) {
-    val pmLabel = appInfo?.first ?: "System Player"
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
+    val pmLabel = appInfo?.first ?: "System Media"
     val dominantColor = remember(albumArt) { getDominantColor(albumArt) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(dominantColor.copy(alpha = 0.3f), Color.Black) // True AMOLED Black base with subtle dynamic top glow
-                )
-            ),
+            .background(colorScheme.surface)
+            .padding(horizontal = 28.dp, vertical = 20.dp),
         contentAlignment = Alignment.Center
     ) {
-        Card(
+        ElevatedCard(
             modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .height(280.dp)
-                .clip(RoundedCornerShape(28.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = colorScheme.surfaceContainerHigh
+            ),
+            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (albumArt != null) {
                     Image(
                         bitmap = albumArt.asImageBitmap(),
-                        contentDescription = "Background Art",
+                        contentDescription = "Album Art",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.5f),
+                                        Color.Black.copy(alpha = 0.86f)
+                                    )
+                                )
+                            )
                     )
                 } else {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Brush.radialGradient(listOf(accentColor.copy(alpha = 0.35f), Color.Transparent)))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        dominantColor.copy(alpha = 0.45f),
+                                        colorScheme.surfaceContainerHighest
+                                    )
+                                )
+                            )
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.55f),
-                                    Color.Black.copy(alpha = 0.88f)
-                                )
-                            )
-                        )
-                )
+                val contentFg = if (albumArt != null) Color.White else colorScheme.onSurface
+                val secondaryFg = if (albumArt != null) Color.White.copy(alpha = 0.72f) else colorScheme.onSurfaceVariant
 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(20.dp),
+                        .padding(24.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Header Row with Connected Speaker & Swipe Guide
+                    // Top M3 Pill Header
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = { /* Volume decorational feedback */ },
-                            modifier = Modifier.size(24.dp)
+                        Surface(
+                            shape = CircleShape,
+                            color = colorScheme.secondaryContainer.copy(alpha = 0.88f)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.VolumeUp,
-                                contentDescription = "Active Speaker",
-                                tint = Color.White.copy(alpha = 0.8f)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VolumeUp,
+                                    contentDescription = "Active Speaker",
+                                    tint = colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = pmLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colorScheme.onSecondaryContainer,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
 
-                        // Theme indicator & trigger
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier
-                                .clickable { standbyViewModel.setUseClassicMediaTheme(true) }
-                                .padding(4.dp)
-                        ) {
-                            Text(
-                                "SWIPE UP FOR CLASSIC THEME",
-                                color = Color.White.copy(alpha = 0.4f),
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = customFont,
-                                letterSpacing = 1.sp
+                        AssistChip(
+                            onClick = {
+                                haptics.tick()
+                                standbyViewModel.setUseClassicMediaTheme(true)
+                            },
+                            label = {
+                                Text(
+                                    text = "Classic Vinyl",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontFamily = customFont
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Album,
+                                    contentDescription = "Classic Theme",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                                labelColor = colorScheme.onSurface,
+                                leadingIconContentColor = accentColor
                             )
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Classic Theme",
-                                tint = Color.White.copy(alpha = 0.4f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                        )
                     }
 
-                    // Metadata Titles and Seek progress
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    // Track Metadata & Squiggly M3 Seekbar
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = trackTitle ?: "Unknown Track",
-                            color = Color.White,
-                            fontSize = 20.sp,
+                            color = contentFg,
+                            style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             fontFamily = customFont,
                             maxLines = 1,
@@ -761,23 +820,22 @@ fun MaterialYouExpressivePlayer(
                         )
                         Text(
                             text = artistName ?: "Unknown Artist",
-                            color = Color.White.copy(alpha = 0.65f),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
+                            color = secondaryFg,
+                            style = MaterialTheme.typography.titleMedium,
                             fontFamily = customFont,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 2.dp)
                         )
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            var simulatedProgress by remember { mutableStateOf(0.35f) }
-                            
+                            var simulatedProgress by remember { mutableFloatStateOf(0.35f) }
+
                             LaunchedEffect(isPlaying) {
                                 if (isPlaying) {
                                     while (true) {
@@ -790,16 +848,16 @@ fun MaterialYouExpressivePlayer(
                                 }
                             }
 
-                            val elapsedSeconds = (simulatedProgress * 225).toInt() 
+                            val elapsedSeconds = (simulatedProgress * 225).toInt()
                             val minutesVal = elapsedSeconds / 60
                             val secondsVal = elapsedSeconds % 60
                             val elapsedMinutesStr = "$minutesVal:${secondsVal.toString().padStart(2, '0')}"
 
                             Text(
                                 text = elapsedMinutesStr,
-                                color = Color.Gray,
-                                fontSize = 9.sp,
-                                fontFamily = customFont
+                                color = secondaryFg,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace
                             )
 
                             SquigglySeekBar(
@@ -807,7 +865,7 @@ fun MaterialYouExpressivePlayer(
                                 accentColor = accentColor,
                                 modifier = Modifier
                                     .weight(1f)
-                                    .padding(horizontal = 10.dp),
+                                    .padding(horizontal = 12.dp),
                                 onSeek = { newProgress ->
                                     simulatedProgress = newProgress
                                 }
@@ -815,64 +873,67 @@ fun MaterialYouExpressivePlayer(
 
                             Text(
                                 text = "3:45",
-                                color = Color.Gray,
-                                fontSize = 9.sp,
-                                fontFamily = customFont
+                                color = secondaryFg,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace
                             )
                         }
                     }
 
-                    // Media Action Controls Area
+                    // Material 3 Expressive Media Transport Controls
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
-                            modifier = Modifier.size(64.dp)
+                        FilledTonalIconButton(
+                            onClick = {
+                                haptics.tick()
+                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                            },
+                            modifier = Modifier.size(56.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous",
-                                tint = Color.White,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(24.dp))
+
+                        FilledIconButton(
+                            onClick = {
+                                haptics.confirm()
+                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                            },
+                            modifier = Modifier.size(width = 88.dp, height = 64.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = accentColor,
+                                contentColor = if (accentColor == Color.White) Color.Black else Color.White
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Play/Pause",
                                 modifier = Modifier.size(36.dp)
                             )
                         }
 
                         Spacer(modifier = Modifier.width(24.dp))
 
-                        Surface(
-                            modifier = Modifier
-                                .size(76.dp)
-                                .clickable { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
-                            shape = RoundedCornerShape(26.dp),
-                            color = accentColor
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play/Pause",
-                                    tint = if (accentColor == Color.White) Color.Black else Color.White,
-                                    modifier = Modifier.size(42.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(24.dp))
-
-                        IconButton(
-                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
-                            modifier = Modifier.size(64.dp)
+                        FilledTonalIconButton(
+                            onClick = {
+                                haptics.tick()
+                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+                            },
+                            modifier = Modifier.size(56.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next",
-                                tint = Color.White,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(30.dp)
                             )
                         }
                     }
@@ -880,15 +941,14 @@ fun MaterialYouExpressivePlayer(
             }
         }
 
-        // Equalizer bits jumping at the bottom of the card/screen based on the music playing
         EqualizerJumpingBars(
             isPlaying = isPlaying,
             accentColor = accentColor,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(24.dp)
-                .padding(horizontal = 24.dp, vertical = 2.dp)
+                .height(22.dp)
+                .padding(horizontal = 40.dp, vertical = 2.dp)
         )
     }
 }
@@ -901,8 +961,7 @@ fun EqualizerJumpingBars(
     barCount: Int = 32
 ) {
     val transition = rememberInfiniteTransition(label = "equalizer")
-    
-    // Create height animations for each bar to jump asynchronously
+
     val animations = (0 until barCount).map { index ->
         if (isPlaying) {
             val duration = remember { (400 + (index % 5) * 120 + (index % 3) * 70) }
@@ -923,7 +982,7 @@ fun EqualizerJumpingBars(
                 label = "bar_$index"
             )
         } else {
-            remember { mutableStateOf(0.12f) }
+            remember { mutableFloatStateOf(0.12f) }
         }
     }
 
@@ -963,7 +1022,8 @@ fun CinematicRetroPlayer(
     context: Context,
     standbyViewModel: StandbyViewModel
 ) {
-    var simulatedProgress by remember { mutableStateOf(0.35f) }
+    val haptics = rememberStandbyHaptics()
+    var simulatedProgress by remember { mutableFloatStateOf(0.35f) }
     LaunchedEffect(isPlaying) {
         if (isPlaying) {
             while (true) {
@@ -982,18 +1042,15 @@ fun CinematicRetroPlayer(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF04141A), // Moody deep teal
-                        Color(0xFF010608)  // Atmospheric rich black
+                        Color(0xFF04141A),
+                        Color(0xFF010608)
                     )
                 )
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Overlay elegant classic vinyl contours in background using a custom Canvas
         Canvas(modifier = Modifier.fillMaxSize()) {
             val centerY = size.height * 0.5f
-            
-            // Decorative audio waves representing the melodic raga lines
             val ragaLine = Path()
             ragaLine.moveTo(0f, centerY)
             for (x in 0..size.width.toInt() step 6) {
@@ -1002,11 +1059,9 @@ fun CinematicRetroPlayer(
             }
             drawPath(
                 path = ragaLine,
-                color = Color(0xFFD4AF37).copy(alpha = 0.05f), // Pale classical gold string
+                color = Color(0xFFD4AF37).copy(alpha = 0.05f),
                 style = Stroke(width = 1.dp.toPx())
             )
-
-            // Dynamic golden aura centered around controls
             drawCircle(
                 color = Color(0xFF00D1FF).copy(alpha = 0.03f),
                 radius = 150.dp.toPx(),
@@ -1017,12 +1072,10 @@ fun CinematicRetroPlayer(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(horizontal = 28.dp, vertical = 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            
-            // Left Content: Classical typography + Artist
             Column(
                 modifier = Modifier
                     .weight(1.3f)
@@ -1030,33 +1083,29 @@ fun CinematicRetroPlayer(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.Start
             ) {
-                // Return trigger hint
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable { standbyViewModel.setUseClassicMediaTheme(false) }
-                        .padding(bottom = 12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Swipe Down",
-                        tint = Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "SWIPE DOWN FOR MODERN THEME",
-                        color = Color.White.copy(alpha = 0.35f),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.2.sp,
-                        fontFamily = customFont
-                    )
-                }
+                AssistChip(
+                    onClick = {
+                        haptics.tick()
+                        standbyViewModel.setUseClassicMediaTheme(false)
+                    },
+                    label = {
+                        Text(
+                            text = "Material 3 Theme",
+                            fontSize = 11.sp,
+                            fontFamily = customFont
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Switch to Material 3 Theme",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Uppercased track text exactly matching retro cinema layout
                 Text(
                     text = (trackTitle ?: "MAYABONO BIHARINI").uppercase(),
                     color = Color.White,
@@ -1070,32 +1119,18 @@ fun CinematicRetroPlayer(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Artist description or Mohai Minul reference
                 Text(
-                    text = if (artistName != null) "BY ${artistName.uppercase()}" else "BY MOHAI MINUL",
-                    color = Color(0xFF00D1FF),
-                    fontSize = 11.sp,
+                    text = if (artistName != null) "BY ${artistName.uppercase()}" else "BY SYSTEM AUDIO",
+                    color = accentColor,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 2.sp,
                     fontFamily = customFont,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Cinematic Retro metadata note
-                Text(
-                    text = "BENGALI CINEMATIC CLASSIC",
-                    color = Color(0xFFD4AF37).copy(alpha = 0.65f), // Soft classical gold
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.sp,
-                    fontFamily = customFont
-                )
             }
 
-            // Right Content: Bespoke circular control wheel layout
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -1104,159 +1139,96 @@ fun CinematicRetroPlayer(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(160.dp)
+                        .size(172.dp)
                         .clip(CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
+                        .border(1.5.dp, Color.White.copy(alpha = 0.12f), CircleShape)
                         .background(Color(0xFF051114))
                 ) {
                     if (albumArt != null) {
                         Image(
                             bitmap = albumArt.asImageBitmap(),
-                            contentDescription = "Raga Master Art",
+                            contentDescription = "Album Art",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .alpha(0.6f)
                         )
-                    } else {
-                        // Classical Indian vector Canvas representation drawing a graceful lady in teal saree with flowers
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            // Silk pleat flowing arc (teal saree)
-                            val sareePath = Path().apply {
-                                moveTo(size.width * 0.25f, size.height * 0.85f)
-                                cubicTo(
-                                    size.width * 0.35f, size.height * 0.45f,
-                                    size.width * 0.68f, size.height * 0.35f,
-                                    size.width * 0.8f, size.height * 0.65f
-                                )
-                                cubicTo(
-                                    size.width * 0.68f, size.height * 0.82f,
-                                    size.width * 0.45f, size.height * 0.92f,
-                                    size.width * 0.25f, size.height * 0.85f
-                                )
-                            }
-                            drawPath(
-                                path = sareePath,
-                                color = Color(0xFF0C7A93).copy(alpha = 0.55f) // Teal saree
-                            )
-
-                            // Saree crimson border ribbon
-                            drawPath(
-                                path = sareePath,
-                                color = Color(0xFFDC2626).copy(alpha = 0.35f), // Crimson red border
-                                style = Stroke(width = 2.5.dp.toPx())
-                            )
-
-                            // Minimalist golden halo
-                            drawCircle(
-                                color = Color(0xFFFBBF24).copy(alpha = 0.25f),
-                                radius = 20.dp.toPx(),
-                                center = Offset(size.width * 0.55f, size.height * 0.38f)
-                            )
-                        }
                     }
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        
-                        // Center Play Button (blue filled with white indicator)
-                        Box(
+                        FilledIconButton(
+                            onClick = {
+                                haptics.confirm()
+                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                            },
                             modifier = Modifier
                                 .size(60.dp)
-                                .align(Alignment.Center)
-                                .clip(CircleShape)
-                                .background(Color(0xFF3B82F6)) // Bright classical blue
-                                .clickable { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) },
-                            contentAlignment = Alignment.Center
+                                .align(Alignment.Center),
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = accentColor,
+                                contentColor = if (accentColor == Color.White) Color.Black else Color.White
+                            )
                         ) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play/Pause",
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                         }
 
-                        // Circular seeking border dynamic arc surrounding Play/Pause button
                         Canvas(
                             modifier = Modifier
-                                .size(70.dp)
+                                .size(72.dp)
                                 .align(Alignment.Center)
                         ) {
                             drawCircle(
-                                color = Color.White.copy(alpha = 0.12f),
-                                radius = 32.dp.toPx(),
-                                style = Stroke(width = 1.dp.toPx())
+                                color = Color.White.copy(alpha = 0.15f),
+                                radius = 34.dp.toPx(),
+                                style = Stroke(width = 1.5.dp.toPx())
                             )
                             drawArc(
-                                color = Color(0xFF00D1FF),
+                                color = accentColor,
                                 startAngle = -90f,
                                 sweepAngle = 360f * simulatedProgress,
                                 useCenter = false,
-                                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
                             )
                         }
 
-                        // Top: Shuffle helper
                         IconButton(
-                            onClick = { /* Simulated shuffle button */ },
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 6.dp)
-                                .size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shuffle,
-                                contentDescription = "Shuffle",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        // Bottom: Repeat helper
-                        IconButton(
-                            onClick = { /* Simulated repeat button */ },
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 6.dp)
-                                .size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Repeat,
-                                contentDescription = "Repeat",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        // Left: Skip Previous
-                        IconButton(
-                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
+                            onClick = {
+                                haptics.tick()
+                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                            },
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
                                 .padding(start = 6.dp)
-                                .size(28.dp)
+                                .size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous",
                                 tint = Color.White,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // Right: Skip Next
                         IconButton(
-                            onClick = { sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
+                            onClick = {
+                                haptics.tick()
+                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+                            },
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
                                 .padding(end = 6.dp)
-                                .size(28.dp)
+                                .size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next",
                                 tint = Color.White,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -1264,10 +1236,9 @@ fun CinematicRetroPlayer(
             }
         }
 
-        // Jumping equalizer bars at bottom of cinematic module
         EqualizerJumpingBars(
             isPlaying = isPlaying,
-            accentColor = Color(0xFF00D1FF), // Dynamic cyan equalizer
+            accentColor = accentColor,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -1276,4 +1247,3 @@ fun CinematicRetroPlayer(
         )
     }
 }
-

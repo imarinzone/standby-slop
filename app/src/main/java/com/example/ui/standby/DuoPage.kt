@@ -1,21 +1,16 @@
 package com.example.ui.standby
 
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
-import android.view.KeyEvent
 import android.os.Build
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import android.view.KeyEvent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -28,13 +23,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -62,118 +55,169 @@ fun DuoPage(
     weatherViewModel: WeatherViewModel = viewModel()
 ) {
     val coroutineScope = rememberCoroutineScope()
-    
-    // Independent vertical pager states for Left & Right sides
-    val leftPagerState = rememberPagerState(initialPage = 0, pageCount = { 5 })
-    val rightPagerState = rememberPagerState(initialPage = 2, pageCount = { 5 })
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
 
-    Row(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // LEFT HALF PANELS
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-        ) {
-            VerticalPager(
-                state = leftPagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                WidgetContainer(
-                    pageIndex = page,
-                    isLeft = true
-                ) {
-                    RenderDuoWidget(
-                        pageIndex = page,
-                        viewModel = viewModel,
-                        calendarViewModel = calendarViewModel,
-                        weatherViewModel = weatherViewModel
-                    )
-                }
-            }
+    val initialLeft = remember { viewModel.duoLeftWidgetIndex.value }
+    val initialRight = remember { viewModel.duoRightWidgetIndex.value }
 
-            // Left Pager vertical dots indicator (as in clock screen representing screen count)
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                for (i in 0 until 5) {
-                    val isSelected = i == leftPagerState.currentPage
-                    Box(
-                        modifier = Modifier
-                            .size(if (isSelected) 8.dp else 4.2.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) Color.White.copy(alpha = 0.9f)
-                                else Color.White.copy(alpha = 0.25f)
-                            )
-                            .clickable {
-                                coroutineScope.launch {
-                                    leftPagerState.animateScrollToPage(i)
-                                }
-                            }
-                    )
-                }
-            }
+    val leftPagerState = rememberPagerState(initialPage = initialLeft, pageCount = { 5 })
+    val rightPagerState = rememberPagerState(initialPage = initialRight, pageCount = { 5 })
+
+    var hasInitLeft by remember { mutableStateOf(false) }
+    LaunchedEffect(leftPagerState.currentPage) {
+        if (!hasInitLeft) {
+            hasInitLeft = true
+        } else {
+            haptics.tick()
+            viewModel.setDuoLeftWidgetIndex(leftPagerState.currentPage)
         }
+    }
 
-        // Soft, ultra-subtle vertical space instead of borders per user request
-        Spacer(modifier = Modifier.width(4.dp))
+    var hasInitRight by remember { mutableStateOf(false) }
+    LaunchedEffect(rightPagerState.currentPage) {
+        if (!hasInitRight) {
+            hasInitRight = true
+        } else {
+            haptics.tick()
+            viewModel.setDuoRightWidgetIndex(rightPagerState.currentPage)
+        }
+    }
 
-        // RIGHT HALF PANELS
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-        ) {
-            VerticalPager(
-                state = rightPagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                WidgetContainer(
-                    pageIndex = page,
-                    isLeft = false
-                ) {
-                    RenderDuoWidget(
-                        pageIndex = page,
-                        viewModel = viewModel,
-                        calendarViewModel = calendarViewModel,
-                        weatherViewModel = weatherViewModel
-                    )
-                }
+    val bgUri by viewModel.getBgUriFlow(5).collectAsState()
+
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = colorScheme.surface
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (bgUri != null) {
+                coil.compose.AsyncImage(
+                    model = bgUri,
+                    contentDescription = "Background",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(Modifier.fillMaxSize().background(colorScheme.surface.copy(alpha = 0.72f)))
             }
 
-            // Right Pager vertical dots indicator (as in clock screen representing screen count)
-            Column(
+            Row(
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                for (i in 0 until 5) {
-                    val isSelected = i == rightPagerState.currentPage
-                    Box(
-                        modifier = Modifier
-                            .size(if (isSelected) 8.dp else 4.2.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) Color.White.copy(alpha = 0.9f)
-                                else Color.White.copy(alpha = 0.25f)
+                // LEFT HALF PANEL
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    VerticalPager(
+                        state = leftPagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        WidgetContainer(pageIndex = page) {
+                            RenderDuoWidget(
+                                pageIndex = page,
+                                viewModel = viewModel,
+                                calendarViewModel = calendarViewModel,
+                                weatherViewModel = weatherViewModel
                             )
-                            .clickable {
-                                coroutineScope.launch {
-                                    rightPagerState.animateScrollToPage(i)
-                                }
+                        }
+                    }
+
+                    // Left Pager M3 Vertical Indicator
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 10.dp),
+                        shape = CircleShape,
+                        color = colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            for (i in 0 until 5) {
+                                val isSelected = i == leftPagerState.currentPage
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 6.dp, height = if (isSelected) 14.dp else 6.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) colorScheme.primary
+                                            else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                        )
+                                        .clickable {
+                                            haptics.tick()
+                                            viewModel.setDuoLeftWidgetIndex(i)
+                                            coroutineScope.launch {
+                                                leftPagerState.animateScrollToPage(i)
+                                            }
+                                        }
+                                )
                             }
-                    )
+                        }
+                    }
+                }
+
+                // RIGHT HALF PANEL
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    VerticalPager(
+                        state = rightPagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        WidgetContainer(pageIndex = page) {
+                            RenderDuoWidget(
+                                pageIndex = page,
+                                viewModel = viewModel,
+                                calendarViewModel = calendarViewModel,
+                                weatherViewModel = weatherViewModel
+                            )
+                        }
+                    }
+
+                    // Right Pager M3 Vertical Indicator
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 10.dp),
+                        shape = CircleShape,
+                        color = colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            for (i in 0 until 5) {
+                                val isSelected = i == rightPagerState.currentPage
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 6.dp, height = if (isSelected) 14.dp else 6.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) colorScheme.primary
+                                            else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                        )
+                                        .clickable {
+                                            haptics.tick()
+                                            viewModel.setDuoRightWidgetIndex(i)
+                                            coroutineScope.launch {
+                                                rightPagerState.animateScrollToPage(i)
+                                            }
+                                        }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -183,44 +227,23 @@ fun DuoPage(
 @Composable
 fun WidgetContainer(
     pageIndex: Int,
-    isLeft: Boolean,
     content: @Composable () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black) // AMOLED True Black Background
-            .padding(
-                start = if (isLeft) 6.dp else 2.dp,
-                end = if (isLeft) 2.dp else 6.dp,
-                top = 6.dp,
-                bottom = 6.dp
-            )
+    val colorScheme = MaterialTheme.colorScheme
+    ElevatedCard(
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = colorScheme.surfaceContainerLow
+        ),
+        modifier = Modifier.fillMaxSize()
     ) {
-        // High-contrast subtle ambient glow for premium AMOLED vibes
-        val ambientBrush = when (pageIndex) {
-            0 -> Brush.radialGradient(colors = listOf(Color(0xFF3B82F6).copy(alpha = 0.04f), Color.Transparent)) // Clock blue
-            1 -> Brush.radialGradient(colors = listOf(Color(0xFFEF4444).copy(alpha = 0.04f), Color.Transparent)) // Alarm Red
-            2 -> Brush.radialGradient(colors = listOf(Color(0xFF10B981).copy(alpha = 0.04f), Color.Transparent)) // Calendar Teal
-            3 -> Brush.radialGradient(colors = listOf(Color(0xFF8B5CF6).copy(alpha = 0.04f), Color.Transparent)) // Music Violet
-            else -> Brush.radialGradient(colors = listOf(Color(0xFFF97316).copy(alpha = 0.04f), Color.Transparent)) // Timer Amber
-        }
-        
-        Box(modifier = Modifier.fillMaxSize().background(ambientBrush))
-
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Black), // True AMOLED Black for maximum power saving
-            modifier = Modifier.fillMaxSize()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                content()
-            }
+            content()
         }
     }
 }
@@ -241,17 +264,18 @@ fun RenderDuoWidget(
     }
 }
 
-// 0. Duo Clock face: Glowing digital dynamic clock with local weather metadata
 @Composable
 fun DuoClockWidget(
     viewModel: StandbyViewModel,
     weatherViewModel: WeatherViewModel
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     var currentTime by remember { mutableStateOf(Calendar.getInstance()) }
     val weather by weatherViewModel.weather.collectAsState()
     val showWeatherVal by viewModel.showWeatherPage0.collectAsState()
-    val selectedColorIdx by viewModel.colorPage0.collectAsState()
+    val selectedColorIdx by viewModel.colorPage5.collectAsState()
     val accentColor = viewModel.colors[selectedColorIdx].first
+    val use24Hour by viewModel.use24HourFormat.collectAsState()
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -260,9 +284,11 @@ fun DuoClockWidget(
         }
     }
 
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-    val secFormat = SimpleDateFormat("ss", Locale.getDefault())
-    val dateFormat = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+    val timeFormat = remember(use24Hour) {
+        SimpleDateFormat(if (use24Hour) "HH:mm" else "hh:mm", Locale.getDefault())
+    }
+    val secFormat = remember { SimpleDateFormat("ss", Locale.getDefault()) }
+    val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -274,8 +300,8 @@ fun DuoClockWidget(
         ) {
             Text(
                 text = timeFormat.format(currentTime.time),
-                color = Color.White,
-                fontSize = 52.sp,
+                color = colorScheme.onSurface,
+                fontSize = 54.sp,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = (-1.5).sp
@@ -289,20 +315,25 @@ fun DuoClockWidget(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
-        
-        Spacer(modifier = Modifier.height(2.dp))
-        
-        Text(
-            text = dateFormat.format(currentTime.time).uppercase(Locale.getDefault()),
-            color = Color.Gray,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.2.sp
-        )
 
-        // Show weather widget if enabled
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Surface(
+            shape = CircleShape,
+            color = colorScheme.secondaryContainer
+        ) {
+            Text(
+                text = dateFormat.format(currentTime.time).uppercase(Locale.getDefault()),
+                color = colorScheme.onSecondaryContainer,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+        }
+
         if (showWeatherVal && weather != null) {
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -311,12 +342,12 @@ fun DuoClockWidget(
                     imageVector = Icons.Default.Cloud,
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(16.dp)
                 )
                 Text(
                     text = "${weather?.temperature_2m}°C • ${getWeatherCodeDesc(weather?.weather_code ?: 0)}",
-                    color = Color.LightGray,
-                    fontSize = 11.sp,
+                    color = colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -340,9 +371,9 @@ private fun getWeatherCodeDesc(code: Int): String {
     }
 }
 
-// 1. Duo Alarm widget: Large high-contrast neon list card of next alarm
 @Composable
 fun DuoAlarmWidget(viewModel: StandbyViewModel) {
+    val colorScheme = MaterialTheme.colorScheme
     val nextSystemAlarm by viewModel.nextSystemAlarm.collectAsState()
     val selectedColorIdx by viewModel.colorPage1.collectAsState()
     val accentColor = viewModel.colors[selectedColorIdx].first
@@ -354,33 +385,40 @@ fun DuoAlarmWidget(viewModel: StandbyViewModel) {
         verticalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxSize()
     ) {
-        Icon(
-            imageVector = Icons.Default.Alarm,
-            contentDescription = null,
-            tint = if (hasAlarm) accentColor else Color.Gray.copy(alpha = 0.4f),
-            modifier = Modifier.size(34.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        Surface(
+            modifier = Modifier.size(56.dp),
+            shape = CircleShape,
+            color = if (hasAlarm) colorScheme.primaryContainer else colorScheme.surfaceContainerHigh
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Alarm,
+                    contentDescription = null,
+                    tint = if (hasAlarm) colorScheme.onPrimaryContainer else colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "UPCOMING ALARM",
-            color = Color.Gray,
-            fontSize = 9.sp,
+            color = colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = nextSystemAlarm ?: "No Active Alarm",
-            color = if (hasAlarm) Color.White else Color.DarkGray,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.ExtraBold,
+            color = if (hasAlarm) colorScheme.onSurface else colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 12.dp)
         )
     }
 }
 
-// 2. Duo Calendar: Agenda items scrollable widget list
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun DuoCalendarWidget(
@@ -388,6 +426,8 @@ fun DuoCalendarWidget(
     standbyViewModel: StandbyViewModel
 ) {
     val events by calendarViewModel.events.collectAsState()
+    val startOnMon by calendarViewModel.startWeekOnMonday.collectAsState()
+    val showDots by calendarViewModel.showEventDots.collectAsState()
     val context = LocalContext.current
     val selectedColorIdx by standbyViewModel.colorPage2.collectAsState()
     val accentColor = standbyViewModel.colors[selectedColorIdx].first
@@ -428,7 +468,7 @@ fun DuoCalendarWidget(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         val currentCal = remember { Calendar.getInstance() }
@@ -436,9 +476,9 @@ fun DuoCalendarWidget(
             SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(currentCal.time)
         }
         MonthlyGrid(
-            startOnMonday = false,
+            startOnMonday = startOnMon,
             highlightDay = currentCal.get(Calendar.DAY_OF_MONTH),
-            showEventDots = true,
+            showEventDots = showDots,
             events = events,
             accentColor = accentColor,
             customFont = FontFamily.Default,
@@ -447,11 +487,12 @@ fun DuoCalendarWidget(
     }
 }
 
-// 3. Duo Music Widget: Spinning vinyl disc and compact playback controllers
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
     val context = LocalContext.current
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
     val trackTitle by MediaStateHolder.trackTitle.collectAsState()
     val artistName by MediaStateHolder.artistName.collectAsState()
@@ -467,11 +508,10 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
             }
         )
     }
-    
+
     val selectedColorIdx by standbyViewModel.colorPage3.collectAsState()
     val accentColor = standbyViewModel.colors[selectedColorIdx].first
 
-    // Notification permission setup
     val notificationPermissionState = if (Build.VERSION.SDK_INT >= 33) {
         rememberPermissionState(android.Manifest.permission.POST_NOTIFICATIONS)
     } else {
@@ -497,20 +537,10 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                 context,
                 android.Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED) ||
-                    (notificationPermissionState?.status?.isGranted == true)
+                (notificationPermissionState?.status?.isGranted == true)
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= 33) {
-            hasNotificationPermission = ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    // Periodic check to keep system alarm status accurate on view resume/active
     LaunchedEffect(Unit) {
         while (true) {
             isMusicActive = try {
@@ -524,84 +554,64 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
 
     val isCurrentlyPlaying = isPlayingFlow || isMusicActive
 
-    // Vinyl Rotation angle
-    val rotationAngle = remember { Animatable(0f) }
-    LaunchedEffect(isCurrentlyPlaying) {
-        if (isCurrentlyPlaying) {
-            rotationAngle.animateTo(
-                targetValue = rotationAngle.value + 360f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(4000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                )
-            )
-        } else {
-            rotationAngle.stop()
-        }
-    }
-
     if (!hasNotificationPermission && Build.VERSION.SDK_INT >= 33) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize().padding(8.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Notifications,
                 contentDescription = null,
-                tint = Color.DarkGray,
-                modifier = Modifier.size(24.dp)
+                tint = colorScheme.primary,
+                modifier = Modifier.size(28.dp)
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Notifications Setup",
-                color = Color.LightGray,
-                fontSize = 11.sp,
+                text = "Media Sync Permission",
+                color = colorScheme.onSurface,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "Permit playback status sync",
-                color = Color.Gray,
-                fontSize = 8.sp,
-                textAlign = TextAlign.Center
-            )
             Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { notificationPermissionState?.launchPermissionRequest() },
-                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                modifier = Modifier.height(24.dp)
+            FilledTonalButton(
+                onClick = {
+                    haptics.confirm()
+                    notificationPermissionState?.launchPermissionRequest()
+                }
             ) {
-                Text(
-                    "GRANT",
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (accentColor == Color.White) Color.Black else Color.White
-                )
+                Text("Allow")
             }
         }
     } else {
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(20.dp))
         ) {
-            // Background album art similar to main music screen
             if (albumArt != null) {
                 Image(
                     bitmap = albumArt!!.asImageBitmap(),
-                    contentDescription = "Background Art",
+                    contentDescription = "Album Art",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.65f)))
             } else {
                 Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.radialGradient(listOf(accentColor.copy(alpha = 0.35f), Color.Transparent))
-                    )
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(listOf(accentColor.copy(alpha = 0.2f), Color.Transparent))
+                        )
                 )
             }
+
+            val fgColor = if (albumArt != null) Color.White else colorScheme.onSurface
+            val subColor = if (albumArt != null) Color.White.copy(alpha = 0.75f) else colorScheme.onSurfaceVariant
 
             Column(
                 modifier = Modifier
@@ -610,7 +620,6 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                 verticalArrangement = Arrangement.SpaceBetween,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Media Title Metadata
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -620,69 +629,73 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                 ) {
                     Text(
                         text = trackTitle ?: "No Track Playing",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        color = fgColor,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = artistName ?: "Unknown Artist",
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
+                        text = artistName ?: "System Media",
+                        color = subColor,
+                        style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
 
-                // Action Deck buttons upscaled
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS) },
-                        modifier = Modifier.size(48.dp)
+                    FilledTonalIconButton(
+                        onClick = {
+                            haptics.tick()
+                            triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                        },
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Icon(
                             Icons.Default.SkipPrevious,
-                            contentDescription = "Prev",
-                            tint = Color.White,
+                            contentDescription = "Previous",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    FilledIconButton(
+                        onClick = {
+                            haptics.confirm()
+                            triggerMediaKey(
+                                context,
+                                if (isCurrentlyPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY
+                            )
+                        },
+                        modifier = Modifier.size(56.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = accentColor,
+                            contentColor = if (accentColor == Color.White) Color.Black else Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = if (isCurrentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Play/Pause",
                             modifier = Modifier.size(28.dp)
                         )
                     }
 
-                    Surface(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clickable { 
-                                triggerMediaKey(context, if (isCurrentlyPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY)
-                            },
-                        shape = RoundedCornerShape(22.dp),
-                        color = accentColor
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (isCurrentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Toggle",
-                                tint = if (accentColor == Color.White) Color.Black else Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = { triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT) },
-                        modifier = Modifier.size(48.dp)
+                    FilledTonalIconButton(
+                        onClick = {
+                            haptics.tick()
+                            triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+                        },
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Icon(
                             Icons.Default.SkipNext,
                             contentDescription = "Next",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
@@ -691,20 +704,23 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
     }
 }
 
-// 4. Duo Timer: Interactive countdown Focus block and split stopwatch
 @Composable
 fun DuoTimerWidget(viewModel: StandbyViewModel) {
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
     val selectedColorIdx by viewModel.colorPage4.collectAsState()
     val accentColor = viewModel.colors[selectedColorIdx].first
+    val focusMinutes by viewModel.pomodoroFocusMinutes.collectAsState()
 
     var isRunning by remember { mutableStateOf(false) }
-    var secondsLeft by remember { mutableStateOf(1500) } // Standard 25 mins
+    var secondsLeft by remember(focusMinutes) { mutableIntStateOf(focusMinutes * 60) }
 
     LaunchedEffect(isRunning, secondsLeft) {
         if (isRunning && secondsLeft > 0) {
             delay(1000)
             secondsLeft -= 1
             if (secondsLeft == 0) {
+                haptics.confirm()
                 isRunning = false
             }
         }
@@ -720,76 +736,74 @@ fun DuoTimerWidget(viewModel: StandbyViewModel) {
         modifier = Modifier.fillMaxSize()
     ) {
         Box(
-            modifier = Modifier.size(90.dp),
+            modifier = Modifier.size(96.dp),
             contentAlignment = Alignment.Center
         ) {
-            val ratio = secondsLeft.toFloat() / 1500f
+            val totalSecs = (focusMinutes * 60).coerceAtLeast(1)
+            val ratio = secondsLeft.toFloat() / totalSecs.toFloat()
+            val trackColor = colorScheme.surfaceContainerHighest
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.05f),
+                    color = trackColor,
                     radius = size.minDimension / 2f,
-                    style = Stroke(width = 3.dp.toPx())
+                    style = Stroke(width = 4.dp.toPx())
                 )
                 drawArc(
                     color = accentColor,
                     startAngle = -90f,
                     sweepAngle = 360f * ratio,
                     useCenter = false,
-                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
                 )
             }
-            
+
             Text(
                 text = formatted,
-                color = Color.White,
-                fontSize = 18.sp,
+                color = colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Actions Container
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                color = if (isRunning) Color(0xFF5C1C1C) else Color(0xFF1E293B),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .clickable { isRunning = !isRunning }
+            FilledTonalButton(
+                onClick = {
+                    haptics.confirm()
+                    isRunning = !isRunning
+                },
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text = if (isRunning) "PAUSE" else "START",
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    text = if (isRunning) "Pause" else "Start",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            Surface(
-                color = Color.White.copy(alpha = 0.08f),
-                shape = CircleShape,
-                modifier = Modifier
-                    .size(28.dp)
-                    .clickable {
-                        isRunning = false
-                        secondsLeft = 1500
-                    },
-                contentColor = Color.White
+            FilledTonalIconButton(
+                onClick = {
+                    haptics.tick()
+                    isRunning = false
+                    secondsLeft = focusMinutes * 60
+                },
+                modifier = Modifier.size(36.dp)
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(13.dp))
-                }
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Reset",
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
 }
 
-// Media key dispatcher helper
 private fun triggerMediaKey(context: Context, keyCode: Int) {
     try {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -797,26 +811,5 @@ private fun triggerMediaKey(context: Context, keyCode: Int) {
         audioManager?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
     } catch (e: Exception) {
         android.util.Log.e("DuoPage", "Media dispatch failed", e)
-    }
-}
-
-// Title & icon loaders for dynamic configuration listings
-private fun getWidgetTitle(pageIndex: Int): String {
-    return when (pageIndex) {
-        0 -> "AMBIENT CLOCK"
-        1 -> "ALARM"
-        2 -> "LOCAL AGENDA"
-        3 -> "MUSIC PLAYER"
-        else -> "FOCUS COUNTER"
-    }
-}
-
-private fun getWidgetIcon(pageIndex: Int): ImageVector {
-    return when (pageIndex) {
-        0 -> Icons.Default.Schedule
-        1 -> Icons.Default.Alarm
-        2 -> Icons.Default.Event
-        3 -> Icons.Default.MusicNote
-        else -> Icons.Default.HourglassEmpty
     }
 }

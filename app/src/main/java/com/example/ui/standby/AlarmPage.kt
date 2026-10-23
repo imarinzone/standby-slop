@@ -1,30 +1,29 @@
 package com.example.ui.standby
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.AlarmOff
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.AlarmAdd
+import androidx.compose.material.icons.outlined.AlarmOff
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Snooze
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,11 +33,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.Alarm
 
 @Composable
-fun AlarmPage(modifier: Modifier = Modifier, viewModel: StandbyViewModel = viewModel()) {
+fun AlarmPage(
+    modifier: Modifier = Modifier,
+    viewModel: StandbyViewModel = viewModel()
+) {
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
+
     val selectedColorIdx by viewModel.colorPage1.collectAsState()
     val customFont = viewModel.fonts[viewModel.fontPage1.collectAsState().value].first
     val accentColor = viewModel.colors[selectedColorIdx].first
-
     val bgUri by viewModel.getBgUriFlow(1).collectAsState()
 
     val alarms by viewModel.alarms.collectAsState()
@@ -46,128 +50,164 @@ fun AlarmPage(modifier: Modifier = Modifier, viewModel: StandbyViewModel = viewM
 
     var showAddDialog by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = colorScheme.surface
     ) {
-        if (bgUri != null) {
-            coil.compose.AsyncImage(
-                model = bgUri,
-                contentDescription = "Background",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-            )
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 16.dp)
-        ) {
-            // Screen Header Title & Add Button Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "ALARM",
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = customFont,
-                        letterSpacing = 1.5.sp
-                    )
-                }
-
-                // Add Alarm Button with modern outline glowing look
-                OutlinedButton(
-                    onClick = { showAddDialog = true },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = accentColor,
-                        containerColor = accentColor.copy(alpha = 0.05f)
-                    ),
-                    border = BorderStroke(1.5.dp, accentColor.copy(alpha = 0.4f)),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Create Alarm Icon",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "NEW ALARM",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = customFont,
-                        letterSpacing = 1.sp
-                    )
-                }
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (bgUri != null) {
+                coil.compose.AsyncImage(
+                    model = bgUri,
+                    contentDescription = "Background",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(Modifier.fillMaxSize().background(colorScheme.surface.copy(alpha = 0.72f)))
             }
 
-            if (alarms.isEmpty()) {
-                // Creative empty state view
-                Box(
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 28.dp, vertical = 20.dp)
+            ) {
+                // Material 3 Header Bar with Extended FAB
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
+                        .padding(bottom = 18.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(32.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(accentColor.copy(alpha = 0.12f))
-                                .border(1.dp, accentColor.copy(alpha = 0.3f), CircleShape),
-                            contentAlignment = Alignment.Center
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = colorScheme.primaryContainer
                         ) {
                             Icon(
-                                imageVector = Icons.Default.AlarmOff,
-                                contentDescription = "No Alarms icon",
-                                tint = accentColor,
-                                modifier = Modifier.size(32.dp)
+                                imageVector = Icons.Default.Alarm,
+                                contentDescription = null,
+                                tint = colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .padding(10.dp)
+                                    .size(24.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text(
-                            text = "NO ACTIVE ALARMS",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = customFont,
-                            letterSpacing = 1.sp
-                        )
+                        Column {
+                            Text(
+                                text = "Alarms",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = colorScheme.onSurface,
+                                fontFamily = customFont,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${alarms.count { it.isEnabled }} active scheduled alerts",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            haptics.tick()
+                            showAddDialog = true
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Outlined.AlarmAdd,
+                                contentDescription = "Create Alarm"
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = "New Alarm",
+                                fontFamily = customFont,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        },
+                        containerColor = colorScheme.primaryContainer,
+                        contentColor = colorScheme.onPrimaryContainer,
+                        modifier = Modifier.testTag("add_alarm_fab")
+                    )
                 }
-            } else {
-                // Alarms List View
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 32.dp)
-                ) {
-                    items(alarms, key = { it.id }) { alarm ->
-                        AlarmCard(
-                            alarm = alarm,
-                            use24Hour = use24Hour,
-                            accentColor = accentColor,
-                            customFont = customFont,
-                            onToggle = { viewModel.toggleAlarm(alarm) },
-                            onDelete = { viewModel.deleteAlarm(alarm) }
-                        )
+
+                if (alarms.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ElevatedCard(
+                            colors = CardDefaults.elevatedCardColors(
+                                containerColor = colorScheme.surfaceContainerLow
+                            ),
+                            shape = RoundedCornerShape(24.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 48.dp, vertical = 32.dp)
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(68.dp),
+                                    shape = CircleShape,
+                                    color = colorScheme.secondaryContainer
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.AlarmOff,
+                                            contentDescription = "No Alarms",
+                                            tint = colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "No Active Alarms",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = colorScheme.onSurface,
+                                    fontFamily = customFont,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Tap New Alarm to schedule a wake-up or standby reminder",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
+                        items(alarms, key = { it.id }) { alarm ->
+                            AlarmCard(
+                                alarm = alarm,
+                                use24Hour = use24Hour,
+                                accentColor = accentColor,
+                                customFont = customFont,
+                                onToggle = {
+                                    haptics.confirm()
+                                    viewModel.toggleAlarm(alarm)
+                                },
+                                onDelete = {
+                                    haptics.tick()
+                                    viewModel.deleteAlarm(alarm)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -179,8 +219,12 @@ fun AlarmPage(modifier: Modifier = Modifier, viewModel: StandbyViewModel = viewM
             accentColor = accentColor,
             customFont = customFont,
             use24Hour = use24Hour,
-            onDismiss = { showAddDialog = false },
+            onDismiss = {
+                haptics.tick()
+                showAddDialog = false
+            },
             onConfirm = { hour, minute, label, snooze ->
+                haptics.confirm()
                 viewModel.addAlarm(hour, minute, label, snooze)
                 showAddDialog = false
             }
@@ -193,36 +237,30 @@ fun AlarmCard(
     alarm: Alarm,
     use24Hour: Boolean,
     accentColor: Color,
-    customFont: androidx.compose.ui.text.font.FontFamily,
+    customFont: FontFamily,
     onToggle: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     val enabledState = alarm.isEnabled
 
-    val cardBg = remember(enabledState) {
-        Color.Black // True AMOLED Black for maximum power saving
-    }
-    val cardBorder = remember(enabledState, accentColor) {
-        if (enabledState) BorderStroke(1.dp, accentColor.copy(alpha = 0.2f))
-        else BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
-    }
-
-    Card(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp)),
-        border = cardBorder,
-        colors = CardDefaults.cardColors(containerColor = cardBg)
+            .testTag("alarm_card_${alarm.id}"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = if (enabledState) colorScheme.surfaceContainerHigh else colorScheme.surfaceContainerLow
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp, horizontal = 20.dp),
+                .padding(vertical = 16.dp, horizontal = 22.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Alarm Time Display
             Column(
-                modifier = Modifier.width(100.dp),
+                modifier = Modifier.width(128.dp),
                 verticalArrangement = Arrangement.Center
             ) {
                 val hourText = if (use24Hour) {
@@ -234,26 +272,24 @@ fun AlarmCard(
                 val minuteText = String.format("%02d", alarm.minute)
                 val amPmText = if (use24Hour) "" else if (alarm.hour >= 12) "PM" else "AM"
 
-                Row(
-                    verticalAlignment = Alignment.Bottom
-                ) {
+                Row(verticalAlignment = Alignment.Bottom) {
                     Text(
                         text = "$hourText:$minuteText",
-                        color = if (enabledState) Color.White else Color.Gray,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Black,
+                        color = if (enabledState) colorScheme.onSurface else colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold,
                         fontFamily = customFont,
-                        lineHeight = 32.sp
+                        lineHeight = 36.sp
                     )
                     if (!use24Hour) {
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = amPmText,
-                            color = if (enabledState) accentColor else Color.Gray.copy(alpha = 0.6f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            color = if (enabledState) accentColor else colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            style = MaterialTheme.typography.labelLarge,
                             fontFamily = customFont,
-                            modifier = Modifier.padding(bottom = 3.dp)
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 4.dp)
                         )
                     }
                 }
@@ -261,67 +297,59 @@ fun AlarmCard(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Alarm Info Column
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = alarm.label.ifBlank { "Alarm" },
-                    color = if (enabledState) Color.White else Color.Gray.copy(alpha = 0.8f),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
+                    color = if (enabledState) colorScheme.onSurface else colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleMedium,
                     fontFamily = customFont,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = colorScheme.secondaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Snooze minutes config icon",
-                        tint = if (enabledState) accentColor.copy(alpha = 0.6f) else Color.Gray.copy(alpha = 0.4f),
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Snooze: ${alarm.snoozeMinutes}m",
-                        color = Color.Gray,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        fontFamily = customFont
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Snooze,
+                            contentDescription = "Snooze interval",
+                            tint = colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Snooze ${alarm.snoozeMinutes} min",
+                            color = colorScheme.onSecondaryContainer,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = customFont
+                        )
+                    }
                 }
             }
 
-            // Switch & Delete Action Buttons
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Switch(
                     checked = enabledState,
-                    onCheckedChange = { onToggle() },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = accentColor,
-                        uncheckedThumbColor = Color.DarkGray,
-                        uncheckedTrackColor = Color.Black
-                    )
+                    onCheckedChange = { onToggle() }
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
-
                 IconButton(
-                    onClick = { onDelete() },
-                    modifier = Modifier.size(40.dp)
+                    onClick = onDelete,
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        imageVector = Icons.Outlined.DeleteOutline,
                         contentDescription = "Delete Alarm",
-                        tint = Color.Gray.copy(alpha = 0.6f),
-                        modifier = Modifier.size(18.dp)
+                        tint = colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -329,210 +357,189 @@ fun AlarmCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomAddAlarmDialog(
     accentColor: Color,
-    customFont: androidx.compose.ui.text.font.FontFamily,
+    customFont: FontFamily,
     use24Hour: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (hour: Int, minute: Int, label: String, snooze: Int) -> Unit
 ) {
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
+
     val minHour = if (use24Hour) 0 else 1
     val maxHour = if (use24Hour) 23 else 12
 
-    var pickedHour by remember { mutableStateOf(if (use24Hour) 7 else 7) }
-    var pickedMinute by remember { mutableStateOf(0) }
+    var pickedHour by remember { mutableIntStateOf(7) }
+    var pickedMinute by remember { mutableIntStateOf(0) }
     var isAm by remember { mutableStateOf(true) }
     var alarmLabel by remember { mutableStateOf("Wake Up") }
-    var snoozeMinutes by remember { mutableStateOf(5) }
+    var snoozeMinutes by remember { mutableIntStateOf(5) }
 
     AlertDialog(
-        onDismissRequest = { onDismiss() },
-        shape = RoundedCornerShape(24.dp),
-        containerColor = Color.Black, // True AMOLED Black for maximum power saving
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        containerColor = colorScheme.surfaceContainerHigh,
         title = {
             Text(
-                text = "Add custom Alarm".uppercase(),
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp,
+                text = "Set Alarm",
+                style = MaterialTheme.typography.headlineSmall,
+                color = colorScheme.onSurface,
                 fontFamily = customFont,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
+                fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll( androidx.compose.foundation.rememberScrollState() ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Modern visual time spinner controls
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                // Material 3 Time Picker Dial Card with Haptic Ticks
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = colorScheme.surfaceContainer,
+                    border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // HOUR SPINNER
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(64.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = {
-                                if (pickedHour == maxHour) pickedHour = minHour else pickedHour++
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Up Hour", tint = accentColor)
-                        }
-                        Text(
-                            text = String.format("%02d", pickedHour),
-                            color = Color.White,
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = customFont
-                        )
-                        IconButton(
-                            onClick = {
-                                if (pickedHour == minHour) pickedHour = maxHour else pickedHour--
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Down Hour", tint = accentColor)
-                        }
-                    }
-
-                    Text(
-                        text = ":",
-                        color = accentColor.copy(alpha = 0.8f),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 4.dp)
-                    )
-
-                    // MINUTE SPINNER
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(64.dp)
-                    ) {
-                        IconButton(
-                            onClick = {
-                                pickedMinute = (pickedMinute + 1) % 60
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Up Minute", tint = accentColor)
-                        }
-                        Text(
-                            text = String.format("%02d", pickedMinute),
-                            color = Color.White,
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = customFont
-                        )
-                        IconButton(
-                            onClick = {
-                                pickedMinute = if (pickedMinute == 0) 59 else pickedMinute - 1
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Down Minute", tint = accentColor)
-                        }
-                    }
-
-                    if (!use24Hour) {
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        // AM/PM SLIDER BUTTON
+                        // Hour Picker Column
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(76.dp)
                         ) {
-                            Button(
-                                onClick = { isAm = !isAm },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = accentColor.copy(alpha = 0.15f),
-                                    contentColor = accentColor
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            FilledTonalIconButton(
+                                onClick = {
+                                    haptics.tick()
+                                    pickedHour = if (pickedHour == maxHour) minHour else pickedHour + 1
+                                },
+                                modifier = Modifier.size(40.dp)
                             ) {
-                                Text(
-                                    text = if (isAm) "AM" else "PM",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Black,
-                                    fontFamily = customFont
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Hour")
+                            }
+                            Text(
+                                text = String.format("%02d", pickedHour),
+                                color = colorScheme.onSurface,
+                                fontSize = 38.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = customFont,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                            FilledTonalIconButton(
+                                onClick = {
+                                    haptics.tick()
+                                    pickedHour = if (pickedHour == minHour) maxHour else pickedHour - 1
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Hour")
+                            }
+                        }
+
+                        Text(
+                            text = ":",
+                            color = colorScheme.primary,
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp)
+                        )
+
+                        // Minute Picker Column
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(76.dp)
+                        ) {
+                            FilledTonalIconButton(
+                                onClick = {
+                                    haptics.tick()
+                                    pickedMinute = (pickedMinute + 1) % 60
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Minute")
+                            }
+                            Text(
+                                text = String.format("%02d", pickedMinute),
+                                color = colorScheme.onSurface,
+                                fontSize = 38.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = customFont,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                            FilledTonalIconButton(
+                                onClick = {
+                                    haptics.tick()
+                                    pickedMinute = if (pickedMinute == 0) 59 else pickedMinute - 1
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Minute")
+                            }
+                        }
+
+                        if (!use24Hour) {
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChip(
+                                    selected = isAm,
+                                    onClick = {
+                                        haptics.tick()
+                                        isAm = true
+                                    },
+                                    label = { Text("AM", fontWeight = FontWeight.Bold) }
+                                )
+                                FilterChip(
+                                    selected = !isAm,
+                                    onClick = {
+                                        haptics.tick()
+                                        isAm = false
+                                    },
+                                    label = { Text("PM", fontWeight = FontWeight.Bold) }
                                 )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Alarm Label input
                 OutlinedTextField(
                     value = alarmLabel,
                     onValueChange = { alarmLabel = it },
-                    label = { Text("Alarm Note / Label", fontFamily = customFont) },
+                    label = { Text("Alarm Label", fontFamily = customFont) },
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = accentColor,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
-                        focusedLabelColor = accentColor,
-                        unfocusedLabelColor = Color.Gray
-                    ),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Snooze selection buttons row
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Snooze interval",
-                        color = Color.Gray,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        text = "Snooze Interval",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colorScheme.onSurfaceVariant,
                         fontFamily = customFont,
-                        letterSpacing = 0.5.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(5, 10, 15, 30).forEach { mins ->
-                            val isSelected = snoozeMinutes == mins
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(36.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        if (isSelected) accentColor else Color.White.copy(alpha = 0.04f)
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isSelected) accentColor else Color.White.copy(alpha = 0.1f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .clickable { snoozeMinutes = mins },
-                                contentAlignment = Alignment.Center
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        val snoozeOptions = listOf(5, 10, 15, 30)
+                        snoozeOptions.forEachIndexed { idx, mins ->
+                            SegmentedButton(
+                                selected = snoozeMinutes == mins,
+                                onClick = {
+                                    haptics.tick()
+                                    snoozeMinutes = mins
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index = idx, count = snoozeOptions.size)
                             ) {
-                                Text(
-                                    text = "${mins}M",
-                                    color = if (isSelected) Color.Black else Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black,
-                                    fontFamily = customFont
-                                )
+                                Text("${mins}m")
                             }
                         }
                     }
@@ -540,12 +547,11 @@ fun CustomAddAlarmDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            Button(
                 onClick = {
                     val finalHour = if (use24Hour) {
                         pickedHour
                     } else {
-                        // Convert 12-hour selection based on AM/PM
                         if (isAm) {
                             if (pickedHour == 12) 0 else pickedHour
                         } else {
@@ -555,21 +561,12 @@ fun CustomAddAlarmDialog(
                     onConfirm(finalHour, pickedMinute, alarmLabel, snoozeMinutes)
                 }
             ) {
-                Text(
-                    text = "SAVE DIRECTLY",
-                    color = accentColor,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = customFont
-                )
+                Text("Save Alarm", fontFamily = customFont)
             }
         },
         dismissButton = {
-            TextButton(onClick = { onDismiss() }) {
-                Text(
-                    text = "CANCEL",
-                    color = Color.Gray,
-                    fontFamily = customFont
-                )
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", fontFamily = customFont)
             }
         }
     )
