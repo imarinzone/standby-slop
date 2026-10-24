@@ -1,6 +1,8 @@
 package com.example.ui.standby
 
+import android.app.Activity
 import android.content.Intent
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -111,6 +113,35 @@ fun StandbyScreen(
     val colorScheme = MaterialTheme.colorScheme
     val currentTabForBg = if (!isOverviewMode) horizontalPagerState.currentPage else 0
     val currentBgUri by viewModel.getBgUriFlow(currentTabForBg).collectAsState()
+
+    val clockBrightnessFactor by viewModel.clockBrightnessFactor.collectAsState()
+    val isPreAlarmDimming by viewModel.isPreAlarmDimmingActive.collectAsState()
+    val context = LocalContext.current
+
+    // Sync Activity window screenBrightness when pre-alarm gradual dimming is active on Clock or Duo display
+    LaunchedEffect(isPreAlarmDimming, clockBrightnessFactor, horizontalPagerState.currentPage, isOverviewMode, showSettingsDialog) {
+        val window = (context as? Activity)?.window ?: return@LaunchedEffect
+        val isClockOrDuoVisible = !isOverviewMode && !showSettingsDialog &&
+            (horizontalPagerState.currentPage == 0 || horizontalPagerState.currentPage == 5)
+        val params = window.attributes
+        if (isPreAlarmDimming && isClockOrDuoVisible) {
+            params.screenBrightness = clockBrightnessFactor.coerceIn(0.05f, 1.0f)
+        } else {
+            params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        window.attributes = params
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = (context as? Activity)?.window
+            if (window != null) {
+                val params = window.attributes
+                params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                window.attributes = params
+            }
+        }
+    }
 
     // Clock screen (page 0) keeps its signature deep canvas; non-clock screens use Adaptive Material 3 surface
     val rootContainerColor = if (!isOverviewMode && horizontalPagerState.currentPage == 0) {
@@ -694,6 +725,14 @@ fun StandbyCustomizationDialog(
     val showSeconds by viewModel.showSeconds.collectAsState()
     val isClassicMediaTheme by viewModel.useClassicMediaTheme.collectAsState()
 
+    val gradualDimEnabled by viewModel.gradualAlarmDimEnabled.collectAsState()
+    val gradualDimWindowMins by viewModel.gradualAlarmDimWindowMinutes.collectAsState()
+    val gradualDimMinBrightness by viewModel.gradualAlarmMinBrightness.collectAsState()
+    val liveBrightnessFactor by viewModel.clockBrightnessFactor.collectAsState()
+    val isPreAlarmDimming by viewModel.isPreAlarmDimmingActive.collectAsState()
+    val nextAlarmLabel by viewModel.nextSystemAlarm.collectAsState()
+    val minutesUntilAlarm by viewModel.minutesUntilNextAlarm.collectAsState()
+
     val pageColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: colorScheme.primary
 
     Dialog(
@@ -1080,6 +1119,150 @@ fun StandbyCustomizationDialog(
                             }
                         }
 
+                        // 3b. Pre-Alarm Gradual Brightness Lowering (Clock Tab 0, Alarm Tab 1, or Duo Tab 5)
+                        if (activeTab == 0 || activeTab == 1 || activeTab == 5) {
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("pre_alarm_dimming_settings_card"),
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = colorScheme.surfaceContainerLow
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                            Text(
+                                                text = "Pre-Alarm Gradual Dimming",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = if (!nextAlarmLabel.isNullOrBlank() && nextAlarmLabel != "No Alarm") {
+                                                    "Next alarm: $nextAlarmLabel"
+                                                } else {
+                                                    "Avoid harsh light before your scheduled alarm"
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (isPreAlarmDimming) colorScheme.primaryContainer else colorScheme.secondaryContainer
+                                        ) {
+                                            Text(
+                                                text = when {
+                                                    !gradualDimEnabled -> "Off"
+                                                    isPreAlarmDimming -> "Dimming ${(liveBrightnessFactor * 100).roundToInt()}%"
+                                                    minutesUntilAlarm != null -> "Standby (${minutesUntilAlarm}m)"
+                                                    else -> "Ready"
+                                                },
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = if (isPreAlarmDimming) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    M3SettingSwitchRow(
+                                        title = "Gradually Lower Clock Brightness",
+                                        subtitle = "Smoothly dim the clock face as your scheduled alarm time approaches",
+                                        checked = gradualDimEnabled,
+                                        onCheckedChange = {
+                                            haptics.confirm()
+                                            viewModel.setGradualAlarmDimEnabled(it)
+                                        },
+                                        modifier = Modifier.testTag("gradual_alarm_dim_switch")
+                                    )
+
+                                    AnimatedVisibility(visible = gradualDimEnabled) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(
+                                                    text = "Lead-Up Dimming Window",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = colorScheme.onSurfaceVariant
+                                                )
+                                                val windowOptions = listOf(15, 30, 45, 60)
+                                                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                                    windowOptions.forEachIndexed { idx, mins ->
+                                                        SegmentedButton(
+                                                            selected = gradualDimWindowMins == mins,
+                                                            onClick = {
+                                                                haptics.tick()
+                                                                viewModel.setGradualAlarmDimWindowMinutes(mins)
+                                                            },
+                                                            shape = SegmentedButtonDefaults.itemShape(
+                                                                index = idx,
+                                                                count = windowOptions.size
+                                                            ),
+                                                            modifier = Modifier.testTag("gradual_dim_window_$mins")
+                                                        ) {
+                                                            Text("${mins}m")
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            var lastBrightnessBucket by remember {
+                                                mutableIntStateOf((gradualDimMinBrightness * 20).roundToInt())
+                                            }
+                                            Column {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "Minimum Clock Brightness Floor",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = colorScheme.onSurface
+                                                    )
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = colorScheme.secondaryContainer
+                                                    ) {
+                                                        Text(
+                                                            text = "${(gradualDimMinBrightness * 100).roundToInt()}%",
+                                                            style = MaterialTheme.typography.labelLarge,
+                                                            color = colorScheme.onSecondaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Slider(
+                                                    value = gradualDimMinBrightness,
+                                                    onValueChange = { newVal ->
+                                                        val bucket = (newVal * 20).roundToInt()
+                                                        if (bucket != lastBrightnessBucket) {
+                                                            lastBrightnessBucket = bucket
+                                                            haptics.step()
+                                                        }
+                                                        viewModel.setGradualAlarmMinBrightness(newVal)
+                                                    },
+                                                    valueRange = 0.15f..0.60f,
+                                                    steps = 8,
+                                                    modifier = Modifier
+                                                        .padding(top = 4.dp)
+                                                        .testTag("gradual_dim_min_brightness_slider")
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // 4. Calendar Specific Settings (Tab 2)
                         if (activeTab == 2) {
                             val calendarFilter by calendarViewModel.calendarFilter.collectAsState()
@@ -1386,13 +1569,14 @@ private fun M3SettingSwitchRow(
     title: String,
     subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = colorScheme.surfaceContainer,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .clickable { onCheckedChange(!checked) }

@@ -28,8 +28,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -291,9 +295,22 @@ fun DuoClockWidget(
     val accentColor = viewModel.colors[selectedColorIdx].first
     val use24Hour by viewModel.use24HourFormat.collectAsState()
 
+    val targetBrightness by viewModel.clockBrightnessFactor.collectAsState()
+    val isPreAlarmDimming by viewModel.isPreAlarmDimmingActive.collectAsState()
+    val animatedBrightness by animateFloatAsState(
+        targetValue = targetBrightness.coerceIn(0.10f, 1.0f),
+        animationSpec = tween(durationMillis = 600),
+        label = "duoClockPreAlarmBrightness"
+    )
+
     LaunchedEffect(Unit) {
+        viewModel.updateNextAlarm()
         while (true) {
-            currentTime = Calendar.getInstance()
+            val now = Calendar.getInstance()
+            currentTime = now
+            if (now.get(Calendar.SECOND) % 15 == 0) {
+                viewModel.updateNextAlarm(now)
+            }
             delay(1000)
         }
     }
@@ -305,7 +322,9 @@ fun DuoClockWidget(
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = animatedBrightness },
         contentAlignment = Alignment.Center
     ) {
         val mainFontSize = (minOf(maxWidth.value * 0.22f, maxHeight.value * 0.28f)).coerceIn(34f, 54f).sp
@@ -380,6 +399,16 @@ fun DuoClockWidget(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+
+            if (isPreAlarmDimming) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Pre-alarm dim • ${(animatedBrightness * 100).roundToInt()}%",
+                    color = accentColor.copy(alpha = 0.85f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
+                )
             }
         }
     }

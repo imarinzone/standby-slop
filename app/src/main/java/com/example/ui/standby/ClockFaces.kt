@@ -37,8 +37,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import kotlin.math.roundToInt
 
 @Composable
 fun ClockFaceRenderer(
@@ -61,6 +63,15 @@ fun ClockFaceRenderer(
     val showAmPm by standbyViewModel.showAmPm.collectAsState()
     val showSeconds by standbyViewModel.showSeconds.collectAsState()
 
+    val targetBrightness by standbyViewModel.clockBrightnessFactor.collectAsState()
+    val isPreAlarmDimming by standbyViewModel.isPreAlarmDimmingActive.collectAsState()
+    val minutesUntilAlarm by standbyViewModel.minutesUntilNextAlarm.collectAsState()
+    val animatedBrightness by animateFloatAsState(
+        targetValue = targetBrightness.coerceIn(0.10f, 1.0f),
+        animationSpec = tween(durationMillis = 600),
+        label = "clockPreAlarmBrightness"
+    )
+
     val bgUri by standbyViewModel.getBgUriFlow(0).collectAsState()
     val glowVal by standbyViewModel.getGlowFlow(0).collectAsState()
     val outlineVal by standbyViewModel.getOutlineFlow(0).collectAsState()
@@ -71,18 +82,30 @@ fun ClockFaceRenderer(
     val customFont = standbyViewModel.fonts[selectedFontIdx].first
 
     LaunchedEffect(Unit) {
+        standbyViewModel.updateNextAlarm()
         while (true) {
             delay(1000)
-            currentTime = Calendar.getInstance()
+            val now = Calendar.getInstance()
+            currentTime = now
+            if (now.get(Calendar.SECOND) % 15 == 0) {
+                standbyViewModel.updateNextAlarm(now)
+            }
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .testTag("clock_face_container")
+    ) {
         if (bgUri != null) {
             coil.compose.AsyncImage(
                 model = bgUri,
                 contentDescription = "Background",
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = animatedBrightness },
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )
             // Add a dark overlay just to make sure clocks remain readable
@@ -101,6 +124,7 @@ fun ClockFaceRenderer(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer { alpha = animatedBrightness }
                 .then(clockGradientModifier),
             contentAlignment = Alignment.Center
         ) {
@@ -133,7 +157,49 @@ fun ClockFaceRenderer(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Normal,
                     fontFamily = customFont,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 24.dp, vertical = 18.dp)
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(horizontal = 24.dp, vertical = 18.dp)
+                        .graphicsLayer { alpha = animatedBrightness }
+                )
+            }
+        }
+
+        // Dimming scrim overlay to ensure hardware/AndroidView elements (e.g. NixieTubeClock) also lower luminance smoothly
+        val scrimAlpha = (1f - animatedBrightness).coerceIn(0f, 0.90f)
+        if (scrimAlpha > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = scrimAlpha))
+            )
+        }
+
+        // Subtle, low-glare status badge when pre-alarm gradual dimming is actively lowering brightness
+        if (isPreAlarmDimming) {
+            val badgeAlpha = animatedBrightness.coerceIn(0.35f, 0.78f)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                    .graphicsLayer { alpha = badgeAlpha }
+                    .clip(CircleShape)
+                    .background(Color(0xFF141418).copy(alpha = 0.85f))
+                    .border(1.dp, customColor.copy(alpha = 0.28f), CircleShape)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("pre_alarm_dimming_indicator")
+            ) {
+                Text(
+                    text = buildString {
+                        append("Pre-alarm dim • ${(animatedBrightness * 100).roundToInt()}%")
+                        minutesUntilAlarm?.let { mins ->
+                            append(" • ${mins}m left")
+                        }
+                    },
+                    color = customColor.copy(alpha = 0.85f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = customFont
                 )
             }
         }

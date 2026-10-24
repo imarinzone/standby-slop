@@ -56,6 +56,10 @@ fun AlarmPage(
 
     val alarms by viewModel.alarms.collectAsState()
     val use24Hour by viewModel.use24HourFormat.collectAsState()
+    val gradualDimEnabled by viewModel.gradualAlarmDimEnabled.collectAsState()
+    val gradualDimWindowMins by viewModel.gradualAlarmDimWindowMinutes.collectAsState()
+    val liveBrightness by viewModel.clockBrightnessFactor.collectAsState()
+    val isPreAlarmDimming by viewModel.isPreAlarmDimmingActive.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -85,7 +89,7 @@ fun AlarmPage(
                         .fillMaxSize()
                         .padding(horizontal = hPad, vertical = vPad)
                 ) {
-                    // Material 3 Header Bar with Extended FAB
+                    // Material 3 Header Bar with Pre-Alarm Dim Chip & Extended FAB
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -133,29 +137,60 @@ fun AlarmPage(
                             }
                         }
 
-                        ExtendedFloatingActionButton(
-                            onClick = {
-                                haptics.tick()
-                                showAddDialog = true
-                            },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.AlarmAdd,
-                                    contentDescription = "Create Alarm"
-                                )
-                            },
-                            text = {
-                                Text(
-                                    text = "New Alarm",
-                                    fontFamily = customFont,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1
-                                )
-                            },
-                            containerColor = colorScheme.primaryContainer,
-                            contentColor = colorScheme.onPrimaryContainer,
-                            modifier = Modifier.testTag("add_alarm_fab")
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilterChip(
+                                selected = gradualDimEnabled,
+                                onClick = {
+                                    haptics.confirm()
+                                    viewModel.setGradualAlarmDimEnabled(!gradualDimEnabled)
+                                },
+                                label = {
+                                    Text(
+                                        text = when {
+                                            !gradualDimEnabled -> "Pre-Alarm Dim: Off"
+                                            isPreAlarmDimming -> "Dimming ${(liveBrightness * 100).toInt()}%"
+                                            else -> "Pre-Alarm Dim (${gradualDimWindowMins}m)"
+                                        },
+                                        maxLines = 1
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (gradualDimEnabled) Icons.Default.BrightnessLow else Icons.Default.BrightnessHigh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                modifier = Modifier.testTag("alarm_page_gradual_dim_chip")
+                            )
+
+                            ExtendedFloatingActionButton(
+                                onClick = {
+                                    haptics.tick()
+                                    showAddDialog = true
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.AlarmAdd,
+                                        contentDescription = "Create Alarm"
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        text = "New Alarm",
+                                        fontFamily = customFont,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1
+                                    )
+                                },
+                                containerColor = colorScheme.primaryContainer,
+                                contentColor = colorScheme.onPrimaryContainer,
+                                modifier = Modifier.testTag("add_alarm_fab")
+                            )
+                        }
                     }
 
                     if (alarms.isEmpty()) {

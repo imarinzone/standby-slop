@@ -8,12 +8,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.Alarm
 import com.example.data.AppDatabase
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -122,6 +124,40 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     val showSeconds = MutableStateFlow(prefs.getBoolean("showSeconds", false))
     val useClassicMediaTheme = MutableStateFlow(prefs.getBoolean("useClassicMediaTheme", false))
 
+    // Pre-Alarm Gradual Brightness Lowering preferences & live state
+    val gradualAlarmDimEnabled = MutableStateFlow(prefs.getBoolean("gradualAlarmDimEnabled", true))
+    val gradualAlarmDimWindowMinutes = MutableStateFlow(prefs.getInt("gradualAlarmDimWindowMinutes", 30).coerceIn(5, 180))
+    val gradualAlarmMinBrightness = MutableStateFlow(prefs.getFloat("gradualAlarmMinBrightness", 0.25f).coerceIn(0.10f, 0.80f))
+
+    private val _clockBrightnessFactor = MutableStateFlow(1.0f)
+    val clockBrightnessFactor: StateFlow<Float> = _clockBrightnessFactor
+
+    private val _isPreAlarmDimmingActive = MutableStateFlow(false)
+    val isPreAlarmDimmingActive: StateFlow<Boolean> = _isPreAlarmDimmingActive
+
+    private val _minutesUntilNextAlarm = MutableStateFlow<Int?>(null)
+    val minutesUntilNextAlarm: StateFlow<Int?> = _minutesUntilNextAlarm
+
+    fun setGradualAlarmDimEnabled(enabled: Boolean) {
+        gradualAlarmDimEnabled.value = enabled
+        prefs.edit().putBoolean("gradualAlarmDimEnabled", enabled).apply()
+        updateNextAlarm()
+    }
+
+    fun setGradualAlarmDimWindowMinutes(minutes: Int) {
+        val safeMinutes = minutes.coerceIn(5, 180)
+        gradualAlarmDimWindowMinutes.value = safeMinutes
+        prefs.edit().putInt("gradualAlarmDimWindowMinutes", safeMinutes).apply()
+        updateNextAlarm()
+    }
+
+    fun setGradualAlarmMinBrightness(minBrightness: Float) {
+        val safeBrightness = minBrightness.coerceIn(0.10f, 0.80f)
+        gradualAlarmMinBrightness.value = safeBrightness
+        prefs.edit().putFloat("gradualAlarmMinBrightness", safeBrightness).apply()
+        updateNextAlarm()
+    }
+
     fun setLastClockFaceIndex(index: Int) {
         val safeIdx = index.coerceIn(0, 9)
         if (lastClockFaceIndex.value != safeIdx) {
@@ -175,28 +211,56 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         viewModelScope.launch {
-            combine(alarms, use24HourFormat) { _, _ -> }.collect {
+            combine(
+                alarms,
+                use24HourFormat,
+                gradualAlarmDimEnabled,
+                gradualAlarmDimWindowMinutes,
+                gradualAlarmMinBrightness
+            ) { _, _, _, _, _ -> }.collect {
+                updateNextAlarm()
+            }
+        }
+        viewModelScope.launch {
+            while (isActive) {
+                delay(15_000L)
                 updateNextAlarm()
             }
         }
     }
 
-    fun updateNextAlarm() {
+    fun computeBrightnessForDiffMillis(
+        diffMillis: Long?,
+        dimEnabled: Boolean = gradualAlarmDimEnabled.value,
+        windowMinutes: Int = gradualAlarmDimWindowMinutes.value,
+        minBrightness: Float = gradualAlarmMinBrightness.value
+    ): Float {
+        if (!dimEnabled || diffMillis == null || diffMillis < 0L) return 1.0f
+        val windowMillis = windowMinutes.coerceIn(5, 180) * 60_000L
+        if (diffMillis > windowMillis || windowMillis <= 0L) return 1.0f
+        val clampedMin = minBrightness.coerceIn(0.10f, 0.80f)
+        val progress = (diffMillis.toFloat() / windowMillis.toFloat()).coerceIn(0f, 1f)
+        return (clampedMin + (1.0f - clampedMin) * progress).coerceIn(clampedMin, 1.0f)
+    }
+
+    fun updateNextAlarm(now: Calendar = Calendar.getInstance()) {
         try {
             val currentAlarms = alarms.value
             val is24Hr = use24HourFormat.value
             val enabledAlarms = currentAlarms.filter { it.isEnabled }
             if (enabledAlarms.isEmpty()) {
                 _nextSystemAlarm.value = "No Alarm"
+                _minutesUntilNextAlarm.value = null
+                _clockBrightnessFactor.value = 1.0f
+                _isPreAlarmDimmingActive.value = false
                 return
             }
 
-            val now = Calendar.getInstance()
             var soonestAlarm: Alarm? = null
             var soonestDiff = Long.MAX_VALUE
 
             for (alarm in enabledAlarms) {
-                val alarmCal = Calendar.getInstance().apply {
+                val alarmCal = (now.clone() as Calendar).apply {
                     set(Calendar.HOUR_OF_DAY, alarm.hour)
                     set(Calendar.MINUTE, alarm.minute)
                     set(Calendar.SECOND, 0)
@@ -213,7 +277,7 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
             }
 
             if (soonestAlarm != null) {
-                val displayCal = Calendar.getInstance().apply {
+                val displayCal = (now.clone() as Calendar).apply {
                     set(Calendar.HOUR_OF_DAY, soonestAlarm.hour)
                     set(Calendar.MINUTE, soonestAlarm.minute)
                     set(Calendar.SECOND, 0)
@@ -225,11 +289,26 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
                 val formatter = SimpleDateFormat(if (is24Hr) "HH:mm" else "h:mm a", Locale.getDefault())
                 val prefix = if (displayCal.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)) "Today " else "Tom. "
                 _nextSystemAlarm.value = "$prefix${formatter.format(displayCal.time)} (${soonestAlarm.label})"
+
+                val minutesLeft = ((soonestDiff + 59_999L) / 60_000L).toInt().coerceAtLeast(0)
+                _minutesUntilNextAlarm.value = minutesLeft
+
+                val brightness = computeBrightnessForDiffMillis(soonestDiff)
+                _clockBrightnessFactor.value = brightness
+                _isPreAlarmDimmingActive.value = gradualAlarmDimEnabled.value &&
+                    soonestDiff <= gradualAlarmDimWindowMinutes.value * 60_000L &&
+                    brightness < 0.99f
             } else {
                 _nextSystemAlarm.value = "No Alarm"
+                _minutesUntilNextAlarm.value = null
+                _clockBrightnessFactor.value = 1.0f
+                _isPreAlarmDimmingActive.value = false
             }
         } catch (e: Exception) {
             _nextSystemAlarm.value = "No Alarm"
+            _minutesUntilNextAlarm.value = null
+            _clockBrightnessFactor.value = 1.0f
+            _isPreAlarmDimmingActive.value = false
             android.util.Log.e("StandbyViewModel", "Failed to update local next alarm status", e)
         }
     }
