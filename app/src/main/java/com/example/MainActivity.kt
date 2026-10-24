@@ -57,17 +57,6 @@ class MainActivity : ComponentActivity() {
             android.util.Log.e(TAG, "onCreate: Failed to set keep screen on flag", e)
         }
         
-        try {
-            // Immersive approach for Standby Display
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-            windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
-            android.util.Log.d(TAG, "onCreate: Immersive system bar controls configured and hidden")
-        } catch (e: Exception) {
-            android.util.Log.e(TAG, "onCreate: Failed to configure immersive window bars", e)
-        }
-        
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {

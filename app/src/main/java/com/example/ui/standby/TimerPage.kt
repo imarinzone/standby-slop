@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -591,6 +592,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
     var timeMillis by remember { mutableLongStateOf(0L) }
     val laps = remember { mutableStateListOf<Long>() }
     var lastRecordedTime by remember { mutableLongStateOf(0L) }
+    var showLapDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(isRunning) {
         if (isRunning) {
@@ -613,6 +615,8 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
         val centisText = String.format(".%02d", centis)
         return Pair(mainText, centisText)
     }
+
+    val canShowLapTimings = !isRunning && (laps.isNotEmpty() || timeMillis > 0L)
 
     BoxWithConstraints(
         modifier = Modifier
@@ -648,38 +652,14 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                     .fillMaxSize()
                     .padding(if (isCompactHeight) 16.dp else 24.dp)
             ) {
-                val mainFontSize = (minOf(maxWidth.value * 0.14f, maxHeight.value * 0.25f)).coerceIn(44f, 72f).sp
+                val mainFontSize = (minOf(maxWidth.value * 0.16f, maxHeight.value * 0.28f)).coerceIn(46f, 80f).sp
                 val centisFontSize = (mainFontSize.value * 0.52f).sp
 
                 Column(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.SpaceEvenly,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = colorScheme.secondaryContainer
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Timer,
-                                contentDescription = null,
-                                tint = colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "PRECISION STOPWATCH",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = colorScheme.onSecondaryContainer,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
                     val stopwatchGradientModifier = if (gradientColors != null) {
                         Modifier
                             .graphicsLayer(alpha = 0.99f)
@@ -717,6 +697,12 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                     Row(
                         verticalAlignment = Alignment.Bottom,
                         modifier = stopwatchGradientModifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable(enabled = canShowLapTimings) {
+                                haptics.tick()
+                                showLapDialog = true
+                            }
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         val formatted = formatDisplayTime(timeMillis)
                         Text(
@@ -734,43 +720,74 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                         )
                     }
 
-                    val count = laps.size
-                    val lapTextValue = if (count > 0) {
-                        val activeLapProgress = timeMillis - lastRecordedTime
-                        val activeFormatted = formatDisplayTime(activeLapProgress)
-                        "Lap ${count + 1} • ${activeFormatted.first}${activeFormatted.second}"
-                    } else {
-                        "Tap Split while running to record lap intervals"
-                    }
+                    if (laps.isNotEmpty() || (!isRunning && timeMillis > 0L)) {
+                        val count = laps.size
+                        val lapTextValue = when {
+                            isRunning && count > 0 -> {
+                                val activeLapProgress = (timeMillis - lastRecordedTime).coerceAtLeast(0L)
+                                val activeFormatted = formatDisplayTime(activeLapProgress)
+                                "Lap ${count + 1} • ${activeFormatted.first}${activeFormatted.second}"
+                            }
+                            !isRunning && count > 0 -> {
+                                val lastLapFormatted = formatDisplayTime(laps.last())
+                                "Lap $count • ${lastLapFormatted.first}${lastLapFormatted.second}"
+                            }
+                            else -> {
+                                val stoppedFormatted = formatDisplayTime(timeMillis)
+                                "Lap 1 • ${stoppedFormatted.first}${stoppedFormatted.second}"
+                            }
+                        }
 
-                    Surface(
-                        color = colorScheme.surfaceContainerHigh,
-                        shape = CircleShape,
-                        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(
-                                horizontal = if (isCompactHeight) 14.dp else 20.dp,
-                                vertical = if (isCompactHeight) 6.dp else 10.dp
+                        Surface(
+                            onClick = {
+                                if (!isRunning) {
+                                    haptics.tick()
+                                    showLapDialog = true
+                                }
+                            },
+                            enabled = !isRunning,
+                            color = if (!isRunning) colorScheme.secondaryContainer else colorScheme.surfaceContainerHigh,
+                            shape = CircleShape,
+                            border = BorderStroke(
+                                1.dp,
+                                if (!isRunning) accentColor.copy(alpha = 0.55f) else colorScheme.outlineVariant.copy(alpha = 0.5f)
                             ),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                            modifier = Modifier.testTag("stopwatch_lap_pill")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Flag,
-                                contentDescription = "Lap Indicator",
-                                tint = accentColor,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = lapTextValue,
-                                color = colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                modifier = Modifier.padding(
+                                    horizontal = if (isCompactHeight) 14.dp else 20.dp,
+                                    vertical = if (isCompactHeight) 6.dp else 10.dp
+                                ),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Flag,
+                                    contentDescription = "Lap Timings",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = lapTextValue,
+                                    color = if (!isRunning) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (!isRunning) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowUp,
+                                        contentDescription = "Show Lap Timings",
+                                        tint = colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -789,6 +806,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                 timeMillis = 0L
                                 laps.clear()
                                 lastRecordedTime = 0L
+                                showLapDialog = false
                             },
                             modifier = Modifier.size(sideBtnSize),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -827,16 +845,19 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                 if (isRunning) {
                                     haptics.tick()
                                     val nextLap = timeMillis
-                                    laps.add(nextLap - lastRecordedTime)
+                                    laps.add((nextLap - lastRecordedTime).coerceAtLeast(0L))
                                     lastRecordedTime = nextLap
+                                } else if (laps.isNotEmpty() || timeMillis > 0L) {
+                                    haptics.tick()
+                                    showLapDialog = true
                                 }
                             },
-                            enabled = isRunning,
+                            enabled = isRunning || laps.isNotEmpty() || timeMillis > 0L,
                             modifier = Modifier.size(sideBtnSize)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Flag,
-                                contentDescription = "Record Lap Split",
+                                contentDescription = if (isRunning) "Record Lap Split" else "View Lap Timings",
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -844,5 +865,171 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                 }
             }
         }
+    }
+
+    if (showLapDialog && !isRunning) {
+        val displayLaps = remember(laps.size, timeMillis, lastRecordedTime) {
+            val result = laps.toMutableList()
+            val unrecordedRemainder = timeMillis - lastRecordedTime
+            if (result.isEmpty() && timeMillis > 0L) {
+                result.add(timeMillis)
+            } else if (unrecordedRemainder > 0L) {
+                result.add(unrecordedRemainder)
+            }
+            result
+        }
+        val fastestIdx = if (displayLaps.size > 1) displayLaps.indices.minByOrNull { displayLaps[it] } else null
+        val slowestIdx = if (displayLaps.size > 1) displayLaps.indices.maxByOrNull { displayLaps[it] } else null
+
+        AlertDialog(
+            onDismissRequest = { showLapDialog = false },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = colorScheme.surfaceContainerHigh,
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Flag,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Lap Timings",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = colorScheme.onSurface,
+                            fontFamily = customFont,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    val totalFmt = formatDisplayTime(timeMillis)
+                    Surface(
+                        shape = CircleShape,
+                        color = colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = "${totalFmt.first}${totalFmt.second}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colorScheme.onSecondaryContainer,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    var cumulativeMillis = 0L
+                    displayLaps.forEachIndexed { idx, splitMillis ->
+                        cumulativeMillis += splitMillis
+                        val splitFmt = formatDisplayTime(splitMillis)
+                        val totalFmt = formatDisplayTime(cumulativeMillis)
+                        val isFastest = fastestIdx == idx
+                        val isSlowest = slowestIdx == idx && fastestIdx != slowestIdx
+
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = colorScheme.surfaceContainer,
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = when {
+                                    isFastest -> accentColor.copy(alpha = 0.6f)
+                                    isSlowest -> colorScheme.error.copy(alpha = 0.5f)
+                                    else -> colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                }
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Lap ${idx + 1}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colorScheme.onSurface,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (isFastest) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = accentColor.copy(alpha = 0.2f)
+                                        ) {
+                                            Text(
+                                                text = "FASTEST",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = accentColor,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else if (isSlowest) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = colorScheme.errorContainer
+                                        ) {
+                                            Text(
+                                                text = "SLOWEST",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = colorScheme.onErrorContainer,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "+${splitFmt.first}${splitFmt.second}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colorScheme.onSurface,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Total ${totalFmt.first}${totalFmt.second}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = colorScheme.onSurfaceVariant,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                FilledTonalButton(
+                    onClick = {
+                        haptics.tick()
+                        showLapDialog = false
+                    }
+                ) {
+                    Text("Done")
+                }
+            }
+        )
     }
 }

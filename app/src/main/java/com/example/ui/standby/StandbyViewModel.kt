@@ -12,8 +12,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -21,8 +24,10 @@ import java.util.Locale
 class StandbyViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val prefs = application.getSharedPreferences("standby_prefs", Context.MODE_PRIVATE)
+    private val alarmWriteMutex = Mutex()
 
     val alarms: StateFlow<List<Alarm>> = db.alarmDao().getAllAlarms()
+        .map { list -> list.distinctBy { it.hour to it.minute } }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -154,6 +159,21 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
+        viewModelScope.launch {
+            alarmWriteMutex.withLock {
+                try {
+                    val snapshot = db.alarmDao().getAllAlarmsSnapshot()
+                    val seen = mutableSetOf<Pair<Int, Int>>()
+                    for (alarm in snapshot) {
+                        val key = alarm.hour to alarm.minute
+                        if (!seen.add(key)) {
+                            db.alarmDao().delete(alarm)
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
         viewModelScope.launch {
             combine(alarms, use24HourFormat) { _, _ -> }.collect {
                 updateNextAlarm()
@@ -452,33 +472,56 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
 
     fun addAlarm(hour: Int, minute: Int, label: String, snooze: Int, toneUri: String = "alarm_beep") {
         viewModelScope.launch {
-            db.alarmDao().insert(
-                Alarm(
-                    hour = hour,
-                    minute = minute,
-                    label = label,
-                    snoozeMinutes = snooze,
-                    toneUri = toneUri
-                )
-            )
+            alarmWriteMutex.withLock {
+                val existing = db.alarmDao().getAlarmByTime(hour, minute)
+                if (existing != null) {
+                    db.alarmDao().update(
+                        existing.copy(
+                            isEnabled = true,
+                            label = label,
+                            snoozeMinutes = snooze,
+                            toneUri = toneUri
+                        )
+                    )
+                    db.alarmDao().deleteDuplicatesForTime(hour, minute, existing.id)
+                } else {
+                    db.alarmDao().insert(
+                        Alarm(
+                            hour = hour,
+                            minute = minute,
+                            isEnabled = true,
+                            label = label,
+                            snoozeMinutes = snooze,
+                            toneUri = toneUri
+                        )
+                    )
+                }
+            }
         }
     }
 
     fun updateAlarm(alarm: Alarm) {
         viewModelScope.launch {
-            db.alarmDao().update(alarm)
+            alarmWriteMutex.withLock {
+                db.alarmDao().update(alarm)
+            }
         }
     }
 
     fun toggleAlarm(alarm: Alarm) {
         viewModelScope.launch {
-            db.alarmDao().update(alarm.copy(isEnabled = !alarm.isEnabled))
+            alarmWriteMutex.withLock {
+                db.alarmDao().update(alarm.copy(isEnabled = !alarm.isEnabled))
+            }
         }
     }
 
     fun deleteAlarm(alarm: Alarm) {
         viewModelScope.launch {
-            db.alarmDao().delete(alarm)
+            alarmWriteMutex.withLock {
+                db.alarmDao().deleteDuplicatesForTime(alarm.hour, alarm.minute, alarm.id)
+                db.alarmDao().delete(alarm)
+            }
         }
     }
 }

@@ -1,14 +1,18 @@
 package com.example.ui.standby
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.AlarmAdd
@@ -20,17 +24,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.Alarm
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @Composable
 fun AlarmPage(
@@ -212,7 +221,7 @@ fun AlarmPage(
                             verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 8.dp else 12.dp),
                             contentPadding = PaddingValues(bottom = if (isCompactHeight) 48.dp else 64.dp)
                         ) {
-                            items(alarms, key = { it.id }) { alarm ->
+                            items(alarms, key = { "${it.hour}_${it.minute}_${it.id}" }) { alarm ->
                                 AlarmCard(
                                     alarm = alarm,
                                     use24Hour = use24Hour,
@@ -403,14 +412,17 @@ fun CustomAddAlarmDialog(
     val haptics = rememberStandbyHaptics()
     val colorScheme = MaterialTheme.colorScheme
 
-    val minHour = if (use24Hour) 0 else 1
-    val maxHour = if (use24Hour) 23 else 12
+    val hourValues = remember(use24Hour) {
+        if (use24Hour) (0..23).toList() else (1..12).toList()
+    }
+    val minuteValues = remember { (0..59).toList() }
 
     var pickedHour by remember { mutableIntStateOf(7) }
     var pickedMinute by remember { mutableIntStateOf(0) }
     var isAm by remember { mutableStateOf(true) }
     var alarmLabel by remember { mutableStateOf("Wake Up") }
     var snoozeMinutes by remember { mutableIntStateOf(5) }
+    var hasSubmitted by remember { mutableStateOf(false) }
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
@@ -424,6 +436,7 @@ fun CustomAddAlarmDialog(
         ) {
             val useTwoColumns = maxWidth > 500.dp && maxHeight < 480.dp
             val isVeryShort = maxHeight < 360.dp
+            val wheelItemHeight = if (isVeryShort) 38.dp else 44.dp
 
             Surface(
                 shape = RoundedCornerShape(28.dp),
@@ -435,8 +448,7 @@ fun CustomAddAlarmDialog(
             ) {
                 Column(
                     modifier = Modifier
-                        .padding(horizontal = 20.dp, vertical = if (isVeryShort) 12.dp else 18.dp)
-                        .verticalScroll(rememberScrollState()),
+                        .padding(horizontal = 20.dp, vertical = if (isVeryShort) 12.dp else 18.dp),
                     verticalArrangement = Arrangement.spacedBy(if (isVeryShort) 10.dp else 14.dp)
                 ) {
                     Row(
@@ -456,7 +468,10 @@ fun CustomAddAlarmDialog(
                                 Text("Cancel", fontFamily = customFont)
                             }
                             Button(
+                                enabled = !hasSubmitted,
                                 onClick = {
+                                    if (hasSubmitted) return@Button
+                                    hasSubmitted = true
                                     val finalHour = if (use24Hour) {
                                         pickedHour
                                     } else {
@@ -467,7 +482,8 @@ fun CustomAddAlarmDialog(
                                         }
                                     }
                                     onConfirm(finalHour, pickedMinute, alarmLabel, snoozeMinutes)
-                                }
+                                },
+                                modifier = Modifier.testTag("save_alarm_button")
                             ) {
                                 Text("Save Alarm", fontFamily = customFont)
                             }
@@ -480,121 +496,28 @@ fun CustomAddAlarmDialog(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Left Column: Time Picker Dial
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = colorScheme.surfaceContainer,
-                                border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            // Left Column: Scrollable Haptic Wheel Time Dial
+                            ScrollableTimeDialCard(
+                                hourValues = hourValues,
+                                minuteValues = minuteValues,
+                                pickedHour = pickedHour,
+                                pickedMinute = pickedMinute,
+                                isAm = isAm,
+                                use24Hour = use24Hour,
+                                customFont = customFont,
+                                accentColor = accentColor,
+                                itemHeight = wheelItemHeight,
+                                onHourChanged = { pickedHour = it },
+                                onMinuteChanged = { pickedMinute = it },
+                                onAmChanged = { isAm = it },
                                 modifier = Modifier.weight(1f)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 10.dp, horizontal = 12.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.width(64.dp)
-                                    ) {
-                                        FilledTonalIconButton(
-                                            onClick = {
-                                                haptics.tick()
-                                                pickedHour = if (pickedHour == maxHour) minHour else pickedHour + 1
-                                            },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Hour")
-                                        }
-                                        Text(
-                                            text = String.format("%02d", pickedHour),
-                                            color = colorScheme.onSurface,
-                                            fontSize = 32.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = customFont,
-                                            maxLines = 1,
-                                            modifier = Modifier.padding(vertical = 2.dp)
-                                        )
-                                        FilledTonalIconButton(
-                                            onClick = {
-                                                haptics.tick()
-                                                pickedHour = if (pickedHour == minHour) maxHour else pickedHour - 1
-                                            },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Hour")
-                                        }
-                                    }
-
-                                    Text(
-                                        text = ":",
-                                        color = colorScheme.primary,
-                                        fontSize = 28.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp)
-                                    )
-
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.width(64.dp)
-                                    ) {
-                                        FilledTonalIconButton(
-                                            onClick = {
-                                                haptics.tick()
-                                                pickedMinute = (pickedMinute + 1) % 60
-                                            },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Minute")
-                                        }
-                                        Text(
-                                            text = String.format("%02d", pickedMinute),
-                                            color = colorScheme.onSurface,
-                                            fontSize = 32.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = customFont,
-                                            maxLines = 1,
-                                            modifier = Modifier.padding(vertical = 2.dp)
-                                        )
-                                        FilledTonalIconButton(
-                                            onClick = {
-                                                haptics.tick()
-                                                pickedMinute = if (pickedMinute == 0) 59 else pickedMinute - 1
-                                            },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Minute")
-                                        }
-                                    }
-
-                                    if (!use24Hour) {
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            FilterChip(
-                                                selected = isAm,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    isAm = true
-                                                },
-                                                label = { Text("AM", fontWeight = FontWeight.Bold) }
-                                            )
-                                            FilterChip(
-                                                selected = !isAm,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    isAm = false
-                                                },
-                                                label = { Text("PM", fontWeight = FontWeight.Bold) }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            )
 
                             // Right Column: Label + Snooze
                             Column(
-                                modifier = Modifier.weight(1.1f),
+                                modifier = Modifier
+                                    .weight(1.1f)
+                                    .verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 OutlinedTextField(
@@ -634,114 +557,21 @@ fun CustomAddAlarmDialog(
                         }
                     } else {
                         // Single Column Fallback for Portrait / Tall Screens
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = colorScheme.surfaceContainer,
-                            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        ScrollableTimeDialCard(
+                            hourValues = hourValues,
+                            minuteValues = minuteValues,
+                            pickedHour = pickedHour,
+                            pickedMinute = pickedMinute,
+                            isAm = isAm,
+                            use24Hour = use24Hour,
+                            customFont = customFont,
+                            accentColor = accentColor,
+                            itemHeight = wheelItemHeight,
+                            onHourChanged = { pickedHour = it },
+                            onMinuteChanged = { pickedMinute = it },
+                            onAmChanged = { isAm = it },
                             modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 12.dp, horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.width(72.dp)
-                                ) {
-                                    FilledTonalIconButton(
-                                        onClick = {
-                                            haptics.tick()
-                                            pickedHour = if (pickedHour == maxHour) minHour else pickedHour + 1
-                                        },
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Hour")
-                                    }
-                                    Text(
-                                        text = String.format("%02d", pickedHour),
-                                        color = colorScheme.onSurface,
-                                        fontSize = 36.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = customFont,
-                                        modifier = Modifier.padding(vertical = 4.dp)
-                                    )
-                                    FilledTonalIconButton(
-                                        onClick = {
-                                            haptics.tick()
-                                            pickedHour = if (pickedHour == minHour) maxHour else pickedHour - 1
-                                        },
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Hour")
-                                    }
-                                }
-
-                                Text(
-                                    text = ":",
-                                    color = colorScheme.primary,
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp)
-                                )
-
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.width(72.dp)
-                                ) {
-                                    FilledTonalIconButton(
-                                        onClick = {
-                                            haptics.tick()
-                                            pickedMinute = (pickedMinute + 1) % 60
-                                        },
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Minute")
-                                    }
-                                    Text(
-                                        text = String.format("%02d", pickedMinute),
-                                        color = colorScheme.onSurface,
-                                        fontSize = 36.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = customFont,
-                                        modifier = Modifier.padding(vertical = 4.dp)
-                                    )
-                                    FilledTonalIconButton(
-                                        onClick = {
-                                            haptics.tick()
-                                            pickedMinute = if (pickedMinute == 0) 59 else pickedMinute - 1
-                                        },
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Minute")
-                                    }
-                                }
-
-                                if (!use24Hour) {
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        FilterChip(
-                                            selected = isAm,
-                                            onClick = {
-                                                haptics.tick()
-                                                isAm = true
-                                            },
-                                            label = { Text("AM", fontWeight = FontWeight.Bold) }
-                                        )
-                                        FilterChip(
-                                            selected = !isAm,
-                                            onClick = {
-                                                haptics.tick()
-                                                isAm = false
-                                            },
-                                            label = { Text("PM", fontWeight = FontWeight.Bold) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        )
 
                         OutlinedTextField(
                             value = alarmLabel,
@@ -780,5 +610,249 @@ fun CustomAddAlarmDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ScrollableTimeDialCard(
+    hourValues: List<Int>,
+    minuteValues: List<Int>,
+    pickedHour: Int,
+    pickedMinute: Int,
+    isAm: Boolean,
+    use24Hour: Boolean,
+    customFont: FontFamily,
+    accentColor: Color,
+    itemHeight: Dp,
+    onHourChanged: (Int) -> Unit,
+    onMinuteChanged: (Int) -> Unit,
+    onAmChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
+
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp, horizontal = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            WheelNumberDial(
+                values = hourValues,
+                selectedValue = pickedHour,
+                onValueSelected = onHourChanged,
+                customFont = customFont,
+                accentColor = accentColor,
+                itemHeight = itemHeight,
+                testTag = "alarm_hour_wheel",
+                modifier = Modifier.width(68.dp)
+            )
+
+            Text(
+                text = ":",
+                color = accentColor,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = customFont,
+                modifier = Modifier.padding(horizontal = 6.dp)
+            )
+
+            WheelNumberDial(
+                values = minuteValues,
+                selectedValue = pickedMinute,
+                onValueSelected = onMinuteChanged,
+                customFont = customFont,
+                accentColor = accentColor,
+                itemHeight = itemHeight,
+                testTag = "alarm_minute_wheel",
+                modifier = Modifier.width(68.dp)
+            )
+
+            if (!use24Hour) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(
+                        selected = isAm,
+                        onClick = {
+                            haptics.tick()
+                            onAmChanged(true)
+                        },
+                        label = { Text("AM", fontWeight = FontWeight.Bold) }
+                    )
+                    FilterChip(
+                        selected = !isAm,
+                        onClick = {
+                            haptics.tick()
+                            onAmChanged(false)
+                        },
+                        label = { Text("PM", fontWeight = FontWeight.Bold) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun WheelNumberDial(
+    values: List<Int>,
+    selectedValue: Int,
+    onValueSelected: (Int) -> Unit,
+    customFont: FontFamily,
+    accentColor: Color,
+    itemHeight: Dp,
+    testTag: String,
+    modifier: Modifier = Modifier
+) {
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
+    val coroutineScope = rememberCoroutineScope()
+
+    val itemCount = values.size.coerceAtLeast(1)
+    val virtualCount = itemCount * 1000
+    val middleBase = (virtualCount / 2) - ((virtualCount / 2) % itemCount)
+    val initialOffset = values.indexOf(selectedValue).coerceAtLeast(0)
+    val initialIndex = middleBase + initialOffset
+
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+
+    val centerIndex by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            if (layoutInfo.visibleItemsInfo.isEmpty()) {
+                initialIndex
+            } else {
+                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                layoutInfo.visibleItemsInfo.minByOrNull { item ->
+                    abs((item.offset + item.size / 2) - viewportCenter)
+                }?.index ?: initialIndex
+            }
+        }
+    }
+
+    var hasInitialized by remember { mutableStateOf(false) }
+    LaunchedEffect(centerIndex) {
+        val currentVal = values[centerIndex.mod(itemCount)]
+        if (!hasInitialized) {
+            hasInitialized = true
+        } else {
+            haptics.step()
+            if (currentVal != selectedValue) {
+                onValueSelected(currentVal)
+            }
+        }
+    }
+
+    val wheelHeight = itemHeight * 3
+
+    Box(
+        modifier = modifier
+            .height(wheelHeight)
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        // Center selection highlight frame so the active slot stands out against faded dial numbers
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(itemHeight),
+            shape = RoundedCornerShape(12.dp),
+            color = colorScheme.secondaryContainer.copy(alpha = 0.55f),
+            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f))
+        ) {}
+
+        LazyColumn(
+            state = listState,
+            flingBehavior = flingBehavior,
+            contentPadding = PaddingValues(vertical = itemHeight),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(count = virtualCount, key = { it }) { index ->
+                val number = values[index.mod(itemCount)]
+                val isCenter = index == centerIndex
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight)
+                        .graphicsLayer {
+                            val layoutInfo = listState.layoutInfo
+                            val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                            if (itemInfo != null && itemInfo.size > 0) {
+                                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+                                val itemCenter = itemInfo.offset + itemInfo.size / 2f
+                                val normalizedDistance = (abs(itemCenter - viewportCenter) / itemInfo.size.toFloat()).coerceIn(0f, 1.5f)
+                                alpha = (1f - normalizedDistance * 0.65f).coerceIn(0.22f, 1f)
+                                val scale = (1.08f - normalizedDistance * 0.26f).coerceIn(0.74f, 1.08f)
+                                scaleX = scale
+                                scaleY = scale
+                                rotationX = ((viewportCenter - itemCenter) / itemInfo.size.toFloat() * 24f).coerceIn(-32f, 32f)
+                            } else {
+                                alpha = if (isCenter) 1f else 0.28f
+                            }
+                        }
+                        .clickable {
+                            if (index != centerIndex) {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(index)
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = String.format("%02d", number),
+                        color = if (isCenter) colorScheme.onSurface else colorScheme.onSurfaceVariant,
+                        fontSize = if (isCenter) 28.sp else 21.sp,
+                        fontWeight = if (isCenter) FontWeight.ExtraBold else FontWeight.Medium,
+                        fontFamily = customFont,
+                        maxLines = 1,
+                        softWrap = false,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        // Top & Bottom soft gradient fade overlays to reinforce the curved scrollable dial look
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(itemHeight * 0.85f)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            colorScheme.surfaceContainer,
+                            colorScheme.surfaceContainer.copy(alpha = 0f)
+                        )
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(itemHeight * 0.85f)
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            colorScheme.surfaceContainer.copy(alpha = 0f),
+                            colorScheme.surfaceContainer
+                        )
+                    )
+                )
+        )
     }
 }
