@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -552,55 +553,68 @@ fun TopAppBarOverlay(
         "Duo" to Icons.Outlined.ViewColumn
     )
 
-    Surface(
-        color = colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
-        shape = CircleShape,
-        tonalElevation = 6.dp,
-        shadowElevation = 8.dp,
-        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        modifier = Modifier.padding(horizontal = 24.dp)
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items.forEachIndexed { index, (title, icon) ->
-                val isActive = currentPage == index
-                val containerColor by animateColorAsState(
-                    targetValue = if (isActive) colorScheme.secondaryContainer else Color.Transparent,
-                    label = "navPillBg"
-                )
-                val contentColor by animateColorAsState(
-                    targetValue = if (isActive) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
-                    label = "navPillFg"
-                )
+        val isCompactWidth = maxWidth < 600.dp
+        val itemHPad = if (isCompactWidth) 10.dp else 14.dp
+        val itemVPad = if (isCompactWidth) 6.dp else 8.dp
 
-                Surface(
-                    shape = CircleShape,
-                    color = containerColor,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable { onPageSelected(index) }
-                        .testTag("top_nav_tab_$index")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        Surface(
+            color = colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
+            shape = CircleShape,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.45f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items.forEachIndexed { index, (title, icon) ->
+                    val isActive = currentPage == index
+                    val containerColor by animateColorAsState(
+                        targetValue = if (isActive) colorScheme.secondaryContainer else Color.Transparent,
+                        label = "navPillBg"
+                    )
+                    val contentColor by animateColorAsState(
+                        targetValue = if (isActive) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                        label = "navPillFg"
+                    )
+
+                    Surface(
+                        shape = CircleShape,
+                        color = containerColor,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { onPageSelected(index) }
+                            .testTag("top_nav_tab_$index")
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = title,
-                            tint = contentColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = title,
-                            color = contentColor,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = itemHPad, vertical = itemVPad),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = title,
+                                tint = contentColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = title,
+                                color = contentColor,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
@@ -622,16 +636,16 @@ fun VerticalThemeIndicator(
         border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.4f))
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             for (i in 0 until pageCount) {
                 val isSelected = i == currentIndex
-                val height by animateDpAsState(targetValue = if (isSelected) 18.dp else 8.dp, label = "dotHeight")
+                val height by animateDpAsState(targetValue = if (isSelected) 15.dp else 6.dp, label = "dotHeight")
                 Box(
                     modifier = Modifier
-                        .size(width = 8.dp, height = height)
+                        .size(width = 6.dp, height = height)
                         .clip(CircleShape)
                         .background(
                             if (isSelected) colorScheme.primary
@@ -692,148 +706,172 @@ fun StandbyCustomizationDialog(
                 .systemBarsPadding(),
             color = colorScheme.surface
         ) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                // LEFT PANE: Material 3 NavigationRail optimized for landscape ergonomics
-                NavigationRail(
-                    containerColor = colorScheme.surfaceContainerLow,
-                    contentColor = colorScheme.onSurface,
-                    header = {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp, start = 12.dp, end = 12.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = colorScheme.primaryContainer
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Tune,
-                                    contentDescription = "Studio Hub",
-                                    tint = colorScheme.onPrimaryContainer,
-                                    modifier = Modifier
-                                        .padding(10.dp)
-                                        .size(22.dp)
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val isCompactHeight = maxHeight < 380.dp
+                val isCompactWidth = maxWidth < 620.dp
+                val railWidth = if (isCompactWidth) 88.dp else 108.dp
+                val contentHPad = if (isCompactWidth) 16.dp else 28.dp
+                val contentVPad = if (isCompactHeight) 12.dp else 20.dp
+
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // LEFT PANE: Material 3 NavigationRail optimized for landscape ergonomics
+                    NavigationRail(
+                        containerColor = colorScheme.surfaceContainerLow,
+                        contentColor = colorScheme.onSurface,
+                        header = {
+                            if (!isCompactHeight) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(top = 10.dp, bottom = 6.dp, start = 8.dp, end = 8.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = colorScheme.primaryContainer
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Tune,
+                                            contentDescription = "Studio Hub",
+                                            tint = colorScheme.onPrimaryContainer,
+                                            modifier = Modifier
+                                                .padding(8.dp)
+                                                .size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Studio",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = colorScheme.onSurface,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "Studio",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Studio",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(108.dp)
-                ) {
-                    Column(
+                        },
                         modifier = Modifier
                             .fillMaxHeight()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .width(railWidth)
                     ) {
-                        tabItems.forEachIndexed { idx, (title, _, icon) ->
-                            val isSelected = activeTab == idx
-                            NavigationRailItem(
-                                selected = isSelected,
-                                onClick = {
-                                    haptics.tick()
-                                    activeTab = idx
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = title
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1
-                                    )
-                                },
-                                alwaysShowLabel = true,
-                                modifier = Modifier.testTag("studio_rail_tab_$idx")
-                            )
-                        }
-                    }
-                }
-
-                VerticalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                // RIGHT PANE: Material 3 Tonal Settings Deck
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .padding(horizontal = 28.dp, vertical = 20.dp)
-                ) {
-                    // Header Bar
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = pageColor.copy(alpha = 0.2f),
-                                border = BorderStroke(1.dp, pageColor.copy(alpha = 0.5f))
-                            ) {
-                                Text(
-                                    text = "0${activeTab + 1}",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "${tabItems[activeTab].first} Settings",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    color = colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = tabItems[activeTab].second,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = colorScheme.onSurfaceVariant
+                            tabItems.forEachIndexed { idx, (title, _, icon) ->
+                                val isSelected = activeTab == idx
+                                NavigationRailItem(
+                                    selected = isSelected,
+                                    onClick = {
+                                        haptics.tick()
+                                        activeTab = idx
+                                    },
+                                    icon = {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = title
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1
+                                        )
+                                    },
+                                    alwaysShowLabel = true,
+                                    modifier = Modifier.testTag("studio_rail_tab_$idx")
                                 )
                             }
                         }
-
-                        FilledTonalButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.testTag("studio_apply_close_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Done")
-                        }
                     }
 
-                    // Scrollable Material 3 Cards
+                    VerticalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    // RIGHT PANE: Material 3 Tonal Settings Deck
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                            .fillMaxHeight()
+                            .padding(horizontal = contentHPad, vertical = contentVPad)
                     ) {
+                        // Header Bar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = if (isCompactHeight) 10.dp else 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = pageColor.copy(alpha = 0.2f),
+                                    border = BorderStroke(1.dp, pageColor.copy(alpha = 0.5f))
+                                ) {
+                                    Text(
+                                        text = "0${activeTab + 1}",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = colorScheme.onSurface,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "${tabItems[activeTab].first} Settings",
+                                        style = if (isCompactHeight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+                                        color = colorScheme.onSurface,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = tabItems[activeTab].second,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            FilledTonalButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.testTag("studio_apply_close_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Done")
+                            }
+                        }
+
+                        // Scrollable Material 3 Cards
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 12.dp else 16.dp)
+                        ) {
                         // 1. Interface Color Accent Card
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
@@ -1279,14 +1317,18 @@ fun StandbyCustomizationDialog(
                                 containerColor = colorScheme.surfaceContainerLow
                             )
                         ) {
-                            Row(
+                            FlowRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(18.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 12.dp)
+                                ) {
                                     Text(
                                         text = "Custom Backdrop Image",
                                         style = MaterialTheme.typography.titleMedium,
@@ -1300,7 +1342,10 @@ fun StandbyCustomizationDialog(
                                     )
                                 }
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     if (bgUri != null) {
                                         OutlinedButton(
                                             onClick = {
@@ -1327,6 +1372,7 @@ fun StandbyCustomizationDialog(
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }

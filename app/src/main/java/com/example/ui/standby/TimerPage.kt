@@ -9,8 +9,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Timer
@@ -30,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -75,22 +78,22 @@ fun TimerPage(
             Surface(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 14.dp),
+                    .padding(end = 10.dp),
                 shape = CircleShape,
                 color = colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
                 tonalElevation = 4.dp,
                 border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.4f))
             ) {
                 Column(
-                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 7.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     for (i in 0 until 2) {
                         val isSelected = pagerState.currentPage == i
                         Box(
                             modifier = Modifier
-                                .size(width = 8.dp, height = if (isSelected) 18.dp else 8.dp)
+                                .size(width = 7.dp, height = if (isSelected) 16.dp else 7.dp)
                                 .clip(CircleShape)
                                 .background(
                                     if (isSelected) colorScheme.primary
@@ -179,11 +182,17 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
         }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.surface)
     ) {
+        val isCompactHeight = maxHeight < 380.dp
+        val isCompactWidth = maxWidth < 640.dp
+        val outerHPad = if (isCompactWidth) 20.dp else 36.dp
+        val outerVPad = if (isCompactHeight) 12.dp else 20.dp
+        val paneSpacing = if (isCompactWidth) 14.dp else 24.dp
+
         if (bgUri != null) {
             coil.compose.AsyncImage(
                 model = bgUri,
@@ -197,51 +206,60 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 36.dp, vertical = 20.dp),
+                .padding(start = outerHPad, end = outerHPad + 12.dp, top = outerVPad, bottom = outerVPad),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(24.dp)
+            horizontalArrangement = Arrangement.spacedBy(paneSpacing)
         ) {
             // Left Pane: Material 3 Circular Countdown Dial
             ElevatedCard(
                 modifier = Modifier
-                    .weight(1.1f)
+                    .weight(1.08f)
                     .fillMaxHeight(),
                 shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.elevatedCardColors(
                     containerColor = colorScheme.surfaceContainerLow
                 )
             ) {
-                Box(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .padding(if (isCompactHeight) 10.dp else 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    val dialSize = (minOf(maxWidth, maxHeight) * 0.94f).coerceIn(160.dp, 280.dp)
+                    val isSmallDial = dialSize < 230.dp
+                    val timerFontSize = (dialSize.value * 0.205f).coerceIn(32f, 56f).sp
+                    val iconBtnSize = if (isSmallDial) 36.dp else 44.dp
+                    val iconSize = if (isSmallDial) 16.dp else 20.dp
+                    val strokeWidthDp = if (isSmallDial) 8.dp else 10.dp
+
                     Box(
-                        modifier = Modifier.size(276.dp),
+                        modifier = Modifier.size(dialSize),
                         contentAlignment = Alignment.Center
                     ) {
                         val progress = if (initialSeconds > 0) secondsLeft.toFloat() / initialSeconds.toFloat() else 1f
                         val trackColor = colorScheme.surfaceContainerHighest
 
                         Canvas(modifier = Modifier.fillMaxSize()) {
+                            val strokePx = strokeWidthDp.toPx()
                             drawCircle(
                                 color = trackColor,
-                                radius = size.minDimension / 2f,
-                                style = Stroke(width = 10.dp.toPx())
+                                radius = (size.minDimension - strokePx) / 2f,
+                                style = Stroke(width = strokePx)
                             )
                             drawArc(
                                 color = accentColor,
                                 startAngle = -90f,
                                 sweepAngle = 360f * progress,
                                 useCenter = false,
-                                style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
+                                style = Stroke(width = strokePx, cap = StrokeCap.Round)
                             )
                         }
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = strokeWidthDp + 8.dp)
                         ) {
                             val minutes = secondsLeft / 60
                             val secs = secondsLeft % 60
@@ -249,7 +267,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
 
                             val pomodoroTextStyle = androidx.compose.ui.text.TextStyle(
                                 color = if (gradientColors == null && !outlineVal) colorScheme.onSurface else Color.Unspecified,
-                                fontSize = 58.sp,
+                                fontSize = timerFontSize,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = customFont,
                                 drawStyle = if (outlineVal) Stroke(width = 3f) else androidx.compose.ui.graphics.drawscope.Fill,
@@ -276,26 +294,28 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                             Text(
                                 text = timerString,
                                 style = pomodoroTextStyle,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = textGradientModifier
                             )
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(if (isSmallDial) 8.dp else 14.dp))
 
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(if (isSmallDial) 6.dp else 10.dp)
                             ) {
                                 FilledTonalIconButton(
                                     onClick = {
                                         haptics.tick()
                                         showConfigDialog = true
                                     },
-                                    modifier = Modifier.size(44.dp)
+                                    modifier = Modifier.size(iconBtnSize)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Tune,
                                         contentDescription = "Set Focus Duration",
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(iconSize)
                                     )
                                 }
 
@@ -304,22 +324,27 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         haptics.confirm()
                                         isRunning = !isRunning
                                     },
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = RoundedCornerShape(18.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = accentColor,
                                         contentColor = if (accentColor == Color.White) Color.Black else Color.White
                                     ),
-                                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                                    contentPadding = PaddingValues(
+                                        horizontal = if (isSmallDial) 12.dp else 20.dp,
+                                        vertical = if (isSmallDial) 6.dp else 10.dp
+                                    )
                                 ) {
                                     Icon(
                                         imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
                                         contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(if (isSmallDial) 15.dp else 18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = if (isRunning) "Pause" else "Start",
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = if (isSmallDial) 12.sp else 14.sp,
+                                        maxLines = 1
                                     )
                                 }
 
@@ -329,12 +354,12 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         isRunning = false
                                         secondsLeft = initialSeconds
                                     },
-                                    modifier = Modifier.size(44.dp)
+                                    modifier = Modifier.size(iconBtnSize)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
                                         contentDescription = "Reset Timer",
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(iconSize)
                                     )
                                 }
                             }
@@ -353,98 +378,110 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                     containerColor = colorScheme.surfaceContainerLow
                 )
             ) {
-                Column(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.Start
+                        .padding(if (isCompactHeight) 16.dp else 24.dp),
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = colorScheme.secondaryContainer
+                    val stepBtnSize = ((maxWidth - 20.dp) / 8.5f).coerceIn(22.dp, 36.dp)
+                    val stepIconSize = (stepBtnSize * 0.5f).coerceIn(12.dp, 18.dp)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.Start
                     ) {
-                        Text(
-                            text = "POMODORO MATRIX",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colorScheme.onSecondaryContainer,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = getSegmentLabel(currentSegmentIndex),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = colorScheme.onSurface,
-                        fontFamily = customFont,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    val focusCompletedCount = currentSegmentIndex / 2
-                    Text(
-                        text = "$focusCompletedCount of 4 focus intervals completed • ${focusMinutes}m per round",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
-                    )
-
-                    Surface(
-                        color = colorScheme.surfaceContainer,
-                        shape = RoundedCornerShape(18.dp),
-                        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Surface(
+                            shape = CircleShape,
+                            color = colorScheme.secondaryContainer
                         ) {
-                            listOf(
-                                Icons.Default.Adjust to "P1",
-                                Icons.Default.Coffee to "B1",
-                                Icons.Default.Adjust to "P2",
-                                Icons.Default.Coffee to "B2",
-                                Icons.Default.Adjust to "P3",
-                                Icons.Default.Coffee to "B3",
-                                Icons.Default.Adjust to "P4",
-                                Icons.Default.DirectionsRun to "L"
-                            ).forEachIndexed { index, (icon, label) ->
-                                val isCompleted = index < currentSegmentIndex
-                                val isCurrent = index == currentSegmentIndex
+                            Text(
+                                text = "POMODORO MATRIX",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colorScheme.onSecondaryContainer,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                            )
+                        }
 
-                                Surface(
-                                    onClick = {
-                                        haptics.tick()
-                                        isRunning = false
-                                        currentSegmentIndex = index
-                                        val duration = getDurationForSegment(index, focusMinutes)
-                                        initialSeconds = duration
-                                        secondsLeft = duration
-                                    },
-                                    modifier = Modifier.size(36.dp),
-                                    shape = CircleShape,
-                                    color = when {
-                                        isCurrent -> accentColor
-                                        isCompleted -> colorScheme.secondaryContainer
-                                        else -> Color.Transparent
-                                    }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = label,
-                                            tint = when {
-                                                isCurrent -> if (accentColor == Color.White) Color.Black else Color.White
-                                                isCompleted -> colorScheme.onSecondaryContainer
-                                                else -> colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                            },
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                        Spacer(modifier = Modifier.height(if (isCompactHeight) 8.dp else 12.dp))
+
+                        Text(
+                            text = getSegmentLabel(currentSegmentIndex),
+                            style = if (isCompactHeight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+                            color = colorScheme.onSurface,
+                            fontFamily = customFont,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        val focusCompletedCount = currentSegmentIndex / 2
+                        Text(
+                            text = "$focusCompletedCount of 4 focus intervals completed • ${focusMinutes}m per round",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = if (isCompactHeight) 12.dp else 18.dp)
+                        )
+
+                        Surface(
+                            color = colorScheme.surfaceContainer,
+                            shape = RoundedCornerShape(18.dp),
+                            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf(
+                                    Icons.Default.Adjust to "P1",
+                                    Icons.Default.Coffee to "B1",
+                                    Icons.Default.Adjust to "P2",
+                                    Icons.Default.Coffee to "B2",
+                                    Icons.Default.Adjust to "P3",
+                                    Icons.Default.Coffee to "B3",
+                                    Icons.Default.Adjust to "P4",
+                                    Icons.Default.DirectionsRun to "L"
+                                ).forEachIndexed { index, (icon, label) ->
+                                    val isCompleted = index < currentSegmentIndex
+                                    val isCurrent = index == currentSegmentIndex
+
+                                    Surface(
+                                        onClick = {
+                                            haptics.tick()
+                                            isRunning = false
+                                            currentSegmentIndex = index
+                                            val duration = getDurationForSegment(index, focusMinutes)
+                                            initialSeconds = duration
+                                            secondsLeft = duration
+                                        },
+                                        modifier = Modifier.size(stepBtnSize),
+                                        shape = CircleShape,
+                                        color = when {
+                                            isCurrent -> accentColor
+                                            isCompleted -> colorScheme.secondaryContainer
+                                            else -> Color.Transparent
+                                        }
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = label,
+                                                tint = when {
+                                                    isCurrent -> if (accentColor == Color.White) Color.Black else Color.White
+                                                    isCompleted -> colorScheme.onSecondaryContainer
+                                                    else -> colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                                },
+                                                modifier = Modifier.size(stepIconSize)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -469,7 +506,10 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
                         text = "Choose your preferred Pomodoro duration:",
                         style = MaterialTheme.typography.bodyMedium,
@@ -498,7 +538,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -574,13 +614,16 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
         return Pair(mainText, centisText)
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(colorScheme.surface)
-            .padding(horizontal = 36.dp, vertical = 20.dp),
+            .background(colorScheme.surface),
         contentAlignment = Alignment.Center
     ) {
+        val isCompactHeight = maxHeight < 380.dp
+        val outerHPad = if (maxWidth < 640.dp) 20.dp else 36.dp
+        val outerVPad = if (isCompactHeight) 12.dp else 20.dp
+
         if (bgUri != null) {
             coil.compose.AsyncImage(
                 model = bgUri,
@@ -592,186 +635,211 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
         }
 
         ElevatedCard(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = outerHPad, end = outerHPad + 12.dp, top = outerVPad, bottom = outerVPad),
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.elevatedCardColors(
                 containerColor = colorScheme.surfaceContainerLow
             )
         ) {
-            Column(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(if (isCompactHeight) 16.dp else 24.dp)
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = colorScheme.secondaryContainer
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Timer,
-                            contentDescription = null,
-                            tint = colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "PRECISION STOPWATCH",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colorScheme.onSecondaryContainer,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                val mainFontSize = (minOf(maxWidth.value * 0.14f, maxHeight.value * 0.25f)).coerceIn(44f, 72f).sp
+                val centisFontSize = (mainFontSize.value * 0.52f).sp
 
-                val stopwatchGradientModifier = if (gradientColors != null) {
-                    Modifier
-                        .graphicsLayer(alpha = 0.99f)
-                        .drawWithCache {
-                            val brush = Brush.linearGradient(gradientColors)
-                            onDrawWithContent {
-                                drawContent()
-                                drawRect(brush, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
-                            }
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = colorScheme.secondaryContainer
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Timer,
+                                contentDescription = null,
+                                tint = colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "PRECISION STOPWATCH",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colorScheme.onSecondaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                } else Modifier
-
-                val mainTextStyle = androidx.compose.ui.text.TextStyle(
-                    color = if (gradientColors == null && !outlineVal) colorScheme.onSurface else Color.Unspecified,
-                    fontSize = 72.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = customFont,
-                    drawStyle = if (outlineVal) Stroke(width = 3f) else androidx.compose.ui.graphics.drawscope.Fill,
-                    shadow = if (glowVal && !outlineVal) {
-                        androidx.compose.ui.graphics.Shadow(
-                            color = accentColor.copy(alpha = 0.5f),
-                            offset = Offset(0f, 0f),
-                            blurRadius = 18f
-                        )
-                    } else null
-                )
-                val centisTextStyle = androidx.compose.ui.text.TextStyle(
-                    color = if (gradientColors == null && !outlineVal) accentColor else Color.Unspecified,
-                    fontSize = 38.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = customFont,
-                    drawStyle = if (outlineVal) Stroke(width = 2.5f) else androidx.compose.ui.graphics.drawscope.Fill
-                )
-
-                Row(
-                    verticalAlignment = Alignment.Bottom,
-                    modifier = stopwatchGradientModifier
-                ) {
-                    val formatted = formatDisplayTime(timeMillis)
-                    Text(text = formatted.first, style = mainTextStyle)
-                    Text(
-                        text = formatted.second,
-                        style = centisTextStyle,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-
-                val count = laps.size
-                val lapTextValue = if (count > 0) {
-                    val activeLapProgress = timeMillis - lastRecordedTime
-                    val activeFormatted = formatDisplayTime(activeLapProgress)
-                    "Lap ${count + 1} • ${activeFormatted.first}${activeFormatted.second}"
-                } else {
-                    "Tap Split while running to record lap intervals"
-                }
-
-                Surface(
-                    color = colorScheme.surfaceContainerHigh,
-                    shape = CircleShape,
-                    border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Flag,
-                            contentDescription = "Lap Indicator",
-                            tint = accentColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = lapTextValue,
-                            color = colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledTonalIconButton(
-                        onClick = {
-                            haptics.tick()
-                            isRunning = false
-                            timeMillis = 0L
-                            laps.clear()
-                            lastRecordedTime = 0L
-                        },
-                        modifier = Modifier.size(56.dp),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = colorScheme.errorContainer,
-                            contentColor = colorScheme.onErrorContainer
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reset Stopwatch",
-                            modifier = Modifier.size(24.dp)
-                        )
                     }
 
-                    FilledIconButton(
-                        onClick = {
-                            haptics.confirm()
-                            isRunning = !isRunning
-                        },
-                        modifier = Modifier.size(width = 88.dp, height = 64.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = accentColor,
-                            contentColor = if (accentColor == Color.White) Color.Black else Color.White
-                        )
-                    ) {
-                        Icon(
-                            imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Toggle Stopwatch",
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = {
-                            if (isRunning) {
-                                haptics.tick()
-                                val nextLap = timeMillis
-                                laps.add(nextLap - lastRecordedTime)
-                                lastRecordedTime = nextLap
+                    val stopwatchGradientModifier = if (gradientColors != null) {
+                        Modifier
+                            .graphicsLayer(alpha = 0.99f)
+                            .drawWithCache {
+                                val brush = Brush.linearGradient(gradientColors)
+                                onDrawWithContent {
+                                    drawContent()
+                                    drawRect(brush, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                                }
                             }
-                        },
-                        enabled = isRunning,
-                        modifier = Modifier.size(56.dp)
+                    } else Modifier
+
+                    val mainTextStyle = androidx.compose.ui.text.TextStyle(
+                        color = if (gradientColors == null && !outlineVal) colorScheme.onSurface else Color.Unspecified,
+                        fontSize = mainFontSize,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = customFont,
+                        drawStyle = if (outlineVal) Stroke(width = 3f) else androidx.compose.ui.graphics.drawscope.Fill,
+                        shadow = if (glowVal && !outlineVal) {
+                            androidx.compose.ui.graphics.Shadow(
+                                color = accentColor.copy(alpha = 0.5f),
+                                offset = Offset(0f, 0f),
+                                blurRadius = 18f
+                            )
+                        } else null
+                    )
+                    val centisTextStyle = androidx.compose.ui.text.TextStyle(
+                        color = if (gradientColors == null && !outlineVal) accentColor else Color.Unspecified,
+                        fontSize = centisFontSize,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = customFont,
+                        drawStyle = if (outlineVal) Stroke(width = 2.5f) else androidx.compose.ui.graphics.drawscope.Fill
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        modifier = stopwatchGradientModifier
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Flag,
-                            contentDescription = "Record Lap Split",
-                            modifier = Modifier.size(24.dp)
+                        val formatted = formatDisplayTime(timeMillis)
+                        Text(
+                            text = formatted.first,
+                            style = mainTextStyle,
+                            maxLines = 1,
+                            softWrap = false
                         )
+                        Text(
+                            text = formatted.second,
+                            style = centisTextStyle,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(bottom = if (isCompactHeight) 4.dp else 8.dp)
+                        )
+                    }
+
+                    val count = laps.size
+                    val lapTextValue = if (count > 0) {
+                        val activeLapProgress = timeMillis - lastRecordedTime
+                        val activeFormatted = formatDisplayTime(activeLapProgress)
+                        "Lap ${count + 1} • ${activeFormatted.first}${activeFormatted.second}"
+                    } else {
+                        "Tap Split while running to record lap intervals"
+                    }
+
+                    Surface(
+                        color = colorScheme.surfaceContainerHigh,
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(
+                                horizontal = if (isCompactHeight) 14.dp else 20.dp,
+                                vertical = if (isCompactHeight) 6.dp else 10.dp
+                            ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Flag,
+                                contentDescription = "Lap Indicator",
+                                tint = accentColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = lapTextValue,
+                                color = colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    val sideBtnSize = if (isCompactHeight) 48.dp else 56.dp
+                    val mainBtnWidth = if (isCompactHeight) 76.dp else 88.dp
+                    val mainBtnHeight = if (isCompactHeight) 52.dp else 64.dp
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(if (isCompactHeight) 18.dp else 24.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = {
+                                haptics.tick()
+                                isRunning = false
+                                timeMillis = 0L
+                                laps.clear()
+                                lastRecordedTime = 0L
+                            },
+                            modifier = Modifier.size(sideBtnSize),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = colorScheme.errorContainer,
+                                contentColor = colorScheme.onErrorContainer
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Reset Stopwatch",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        FilledIconButton(
+                            onClick = {
+                                haptics.confirm()
+                                isRunning = !isRunning
+                            },
+                            modifier = Modifier.size(width = mainBtnWidth, height = mainBtnHeight),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = accentColor,
+                                contentColor = if (accentColor == Color.White) Color.Black else Color.White
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Toggle Stopwatch",
+                                modifier = Modifier.size(if (isCompactHeight) 28.dp else 32.dp)
+                            )
+                        }
+
+                        FilledTonalIconButton(
+                            onClick = {
+                                if (isRunning) {
+                                    haptics.tick()
+                                    val nextLap = timeMillis
+                                    laps.add(nextLap - lastRecordedTime)
+                                    lastRecordedTime = nextLap
+                                }
+                            },
+                            enabled = isRunning,
+                            modifier = Modifier.size(sideBtnSize)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Flag,
+                                contentDescription = "Record Lap Split",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
             }

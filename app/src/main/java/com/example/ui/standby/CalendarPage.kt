@@ -11,8 +11,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -123,7 +125,7 @@ fun CalendarPage(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SplitMonthThemeContent(
     viewModel: CalendarViewModel,
@@ -141,323 +143,351 @@ fun SplitMonthThemeContent(
     val todayCal = remember { Calendar.getInstance() }
     val dailyEvents = events
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // LEFT PANE: Material 3 Elevated Hero Date Card
-        ElevatedCard(
-            modifier = Modifier
-                .weight(1.15f)
-                .fillMaxHeight(),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = colorScheme.surfaceContainerLow
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(accentColor.copy(alpha = 0.1f), Color.Transparent)
-                        )
-                    )
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                val dateLabel = remember {
-                    SimpleDateFormat("EEEE", Locale.getDefault()).format(todayCal.time).uppercase()
-                }
-                val numLabel = remember {
-                    SimpleDateFormat("d", Locale.getDefault()).format(todayCal.time)
-                }
-                val monthMiniLabel = remember {
-                    SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(todayCal.time).uppercase()
-                }
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isCompactHeight = maxHeight < 390.dp
+        val isCompactWidth = maxWidth < 660.dp
+        val outerHPad = if (isCompactWidth) 14.dp else 24.dp
+        val outerVPad = if (isCompactHeight) 10.dp else 20.dp
+        val paneSpacing = if (isCompactWidth) 12.dp else 24.dp
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = colorScheme.secondaryContainer
-                    ) {
-                        Text(
-                            text = dateLabel,
-                            color = colorScheme.onSecondaryContainer,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = customFont,
-                            letterSpacing = 1.5.sp,
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = numLabel,
-                        color = colorScheme.onSurface,
-                        fontSize = 156.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = customFont,
-                        lineHeight = 148.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = monthMiniLabel,
-                        color = accentColor,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = customFont,
-                        letterSpacing = 1.2.sp
-                    )
-                }
-            }
-        }
-
-        // RIGHT PANE: Material 3 Daily/Weekly/Monthly Agenda Container
-        ElevatedCard(
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = colorScheme.surfaceContainerLow
-            )
+                .fillMaxSize()
+                .padding(horizontal = outerHPad, vertical = outerVPad),
+            horizontalArrangement = Arrangement.spacedBy(paneSpacing),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
+            // LEFT PANE: Material 3 Elevated Hero Date Card
+            ElevatedCard(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(18.dp)
+                    .weight(if (isCompactWidth) 1f else 1.15f)
+                    .fillMaxHeight(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = colorScheme.surfaceContainerLow
+                )
             ) {
-                // Material 3 SegmentedButton Row for Daily / Weekly / Monthly
-                SingleChoiceSegmentedButtonRow(
+                BoxWithConstraints(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 14.dp)
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(accentColor.copy(alpha = 0.1f), Color.Transparent)
+                            )
+                        )
+                        .padding(if (isCompactHeight) 12.dp else 24.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    val filterOptions = listOf("Daily" to 0, "Weekly" to 1, "Monthly" to 2)
-                    filterOptions.forEachIndexed { idx, (label, filterIndex) ->
-                        SegmentedButton(
-                            selected = filterVal == filterIndex,
-                            onClick = {
-                                haptics.tick()
-                                viewModel.setCalendarFilter(filterIndex)
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = idx,
-                                count = filterOptions.size
-                            )
-                        ) {
-                            Text(
-                                text = label,
-                                fontFamily = customFont,
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
+                    val dateLabel = remember {
+                        SimpleDateFormat("EEEE", Locale.getDefault()).format(todayCal.time).uppercase()
                     }
-                }
+                    val numLabel = remember {
+                        SimpleDateFormat("d", Locale.getDefault()).format(todayCal.time)
+                    }
+                    val monthMiniLabel = remember {
+                        SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(todayCal.time).uppercase()
+                    }
 
-                if (dailyEvents.isEmpty() && filterVal != 0) {
+                    val heroFontSize = (minOf(maxWidth.value * 0.56f, (maxHeight.value - 72f).coerceAtLeast(60f) * 0.78f))
+                        .coerceIn(56f, 152f)
+
                     Column(
-                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         Surface(
-                            modifier = Modifier.size(64.dp),
                             shape = CircleShape,
                             color = colorScheme.secondaryContainer
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Outlined.EventAvailable,
-                                    contentDescription = null,
-                                    tint = colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.size(30.dp)
+                            Text(
+                                text = dateLabel,
+                                color = colorScheme.onSecondaryContainer,
+                                style = if (isCompactHeight) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = customFont,
+                                letterSpacing = 1.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(
+                                    horizontal = if (isCompactHeight) 14.dp else 18.dp,
+                                    vertical = if (isCompactHeight) 4.dp else 6.dp
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(if (isCompactHeight) 2.dp else 6.dp))
+                        Text(
+                            text = numLabel,
+                            color = colorScheme.onSurface,
+                            fontSize = heroFontSize.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = customFont,
+                            maxLines = 1,
+                            softWrap = false,
+                            lineHeight = (heroFontSize * 0.95f).sp
+                        )
+                        Spacer(modifier = Modifier.height(if (isCompactHeight) 2.dp else 6.dp))
+                        Text(
+                            text = monthMiniLabel,
+                            color = accentColor,
+                            style = if (isCompactHeight) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = customFont,
+                            letterSpacing = 1.2.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // RIGHT PANE: Material 3 Daily/Weekly/Monthly Agenda Container
+            ElevatedCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(if (isCompactHeight || isCompactWidth) 12.dp else 18.dp)
+                ) {
+                    // Material 3 SegmentedButton Row for Daily / Weekly / Monthly
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = if (isCompactHeight) 8.dp else 14.dp)
+                    ) {
+                        val filterOptions = listOf("Daily" to 0, "Weekly" to 1, "Monthly" to 2)
+                        filterOptions.forEachIndexed { idx, (label, filterIndex) ->
+                            SegmentedButton(
+                                selected = filterVal == filterIndex,
+                                onClick = {
+                                    haptics.tick()
+                                    viewModel.setCalendarFilter(filterIndex)
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = idx,
+                                    count = filterOptions.size
+                                )
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontFamily = customFont,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = if (isCompactWidth) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "No Scheduled Events",
-                            color = colorScheme.onSurface,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = customFont
-                        )
-                        Text(
-                            text = "Your calendar is clear for this period.",
-                            color = colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                } else if (filterVal == 0) {
-                    val isEventInHour: (LocalCalendarEvent, Int) -> Boolean = { event, hr ->
-                        if (event.allDay) {
-                            true
-                        } else {
-                            val startCal = Calendar.getInstance().apply { timeInMillis = event.dtStart }
-                            val endCal = Calendar.getInstance().apply { timeInMillis = event.dtEnd }
-                            val startHour = startCal.get(Calendar.HOUR_OF_DAY)
-                            val endHour = endCal.get(Calendar.HOUR_OF_DAY)
-                            hr in startHour..endHour
-                        }
                     }
 
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(24) { hour ->
-                            val now = Calendar.getInstance()
-                            val currentHour = now.get(Calendar.HOUR_OF_DAY)
-                            val isPastHour = hour < currentHour
-                            val isCurrentHour = hour == currentHour
-
-                            val eventsInHour = dailyEvents.filter { isEventInHour(it, hour) }
-                            val itemAlpha = if (isPastHour) 0.55f else 1.0f
-
-                            val containerColor = when {
-                                isCurrentHour -> colorScheme.secondaryContainer.copy(alpha = 0.65f)
-                                eventsInHour.isNotEmpty() -> colorScheme.surfaceContainerHigh
-                                else -> colorScheme.surfaceContainer
-                            }
-                            val borderColor = when {
-                                isCurrentHour -> accentColor.copy(alpha = 0.65f)
-                                eventsInHour.isNotEmpty() -> colorScheme.outlineVariant
-                                else -> Color.Transparent
-                            }
-
-                            val hourLabel = if (use24Hour) {
-                                String.format("%02d:00", hour)
-                            } else {
-                                val ampm = if (hour >= 12) "PM" else "AM"
-                                val displayH = if (hour == 0) 12 else if (hour > 12) hour - 12 else hour
-                                "$displayH $ampm"
-                            }
-
+                    if (dailyEvents.isEmpty() && filterVal != 0) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .alpha(itemAlpha),
-                                shape = RoundedCornerShape(14.dp),
-                                color = containerColor,
-                                border = if (borderColor != Color.Transparent) {
-                                    BorderStroke(1.dp, borderColor)
-                                } else null
+                                modifier = Modifier.size(if (isCompactHeight) 48.dp else 64.dp),
+                                shape = CircleShape,
+                                color = colorScheme.secondaryContainer
                             ) {
-                                Row(
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.EventAvailable,
+                                        contentDescription = null,
+                                        tint = colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(if (isCompactHeight) 24.dp else 30.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(if (isCompactHeight) 8.dp else 12.dp))
+                            Text(
+                                text = "No Scheduled Events",
+                                color = colorScheme.onSurface,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = customFont,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Your calendar is clear for this period.",
+                                color = colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    } else if (filterVal == 0) {
+                        val isEventInHour: (LocalCalendarEvent, Int) -> Boolean = { event, hr ->
+                            if (event.allDay) {
+                                true
+                            } else {
+                                val startCal = Calendar.getInstance().apply { timeInMillis = event.dtStart }
+                                val endCal = Calendar.getInstance().apply { timeInMillis = event.dtEnd }
+                                val startHour = startCal.get(Calendar.HOUR_OF_DAY)
+                                val endHour = endCal.get(Calendar.HOUR_OF_DAY)
+                                hr in startHour..endHour
+                            }
+                        }
+
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 6.dp else 8.dp)
+                        ) {
+                            items(24) { hour ->
+                                val now = Calendar.getInstance()
+                                val currentHour = now.get(Calendar.HOUR_OF_DAY)
+                                val isPastHour = hour < currentHour
+                                val isCurrentHour = hour == currentHour
+
+                                val eventsInHour = dailyEvents.filter { isEventInHour(it, hour) }
+                                val itemAlpha = if (isPastHour) 0.55f else 1.0f
+
+                                val containerColor = when {
+                                    isCurrentHour -> colorScheme.secondaryContainer.copy(alpha = 0.65f)
+                                    eventsInHour.isNotEmpty() -> colorScheme.surfaceContainerHigh
+                                    else -> colorScheme.surfaceContainer
+                                }
+                                val borderColor = when {
+                                    isCurrentHour -> accentColor.copy(alpha = 0.65f)
+                                    eventsInHour.isNotEmpty() -> colorScheme.outlineVariant
+                                    else -> Color.Transparent
+                                }
+
+                                val hourLabel = if (use24Hour) {
+                                    String.format("%02d:00", hour)
+                                } else {
+                                    val ampm = if (hour >= 12) "PM" else "AM"
+                                    val displayH = if (hour == 0) 12 else if (hour > 12) hour - 12 else hour
+                                    "$displayH $ampm"
+                                }
+
+                                Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 10.dp, horizontal = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .alpha(itemAlpha),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = containerColor,
+                                    border = if (borderColor != Color.Transparent) {
+                                        BorderStroke(1.dp, borderColor)
+                                    } else null
                                 ) {
-                                    Text(
-                                        text = hourLabel,
-                                        color = if (eventsInHour.isNotEmpty() || isCurrentHour) accentColor else colorScheme.onSurfaceVariant,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.width(64.dp)
-                                    )
-
-                                    VerticalDivider(
+                                    Row(
                                         modifier = Modifier
-                                            .height(28.dp)
-                                            .padding(horizontal = 10.dp),
-                                        color = colorScheme.outlineVariant.copy(alpha = 0.6f)
-                                    )
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp, horizontal = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = hourLabel,
+                                            color = if (eventsInHour.isNotEmpty() || isCurrentHour) accentColor else colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            maxLines = 1,
+                                            modifier = Modifier.width(if (isCompactWidth) 56.dp else 64.dp)
+                                        )
 
-                                    if (eventsInHour.isEmpty()) {
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.Center
-                                        ) {
-                                            if (isCurrentHour) {
-                                                CurrentTimeIndicator(use24Hour = use24Hour)
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                            }
-                                            Text(
-                                                text = "Available",
-                                                color = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontFamily = customFont
-                                            )
-                                        }
-                                    } else {
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            if (isCurrentHour) {
-                                                CurrentTimeIndicator(use24Hour = use24Hour)
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                            }
-                                            eventsInHour.forEach { event ->
-                                                val startFormat = remember(use24Hour) {
-                                                    SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
-                                                }
-                                                val endFormat = remember(use24Hour) {
-                                                    SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
-                                                }
-                                                val timePeriod = if (event.allDay) "All Day" else {
-                                                    "${startFormat.format(Date(event.dtStart))} - ${endFormat.format(Date(event.dtEnd))}"
-                                                }
+                                        VerticalDivider(
+                                            modifier = Modifier
+                                                .height(26.dp)
+                                                .padding(horizontal = 8.dp),
+                                            color = colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                        )
 
-                                                Surface(
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    color = colorScheme.primaryContainer.copy(alpha = 0.55f),
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clickable {
-                                                            haptics.tick()
-                                                            openEventInCalendar(context, event.id)
-                                                        }
-                                                ) {
-                                                    Column(
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        if (eventsInHour.isEmpty()) {
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.Center
+                                            ) {
+                                                if (isCurrentHour) {
+                                                    CurrentTimeIndicator(use24Hour = use24Hour)
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                }
+                                                Text(
+                                                    text = "Available",
+                                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontFamily = customFont,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        } else {
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                if (isCurrentHour) {
+                                                    CurrentTimeIndicator(use24Hour = use24Hour)
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                }
+                                                eventsInHour.forEach { event ->
+                                                    val startFormat = remember(use24Hour) {
+                                                        SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
+                                                    }
+                                                    val endFormat = remember(use24Hour) {
+                                                        SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
+                                                    }
+                                                    val timePeriod = if (event.allDay) "All Day" else {
+                                                        "${startFormat.format(Date(event.dtStart))} - ${endFormat.format(Date(event.dtEnd))}"
+                                                    }
+
+                                                    Surface(
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        color = colorScheme.primaryContainer.copy(alpha = 0.55f),
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable {
+                                                                haptics.tick()
+                                                                openEventInCalendar(context, event.id)
+                                                            }
                                                     ) {
-                                                        Text(
-                                                            text = event.title,
-                                                            color = colorScheme.onSurface,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            fontWeight = FontWeight.Bold,
-                                                            fontFamily = customFont,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                        Column(
+                                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                                         ) {
                                                             Text(
-                                                                text = timePeriod,
-                                                                color = accentColor,
-                                                                style = MaterialTheme.typography.labelSmall,
-                                                                fontFamily = FontFamily.Monospace
+                                                                text = event.title,
+                                                                color = colorScheme.onSurface,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontFamily = customFont,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
                                                             )
-                                                            if (!event.eventLocation.isNullOrBlank()) {
-                                                                Icon(
-                                                                    imageVector = Icons.Outlined.Place,
-                                                                    contentDescription = null,
-                                                                    tint = colorScheme.onSurfaceVariant,
-                                                                    modifier = Modifier.size(12.dp)
-                                                                )
+                                                            Row(
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                            ) {
                                                                 Text(
-                                                                    text = event.eventLocation,
-                                                                    color = colorScheme.onSurfaceVariant,
+                                                                    text = timePeriod,
+                                                                    color = accentColor,
                                                                     style = MaterialTheme.typography.labelSmall,
-                                                                    maxLines = 1,
-                                                                    overflow = TextOverflow.Ellipsis
+                                                                    fontFamily = FontFamily.Monospace,
+                                                                    maxLines = 1
                                                                 )
+                                                                if (!event.eventLocation.isNullOrBlank()) {
+                                                                    Icon(
+                                                                        imageVector = Icons.Outlined.Place,
+                                                                        contentDescription = null,
+                                                                        tint = colorScheme.onSurfaceVariant,
+                                                                        modifier = Modifier.size(12.dp)
+                                                                    )
+                                                                    Text(
+                                                                        text = event.eventLocation,
+                                                                        color = colorScheme.onSurfaceVariant,
+                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                        maxLines = 1,
+                                                                        overflow = TextOverflow.Ellipsis
+                                                                    )
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -468,105 +498,107 @@ fun SplitMonthThemeContent(
                                 }
                             }
                         }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(dailyEvents, key = { "${it.id}_${it.dtStart}" }) { event ->
-                            val startFormat = remember(use24Hour) {
-                                SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
-                            }
-                            val endFormat = remember(use24Hour) {
-                                SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
-                            }
-                            val timeLabel = if (event.allDay) "All Day" else {
-                                "${startFormat.format(Date(event.dtStart))} - ${endFormat.format(Date(event.dtEnd))}"
-                            }
-                            val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
-                            val dateLabel = dateFormat.format(Date(event.dtStart))
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(dailyEvents, key = { "${it.id}_${it.dtStart}" }) { event ->
+                                val startFormat = remember(use24Hour) {
+                                    SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
+                                }
+                                val endFormat = remember(use24Hour) {
+                                    SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
+                                }
+                                val timeLabel = if (event.allDay) "All Day" else {
+                                    "${startFormat.format(Date(event.dtStart))} - ${endFormat.format(Date(event.dtEnd))}"
+                                }
+                                val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+                                val dateLabel = dateFormat.format(Date(event.dtStart))
 
-                            OutlinedCard(
-                                onClick = {
-                                    haptics.tick()
-                                    openEventInCalendar(context, event.id)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.outlinedCardColors(
-                                    containerColor = colorScheme.surfaceContainer
-                                )
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Text(
-                                        text = event.title,
-                                        color = colorScheme.onSurface,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = customFont,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                OutlinedCard(
+                                    onClick = {
+                                        haptics.tick()
+                                        openEventInCalendar(context, event.id)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.outlinedCardColors(
+                                        containerColor = colorScheme.surfaceContainer
                                     )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.CalendarMonth,
-                                                contentDescription = null,
-                                                tint = accentColor,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text(
-                                                text = dateLabel,
-                                                color = colorScheme.onSurface,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Schedule,
-                                                contentDescription = null,
-                                                tint = colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text(
-                                                text = timeLabel,
-                                                color = colorScheme.onSurfaceVariant,
-                                                style = MaterialTheme.typography.labelSmall
-                                            )
-                                        }
-                                    }
-                                    if (!event.eventLocation.isNullOrBlank()) {
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = event.title,
+                                            color = colorScheme.onSurface,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = customFont,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Place,
-                                                contentDescription = null,
-                                                tint = accentColor,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text(
-                                                text = event.eventLocation,
-                                                color = colorScheme.onSurfaceVariant,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.CalendarMonth,
+                                                    contentDescription = null,
+                                                    tint = accentColor,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Text(
+                                                    text = dateLabel,
+                                                    color = colorScheme.onSurface,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1
+                                                )
+                                            }
+
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Schedule,
+                                                    contentDescription = null,
+                                                    tint = colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Text(
+                                                    text = timeLabel,
+                                                    color = colorScheme.onSurfaceVariant,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                        if (!event.eventLocation.isNullOrBlank()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Place,
+                                                    contentDescription = null,
+                                                    tint = accentColor,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Text(
+                                                    text = event.eventLocation,
+                                                    color = colorScheme.onSurfaceVariant,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -612,113 +644,144 @@ fun MonthlyGrid(
         firstDayOfWeekIndex - 1
     }
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = monthLabel.uppercase(),
-            color = colorScheme.onSurface,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.2.sp,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            daysText.forEach { weekDay ->
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = weekDay,
-                        color = colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
+    val activeRows = remember(offsetDays, maxDays) {
         val cellsPerRow = 7
+        var count = 0
         for (row in 0 until 6) {
             val startCell = row * cellsPerRow
-            var hasActiveDaysInRow = false
+            var hasActiveDays = false
             for (c in 0 until cellsPerRow) {
                 val cellDayNum = startCell + c - offsetDays + 1
                 if (cellDayNum in 1..maxDays) {
-                    hasActiveDaysInRow = true
+                    hasActiveDays = true
+                }
+            }
+            if (hasActiveDays) count++
+        }
+        count.coerceAtLeast(4)
+    }
+
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        val isCompactGrid = maxHeight < 235.dp
+        val headerReservedDp = if (isCompactGrid) 36.dp else 46.dp
+        val availableRowsHeight = (maxHeight - headerReservedDp).coerceAtLeast(100.dp)
+        val rowCellHeight = (availableRowsHeight / activeRows).coerceIn(18.dp, 32.dp)
+        val circleDiameter = (rowCellHeight - 2.dp).coerceIn(16.dp, 28.dp)
+        val cellFontSize = (circleDiameter.value * 0.42f).coerceIn(9f, 12f).sp
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = monthLabel.uppercase(),
+                color = colorScheme.onSurface,
+                style = if (isCompactGrid) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = if (isCompactGrid) 4.dp else 8.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                daysText.forEach { weekDay ->
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = weekDay,
+                            color = colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
-            if (hasActiveDaysInRow) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 3.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    for (col in 0 until cellsPerRow) {
-                        val cellIdx = startCell + col
-                        val dayNum = cellIdx - offsetDays + 1
+            Spacer(modifier = Modifier.height(if (isCompactGrid) 3.dp else 6.dp))
 
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(30.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (dayNum in 1..maxDays) {
-                                val isToday = dayNum == highlightDay
-                                val hasEventThisDay = remember(dayNum, events) {
-                                    val dayCal = Calendar.getInstance()
-                                    events.any { event ->
-                                        dayCal.timeInMillis = event.dtStart
-                                        dayCal.get(Calendar.YEAR) == tempCal.get(Calendar.YEAR) &&
-                                            dayCal.get(Calendar.MONTH) == tempCal.get(Calendar.MONTH) &&
-                                            dayCal.get(Calendar.DAY_OF_MONTH) == dayNum
+            val cellsPerRow = 7
+            for (row in 0 until 6) {
+                val startCell = row * cellsPerRow
+                var hasActiveDaysInRow = false
+                for (c in 0 until cellsPerRow) {
+                    val cellDayNum = startCell + c - offsetDays + 1
+                    if (cellDayNum in 1..maxDays) {
+                        hasActiveDaysInRow = true
+                    }
+                }
+
+                if (hasActiveDaysInRow) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        for (col in 0 until cellsPerRow) {
+                            val cellIdx = startCell + col
+                            val dayNum = cellIdx - offsetDays + 1
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(rowCellHeight),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (dayNum in 1..maxDays) {
+                                    val isToday = dayNum == highlightDay
+                                    val hasEventThisDay = remember(dayNum, events) {
+                                        val dayCal = Calendar.getInstance()
+                                        events.any { event ->
+                                            dayCal.timeInMillis = event.dtStart
+                                            dayCal.get(Calendar.YEAR) == tempCal.get(Calendar.YEAR) &&
+                                                dayCal.get(Calendar.MONTH) == tempCal.get(Calendar.MONTH) &&
+                                                dayCal.get(Calendar.DAY_OF_MONTH) == dayNum
+                                        }
                                     }
-                                }
 
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = if (isToday) {
-                                        Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(accentColor)
-                                    } else {
-                                        Modifier.size(28.dp)
-                                    }
-                                ) {
-                                    Text(
-                                        text = "$dayNum",
-                                        color = if (isToday) {
-                                            if (accentColor == Color.White) Color.Black else Color.White
-                                        } else {
-                                            colorScheme.onSurface
-                                        },
-                                        fontSize = 11.sp,
-                                        fontFamily = customFont,
-                                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium
-                                    )
-
-                                    if (showEventDots && hasEventThisDay && !isToday) {
-                                        Box(
-                                            modifier = Modifier
-                                                .padding(top = 1.dp)
-                                                .size(4.dp)
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = if (isToday) {
+                                            Modifier
+                                                .size(circleDiameter)
                                                 .clip(CircleShape)
                                                 .background(accentColor)
+                                        } else {
+                                            Modifier.size(circleDiameter)
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "$dayNum",
+                                            color = if (isToday) {
+                                                if (accentColor == Color.White) Color.Black else Color.White
+                                            } else {
+                                                colorScheme.onSurface
+                                            },
+                                            fontSize = cellFontSize,
+                                            fontFamily = customFont,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium
                                         )
+
+                                        if (showEventDots && hasEventThisDay && !isToday) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(3.5.dp)
+                                                    .clip(CircleShape)
+                                                    .background(accentColor)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -739,12 +802,13 @@ fun EmptyCalendarView(
 ) {
     val haptics = rememberStandbyHaptics()
     val colorScheme = MaterialTheme.colorScheme
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(horizontal = 24.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {
+        val isCompactHeight = maxHeight < 370.dp
         ElevatedCard(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.elevatedCardColors(
@@ -753,12 +817,17 @@ fun EmptyCalendarView(
             modifier = Modifier.widthIn(max = 460.dp)
         ) {
             Column(
-                modifier = Modifier.padding(32.dp),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        horizontal = if (isCompactHeight) 24.dp else 32.dp,
+                        vertical = if (isCompactHeight) 18.dp else 32.dp
+                    ),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Surface(
-                    modifier = Modifier.size(68.dp),
+                    modifier = Modifier.size(if (isCompactHeight) 52.dp else 68.dp),
                     shape = CircleShape,
                     color = colorScheme.primaryContainer
                 ) {
@@ -767,19 +836,20 @@ fun EmptyCalendarView(
                             imageVector = Icons.Outlined.CalendarMonth,
                             contentDescription = "Calendar Permission Needed",
                             tint = colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(if (isCompactHeight) 26.dp else 32.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(if (isCompactHeight) 10.dp else 16.dp))
                 Text(
                     text = "Connect Device Calendar",
                     color = colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = if (isCompactHeight) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = customFont
+                    fontFamily = customFont,
+                    textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "Authorize calendar read access to display your daily schedule, meetings, and monthly agenda directly in Standby.",
                     color = colorScheme.onSurfaceVariant,
@@ -787,7 +857,7 @@ fun EmptyCalendarView(
                     textAlign = TextAlign.Center,
                     fontFamily = customFont
                 )
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(if (isCompactHeight) 12.dp else 20.dp))
                 Button(
                     onClick = {
                         haptics.confirm()

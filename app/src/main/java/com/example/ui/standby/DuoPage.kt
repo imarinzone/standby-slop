@@ -101,120 +101,128 @@ fun DuoPage(
                 Box(Modifier.fillMaxSize().background(colorScheme.surface.copy(alpha = 0.72f)))
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // LEFT HALF PANEL
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                ) {
-                    VerticalPager(
-                        state = leftPagerState,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        WidgetContainer(pageIndex = page) {
-                            RenderDuoWidget(
-                                pageIndex = page,
-                                viewModel = viewModel,
-                                calendarViewModel = calendarViewModel,
-                                weatherViewModel = weatherViewModel
-                            )
-                        }
-                    }
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val isCompactHeight = maxHeight < 380.dp
+                val isCompactWidth = maxWidth < 620.dp
+                val outerHPad = if (isCompactWidth) 14.dp else 20.dp
+                val outerVPad = if (isCompactHeight) 10.dp else 16.dp
+                val paneGap = if (isCompactWidth) 12.dp else 16.dp
 
-                    // Left Pager M3 Vertical Indicator
-                    Surface(
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = outerHPad, vertical = outerVPad),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(paneGap)
+                ) {
+                    // LEFT HALF PANEL
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 10.dp),
-                        shape = CircleShape,
-                        color = colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                            .weight(1f)
+                            .fillMaxHeight()
                     ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            for (i in 0 until 5) {
-                                val isSelected = i == leftPagerState.currentPage
-                                Box(
-                                    modifier = Modifier
-                                        .size(width = 6.dp, height = if (isSelected) 14.dp else 6.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) colorScheme.primary
-                                            else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                        )
-                                        .clickable {
-                                            haptics.tick()
-                                            viewModel.setDuoLeftWidgetIndex(i)
-                                            coroutineScope.launch {
-                                                leftPagerState.animateScrollToPage(i)
-                                            }
-                                        }
+                        VerticalPager(
+                            state = leftPagerState,
+                            modifier = Modifier.fillMaxSize()
+                        ) { page ->
+                            WidgetContainer(pageIndex = page, isLeftPane = true) {
+                                RenderDuoWidget(
+                                    pageIndex = page,
+                                    viewModel = viewModel,
+                                    calendarViewModel = calendarViewModel,
+                                    weatherViewModel = weatherViewModel
                                 )
                             }
                         }
-                    }
-                }
 
-                // RIGHT HALF PANEL
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                ) {
-                    VerticalPager(
-                        state = rightPagerState,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        WidgetContainer(pageIndex = page) {
-                            RenderDuoWidget(
-                                pageIndex = page,
-                                viewModel = viewModel,
-                                calendarViewModel = calendarViewModel,
-                                weatherViewModel = weatherViewModel
-                            )
+                        // Left Pager M3 Vertical Indicator
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 8.dp),
+                            shape = CircleShape,
+                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                for (i in 0 until 5) {
+                                    val isSelected = i == leftPagerState.currentPage
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 6.dp, height = if (isSelected) 13.dp else 6.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isSelected) colorScheme.primary
+                                                else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                            )
+                                            .clickable {
+                                                haptics.tick()
+                                                viewModel.setDuoLeftWidgetIndex(i)
+                                                coroutineScope.launch {
+                                                    leftPagerState.animateScrollToPage(i)
+                                                }
+                                            }
+                                    )
+                                }
+                            }
                         }
                     }
 
-                    // Right Pager M3 Vertical Indicator
-                    Surface(
+                    // RIGHT HALF PANEL
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 10.dp),
-                        shape = CircleShape,
-                        color = colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                            .weight(1f)
+                            .fillMaxHeight()
                     ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            for (i in 0 until 5) {
-                                val isSelected = i == rightPagerState.currentPage
-                                Box(
-                                    modifier = Modifier
-                                        .size(width = 6.dp, height = if (isSelected) 14.dp else 6.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) colorScheme.primary
-                                            else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                        )
-                                        .clickable {
-                                            haptics.tick()
-                                            viewModel.setDuoRightWidgetIndex(i)
-                                            coroutineScope.launch {
-                                                rightPagerState.animateScrollToPage(i)
-                                            }
-                                        }
+                        VerticalPager(
+                            state = rightPagerState,
+                            modifier = Modifier.fillMaxSize()
+                        ) { page ->
+                            WidgetContainer(pageIndex = page, isLeftPane = false) {
+                                RenderDuoWidget(
+                                    pageIndex = page,
+                                    viewModel = viewModel,
+                                    calendarViewModel = calendarViewModel,
+                                    weatherViewModel = weatherViewModel
                                 )
+                            }
+                        }
+
+                        // Right Pager M3 Vertical Indicator
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 8.dp),
+                            shape = CircleShape,
+                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                for (i in 0 until 5) {
+                                    val isSelected = i == rightPagerState.currentPage
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 6.dp, height = if (isSelected) 13.dp else 6.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isSelected) colorScheme.primary
+                                                else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                            )
+                                            .clickable {
+                                                haptics.tick()
+                                                viewModel.setDuoRightWidgetIndex(i)
+                                                coroutineScope.launch {
+                                                    rightPagerState.animateScrollToPage(i)
+                                                }
+                                            }
+                                    )
+                                }
                             }
                         }
                     }
@@ -227,11 +235,12 @@ fun DuoPage(
 @Composable
 fun WidgetContainer(
     pageIndex: Int,
+    isLeftPane: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     ElevatedCard(
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = colorScheme.surfaceContainerLow
         ),
@@ -240,7 +249,12 @@ fun WidgetContainer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(
+                    start = if (isLeftPane) 26.dp else 12.dp,
+                    end = if (isLeftPane) 12.dp else 26.dp,
+                    top = 12.dp,
+                    bottom = 12.dp
+                ),
             contentAlignment = Alignment.Center
         ) {
             content()
@@ -290,66 +304,82 @@ fun DuoClockWidget(
     val secFormat = remember { SimpleDateFormat("ss", Locale.getDefault()) }
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.Center
+        val mainFontSize = (minOf(maxWidth.value * 0.22f, maxHeight.value * 0.28f)).coerceIn(34f, 54f).sp
+        val secFontSize = (mainFontSize.value * 0.37f).sp
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = timeFormat.format(currentTime.time),
-                color = colorScheme.onSurface,
-                fontSize = 54.sp,
-                fontWeight = FontWeight.ExtraBold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = (-1.5).sp
-            )
-            Text(
-                text = ":" + secFormat.format(currentTime.time),
-                color = accentColor,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Surface(
-            shape = CircleShape,
-            color = colorScheme.secondaryContainer
-        ) {
-            Text(
-                text = dateFormat.format(currentTime.time).uppercase(Locale.getDefault()),
-                color = colorScheme.onSecondaryContainer,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-            )
-        }
-
-        if (showWeatherVal && weather != null) {
-            Spacer(modifier = Modifier.height(8.dp))
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Cloud,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(16.dp)
+                Text(
+                    text = timeFormat.format(currentTime.time),
+                    color = colorScheme.onSurface,
+                    fontSize = mainFontSize,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = (-1.5).sp,
+                    maxLines = 1,
+                    softWrap = false
                 )
                 Text(
-                    text = "${weather?.temperature_2m}°C • ${getWeatherCodeDesc(weather?.weather_code ?: 0)}",
-                    color = colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium
+                    text = ":" + secFormat.format(currentTime.time),
+                    color = accentColor,
+                    fontSize = secFontSize,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(bottom = 6.dp)
                 )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Surface(
+                shape = CircleShape,
+                color = colorScheme.secondaryContainer
+            ) {
+                Text(
+                    text = dateFormat.format(currentTime.time).uppercase(Locale.getDefault()),
+                    color = colorScheme.onSecondaryContainer,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.1.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
+
+            if (showWeatherVal && weather != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cloud,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = "${weather?.temperature_2m}°C • ${getWeatherCodeDesc(weather?.weather_code ?: 0)}",
+                        color = colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -380,42 +410,54 @@ fun DuoAlarmWidget(viewModel: StandbyViewModel) {
 
     val hasAlarm = nextSystemAlarm != null && nextSystemAlarm != "No Alarm"
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.fillMaxSize()
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Surface(
-            modifier = Modifier.size(56.dp),
-            shape = CircleShape,
-            color = if (hasAlarm) colorScheme.primaryContainer else colorScheme.surfaceContainerHigh
+        val isCompact = maxHeight < 220.dp
+        val iconCircleSize = if (isCompact) 44.dp else 56.dp
+        val iconSize = if (isCompact) 22.dp else 28.dp
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Default.Alarm,
-                    contentDescription = null,
-                    tint = if (hasAlarm) colorScheme.onPrimaryContainer else colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(28.dp)
-                )
+            Surface(
+                modifier = Modifier.size(iconCircleSize),
+                shape = CircleShape,
+                color = if (hasAlarm) colorScheme.primaryContainer else colorScheme.surfaceContainerHigh
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Alarm,
+                        contentDescription = null,
+                        tint = if (hasAlarm) colorScheme.onPrimaryContainer else colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
             }
+            Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
+            Text(
+                text = "UPCOMING ALARM",
+                color = colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = nextSystemAlarm ?: "No Active Alarm",
+                color = if (hasAlarm) colorScheme.onSurface else colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "UPCOMING ALARM",
-            color = colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = nextSystemAlarm ?: "No Active Alarm",
-            color = if (hasAlarm) colorScheme.onSurface else colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
     }
 }
 
@@ -468,7 +510,7 @@ fun DuoCalendarWidget(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         val currentCal = remember { Calendar.getInstance() }
@@ -560,15 +602,15 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp)
+                .padding(8.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Notifications,
                 contentDescription = null,
                 tint = colorScheme.primary,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(26.dp)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Media Sync Permission",
                 color = colorScheme.onSurface,
@@ -576,7 +618,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             FilledTonalButton(
                 onClick = {
                     haptics.confirm()
@@ -587,11 +629,15 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
             }
         }
     } else {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(20.dp))
         ) {
+            val isCompact = maxHeight < 210.dp || maxWidth < 210.dp
+            val sideBtnSize = if (isCompact) 38.dp else 44.dp
+            val mainBtnSize = if (isCompact) 48.dp else 56.dp
+
             if (albumArt != null) {
                 Image(
                     bitmap = albumArt!!.asImageBitmap(),
@@ -616,7 +662,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(if (isCompact) 10.dp else 16.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -633,7 +679,8 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
                     )
                     Text(
                         text = artistName ?: "System Media",
@@ -641,12 +688,13 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilledTonalIconButton(
@@ -654,12 +702,12 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                             haptics.tick()
                             triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
                         },
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(sideBtnSize)
                     ) {
                         Icon(
                             Icons.Default.SkipPrevious,
                             contentDescription = "Previous",
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(if (isCompact) 18.dp else 22.dp)
                         )
                     }
 
@@ -671,8 +719,8 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                                 if (isCurrentlyPlaying) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY
                             )
                         },
-                        modifier = Modifier.size(56.dp),
-                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.size(mainBtnSize),
+                        shape = RoundedCornerShape(16.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = accentColor,
                             contentColor = if (accentColor == Color.White) Color.Black else Color.White
@@ -681,7 +729,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                         Icon(
                             imageVector = if (isCurrentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Play/Pause",
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(if (isCompact) 24.dp else 28.dp)
                         )
                     }
 
@@ -690,12 +738,12 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                             haptics.tick()
                             triggerMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
                         },
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(sideBtnSize)
                     ) {
                         Icon(
                             Icons.Default.SkipNext,
                             contentDescription = "Next",
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(if (isCompact) 18.dp else 22.dp)
                         )
                     }
                 }
@@ -730,75 +778,86 @@ fun DuoTimerWidget(viewModel: StandbyViewModel) {
     val sec = secondsLeft % 60
     val formatted = String.format("%02d:%02d", min, sec)
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.fillMaxSize()
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.size(96.dp),
-            contentAlignment = Alignment.Center
+        val isCompact = maxHeight < 210.dp
+        val dialSize = (minOf(maxWidth, maxHeight) * 0.48f).coerceIn(72.dp, 98.dp)
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            val totalSecs = (focusMinutes * 60).coerceAtLeast(1)
-            val ratio = secondsLeft.toFloat() / totalSecs.toFloat()
-            val trackColor = colorScheme.surfaceContainerHighest
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawCircle(
-                    color = trackColor,
-                    radius = size.minDimension / 2f,
-                    style = Stroke(width = 4.dp.toPx())
-                )
-                drawArc(
-                    color = accentColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f * ratio,
-                    useCenter = false,
-                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                )
-            }
-
-            Text(
-                text = formatted,
-                color = colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FilledTonalButton(
-                onClick = {
-                    haptics.confirm()
-                    isRunning = !isRunning
-                },
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+            Box(
+                modifier = Modifier.size(dialSize),
+                contentAlignment = Alignment.Center
             ) {
+                val totalSecs = (focusMinutes * 60).coerceAtLeast(1)
+                val ratio = secondsLeft.toFloat() / totalSecs.toFloat()
+                val trackColor = colorScheme.surfaceContainerHighest
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawCircle(
+                        color = trackColor,
+                        radius = size.minDimension / 2f,
+                        style = Stroke(width = 4.dp.toPx())
+                    )
+                    drawArc(
+                        color = accentColor,
+                        startAngle = -90f,
+                        sweepAngle = 360f * ratio,
+                        useCenter = false,
+                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
+
                 Text(
-                    text = if (isRunning) "Pause" else "Start",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
+                    text = formatted,
+                    color = colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
 
-            FilledTonalIconButton(
-                onClick = {
-                    haptics.tick()
-                    isRunning = false
-                    secondsLeft = focusMinutes * 60
-                },
-                modifier = Modifier.size(36.dp)
+            Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Reset",
-                    modifier = Modifier.size(16.dp)
-                )
+                FilledTonalButton(
+                    onClick = {
+                        haptics.confirm()
+                        isRunning = !isRunning
+                    },
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = if (isRunning) "Pause" else "Start",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+
+                FilledTonalIconButton(
+                    onClick = {
+                        haptics.tick()
+                        isRunning = false
+                        secondsLeft = focusMinutes * 60
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Reset",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
     }

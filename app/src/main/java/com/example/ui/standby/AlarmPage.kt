@@ -65,148 +65,170 @@ fun AlarmPage(
                 Box(Modifier.fillMaxSize().background(colorScheme.surface.copy(alpha = 0.72f)))
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 28.dp, vertical = 20.dp)
-            ) {
-                // Material 3 Header Bar with Extended FAB
-                Row(
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val isCompactHeight = maxHeight < 390.dp
+                val isCompactWidth = maxWidth < 660.dp
+                val hPad = if (isCompactWidth) 16.dp else 28.dp
+                val vPad = if (isCompactHeight) 12.dp else 20.dp
+
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 18.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .padding(horizontal = hPad, vertical = vPad)
                 ) {
+                    // Material 3 Header Bar with Extended FAB
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = colorScheme.primaryContainer
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Alarm,
-                                contentDescription = null,
-                                tint = colorScheme.onPrimaryContainer,
-                                modifier = Modifier
-                                    .padding(10.dp)
-                                    .size(24.dp)
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "Alarms",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = colorScheme.onSurface,
-                                fontFamily = customFont,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "${alarms.count { it.isEnabled }} active scheduled alerts",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    ExtendedFloatingActionButton(
-                        onClick = {
-                            haptics.tick()
-                            showAddDialog = true
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Outlined.AlarmAdd,
-                                contentDescription = "Create Alarm"
-                            )
-                        },
-                        text = {
-                            Text(
-                                text = "New Alarm",
-                                fontFamily = customFont,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        },
-                        containerColor = colorScheme.primaryContainer,
-                        contentColor = colorScheme.onPrimaryContainer,
-                        modifier = Modifier.testTag("add_alarm_fab")
-                    )
-                }
-
-                if (alarms.isEmpty()) {
-                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
+                            .padding(bottom = if (isCompactHeight) 10.dp else 18.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        ElevatedCard(
-                            colors = CardDefaults.elevatedCardColors(
-                                containerColor = colorScheme.surfaceContainerLow
-                            ),
-                            shape = RoundedCornerShape(24.dp)
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(horizontal = 48.dp, vertical = 32.dp)
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = colorScheme.primaryContainer
                             ) {
-                                Surface(
-                                    modifier = Modifier.size(68.dp),
-                                    shape = CircleShape,
-                                    color = colorScheme.secondaryContainer
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.AlarmOff,
-                                            contentDescription = "No Alarms",
-                                            tint = colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Alarm,
+                                    contentDescription = null,
+                                    tint = colorScheme.onPrimaryContainer,
+                                    modifier = Modifier
+                                        .padding(if (isCompactHeight) 8.dp else 10.dp)
+                                        .size(if (isCompactHeight) 20.dp else 24.dp)
+                                )
+                            }
+                            Column {
                                 Text(
-                                    text = "No Active Alarms",
-                                    style = MaterialTheme.typography.titleMedium,
+                                    text = "Alarms",
+                                    style = if (isCompactHeight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
                                     color = colorScheme.onSurface,
                                     fontFamily = customFont,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Tap New Alarm to schedule a wake-up or standby reminder",
+                                    text = "${alarms.count { it.isEnabled }} active scheduled alerts",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
+
+                        ExtendedFloatingActionButton(
+                            onClick = {
+                                haptics.tick()
+                                showAddDialog = true
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.AlarmAdd,
+                                    contentDescription = "Create Alarm"
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text = "New Alarm",
+                                    fontFamily = customFont,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1
+                                )
+                            },
+                            containerColor = colorScheme.primaryContainer,
+                            contentColor = colorScheme.onPrimaryContainer,
+                            modifier = Modifier.testTag("add_alarm_fab")
+                        )
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 24.dp)
-                    ) {
-                        items(alarms, key = { it.id }) { alarm ->
-                            AlarmCard(
-                                alarm = alarm,
-                                use24Hour = use24Hour,
-                                accentColor = accentColor,
-                                customFont = customFont,
-                                onToggle = {
-                                    haptics.confirm()
-                                    viewModel.toggleAlarm(alarm)
-                                },
-                                onDelete = {
-                                    haptics.tick()
-                                    viewModel.deleteAlarm(alarm)
+
+                    if (alarms.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ElevatedCard(
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = colorScheme.surfaceContainerLow
+                                ),
+                                shape = RoundedCornerShape(24.dp),
+                                modifier = Modifier.widthIn(max = 460.dp)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(
+                                            horizontal = if (isCompactWidth) 24.dp else 48.dp,
+                                            vertical = if (isCompactHeight) 18.dp else 32.dp
+                                        )
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.size(if (isCompactHeight) 52.dp else 68.dp),
+                                        shape = CircleShape,
+                                        color = colorScheme.secondaryContainer
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.AlarmOff,
+                                                contentDescription = "No Alarms",
+                                                tint = colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.size(if (isCompactHeight) 26.dp else 32.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(if (isCompactHeight) 10.dp else 16.dp))
+                                    Text(
+                                        text = "No Active Alarms",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = colorScheme.onSurface,
+                                        fontFamily = customFont,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Tap New Alarm to schedule a wake-up or standby reminder",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
                                 }
-                            )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 8.dp else 12.dp),
+                            contentPadding = PaddingValues(bottom = if (isCompactHeight) 48.dp else 64.dp)
+                        ) {
+                            items(alarms, key = { it.id }) { alarm ->
+                                AlarmCard(
+                                    alarm = alarm,
+                                    use24Hour = use24Hour,
+                                    accentColor = accentColor,
+                                    customFont = customFont,
+                                    isCompact = isCompactWidth || isCompactHeight,
+                                    onToggle = {
+                                        haptics.confirm()
+                                        viewModel.toggleAlarm(alarm)
+                                    },
+                                    onDelete = {
+                                        haptics.tick()
+                                        viewModel.deleteAlarm(alarm)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -238,6 +260,7 @@ fun AlarmCard(
     use24Hour: Boolean,
     accentColor: Color,
     customFont: FontFamily,
+    isCompact: Boolean = false,
     onToggle: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -256,11 +279,14 @@ fun AlarmCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp, horizontal = 22.dp),
+                .padding(
+                    vertical = if (isCompact) 12.dp else 16.dp,
+                    horizontal = if (isCompact) 14.dp else 22.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
-                modifier = Modifier.width(128.dp),
+                modifier = Modifier.widthIn(min = if (isCompact) 104.dp else 124.dp),
                 verticalArrangement = Arrangement.Center
             ) {
                 val hourText = if (use24Hour) {
@@ -276,44 +302,48 @@ fun AlarmCard(
                     Text(
                         text = "$hourText:$minuteText",
                         color = if (enabledState) colorScheme.onSurface else colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        fontSize = 34.sp,
+                        fontSize = if (isCompact) 28.sp else 34.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = customFont,
-                        lineHeight = 36.sp
+                        maxLines = 1,
+                        softWrap = false,
+                        lineHeight = if (isCompact) 30.sp else 36.sp
                     )
                     if (!use24Hour) {
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = amPmText,
                             color = if (enabledState) accentColor else colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             style = MaterialTheme.typography.labelLarge,
                             fontFamily = customFont,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(bottom = 3.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(if (isCompact) 10.dp else 16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = alarm.label.ifBlank { "Alarm" },
                     color = if (enabledState) colorScheme.onSurface else colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = if (isCompact) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleMedium,
                     fontFamily = customFont,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = colorScheme.secondaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -327,15 +357,19 @@ fun AlarmCard(
                             text = "Snooze ${alarm.snoozeMinutes} min",
                             color = colorScheme.onSecondaryContainer,
                             style = MaterialTheme.typography.labelSmall,
-                            fontFamily = customFont
+                            fontFamily = customFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isCompact) 4.dp else 10.dp)
             ) {
                 Switch(
                     checked = enabledState,
@@ -378,196 +412,373 @@ fun CustomAddAlarmDialog(
     var alarmLabel by remember { mutableStateOf("Wake Up") }
     var snoozeMinutes by remember { mutableIntStateOf(5) }
 
-    AlertDialog(
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(28.dp),
-        containerColor = colorScheme.surfaceContainerHigh,
-        title = {
-            Text(
-                text = "Set Alarm",
-                style = MaterialTheme.typography.headlineSmall,
-                color = colorScheme.onSurface,
-                fontFamily = customFont,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val useTwoColumns = maxWidth > 500.dp && maxHeight < 480.dp
+            val isVeryShort = maxHeight < 360.dp
+
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
                 modifier = Modifier
+                    .widthIn(max = if (useTwoColumns) 640.dp else 440.dp)
                     .fillMaxWidth()
-                    .verticalScroll( androidx.compose.foundation.rememberScrollState() ),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Material 3 Time Picker Dial Card with Haptic Ticks
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = colorScheme.surfaceContainer,
-                    border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp, vertical = if (isVeryShort) 12.dp else 18.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(if (isVeryShort) 10.dp else 14.dp)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp, horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Hour Picker Column
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(76.dp)
-                        ) {
-                            FilledTonalIconButton(
-                                onClick = {
-                                    haptics.tick()
-                                    pickedHour = if (pickedHour == maxHour) minHour else pickedHour + 1
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Hour")
+                        Text(
+                            text = "Set Alarm",
+                            style = if (isVeryShort) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+                            color = colorScheme.onSurface,
+                            fontFamily = customFont,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = onDismiss) {
+                                Text("Cancel", fontFamily = customFont)
                             }
-                            Text(
-                                text = String.format("%02d", pickedHour),
-                                color = colorScheme.onSurface,
-                                fontSize = 38.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = customFont,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                            FilledTonalIconButton(
+                            Button(
                                 onClick = {
-                                    haptics.tick()
-                                    pickedHour = if (pickedHour == minHour) maxHour else pickedHour - 1
-                                },
-                                modifier = Modifier.size(40.dp)
+                                    val finalHour = if (use24Hour) {
+                                        pickedHour
+                                    } else {
+                                        if (isAm) {
+                                            if (pickedHour == 12) 0 else pickedHour
+                                        } else {
+                                            if (pickedHour == 12) 12 else pickedHour + 12
+                                        }
+                                    }
+                                    onConfirm(finalHour, pickedMinute, alarmLabel, snoozeMinutes)
+                                }
                             ) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Hour")
+                                Text("Save Alarm", fontFamily = customFont)
+                            }
+                        }
+                    }
+
+                    if (useTwoColumns) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Left Column: Time Picker Dial
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = colorScheme.surfaceContainer,
+                                border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 10.dp, horizontal = 12.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.width(64.dp)
+                                    ) {
+                                        FilledTonalIconButton(
+                                            onClick = {
+                                                haptics.tick()
+                                                pickedHour = if (pickedHour == maxHour) minHour else pickedHour + 1
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Hour")
+                                        }
+                                        Text(
+                                            text = String.format("%02d", pickedHour),
+                                            color = colorScheme.onSurface,
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = customFont,
+                                            maxLines = 1,
+                                            modifier = Modifier.padding(vertical = 2.dp)
+                                        )
+                                        FilledTonalIconButton(
+                                            onClick = {
+                                                haptics.tick()
+                                                pickedHour = if (pickedHour == minHour) maxHour else pickedHour - 1
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Hour")
+                                        }
+                                    }
+
+                                    Text(
+                                        text = ":",
+                                        color = colorScheme.primary,
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp)
+                                    )
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.width(64.dp)
+                                    ) {
+                                        FilledTonalIconButton(
+                                            onClick = {
+                                                haptics.tick()
+                                                pickedMinute = (pickedMinute + 1) % 60
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Minute")
+                                        }
+                                        Text(
+                                            text = String.format("%02d", pickedMinute),
+                                            color = colorScheme.onSurface,
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = customFont,
+                                            maxLines = 1,
+                                            modifier = Modifier.padding(vertical = 2.dp)
+                                        )
+                                        FilledTonalIconButton(
+                                            onClick = {
+                                                haptics.tick()
+                                                pickedMinute = if (pickedMinute == 0) 59 else pickedMinute - 1
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Minute")
+                                        }
+                                    }
+
+                                    if (!use24Hour) {
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            FilterChip(
+                                                selected = isAm,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    isAm = true
+                                                },
+                                                label = { Text("AM", fontWeight = FontWeight.Bold) }
+                                            )
+                                            FilterChip(
+                                                selected = !isAm,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    isAm = false
+                                                },
+                                                label = { Text("PM", fontWeight = FontWeight.Bold) }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Right Column: Label + Snooze
+                            Column(
+                                modifier = Modifier.weight(1.1f),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = alarmLabel,
+                                    onValueChange = { alarmLabel = it },
+                                    label = { Text("Alarm Label", fontFamily = customFont) },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = "Snooze Interval",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = colorScheme.onSurfaceVariant,
+                                        fontFamily = customFont,
+                                        modifier = Modifier.padding(bottom = 6.dp)
+                                    )
+                                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                        val snoozeOptions = listOf(5, 10, 15, 30)
+                                        snoozeOptions.forEachIndexed { idx, mins ->
+                                            SegmentedButton(
+                                                selected = snoozeMinutes == mins,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    snoozeMinutes = mins
+                                                },
+                                                shape = SegmentedButtonDefaults.itemShape(index = idx, count = snoozeOptions.size)
+                                            ) {
+                                                Text("${mins}m", maxLines = 1)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Single Column Fallback for Portrait / Tall Screens
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = colorScheme.surfaceContainer,
+                            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.width(72.dp)
+                                ) {
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            haptics.tick()
+                                            pickedHour = if (pickedHour == maxHour) minHour else pickedHour + 1
+                                        },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Hour")
+                                    }
+                                    Text(
+                                        text = String.format("%02d", pickedHour),
+                                        color = colorScheme.onSurface,
+                                        fontSize = 36.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = customFont,
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            haptics.tick()
+                                            pickedHour = if (pickedHour == minHour) maxHour else pickedHour - 1
+                                        },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Hour")
+                                    }
+                                }
+
+                                Text(
+                                    text = ":",
+                                    color = colorScheme.primary,
+                                    fontSize = 32.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.width(72.dp)
+                                ) {
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            haptics.tick()
+                                            pickedMinute = (pickedMinute + 1) % 60
+                                        },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Minute")
+                                    }
+                                    Text(
+                                        text = String.format("%02d", pickedMinute),
+                                        color = colorScheme.onSurface,
+                                        fontSize = 36.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = customFont,
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            haptics.tick()
+                                            pickedMinute = if (pickedMinute == 0) 59 else pickedMinute - 1
+                                        },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Minute")
+                                    }
+                                }
+
+                                if (!use24Hour) {
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        FilterChip(
+                                            selected = isAm,
+                                            onClick = {
+                                                haptics.tick()
+                                                isAm = true
+                                            },
+                                            label = { Text("AM", fontWeight = FontWeight.Bold) }
+                                        )
+                                        FilterChip(
+                                            selected = !isAm,
+                                            onClick = {
+                                                haptics.tick()
+                                                isAm = false
+                                            },
+                                            label = { Text("PM", fontWeight = FontWeight.Bold) }
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        Text(
-                            text = ":",
-                            color = colorScheme.primary,
-                            fontSize = 34.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp)
+                        OutlinedTextField(
+                            value = alarmLabel,
+                            onValueChange = { alarmLabel = it },
+                            label = { Text("Alarm Label", fontFamily = customFont) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
                         )
 
-                        // Minute Picker Column
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(76.dp)
-                        ) {
-                            FilledTonalIconButton(
-                                onClick = {
-                                    haptics.tick()
-                                    pickedMinute = (pickedMinute + 1) % 60
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase Minute")
-                            }
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = String.format("%02d", pickedMinute),
-                                color = colorScheme.onSurface,
-                                fontSize = 38.sp,
-                                fontWeight = FontWeight.Bold,
+                                text = "Snooze Interval",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = colorScheme.onSurfaceVariant,
                                 fontFamily = customFont,
-                                modifier = Modifier.padding(vertical = 4.dp)
+                                modifier = Modifier.padding(bottom = 8.dp)
                             )
-                            FilledTonalIconButton(
-                                onClick = {
-                                    haptics.tick()
-                                    pickedMinute = if (pickedMinute == 0) 59 else pickedMinute - 1
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease Minute")
-                            }
-                        }
-
-                        if (!use24Hour) {
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                FilterChip(
-                                    selected = isAm,
-                                    onClick = {
-                                        haptics.tick()
-                                        isAm = true
-                                    },
-                                    label = { Text("AM", fontWeight = FontWeight.Bold) }
-                                )
-                                FilterChip(
-                                    selected = !isAm,
-                                    onClick = {
-                                        haptics.tick()
-                                        isAm = false
-                                    },
-                                    label = { Text("PM", fontWeight = FontWeight.Bold) }
-                                )
+                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                val snoozeOptions = listOf(5, 10, 15, 30)
+                                snoozeOptions.forEachIndexed { idx, mins ->
+                                    SegmentedButton(
+                                        selected = snoozeMinutes == mins,
+                                        onClick = {
+                                            haptics.tick()
+                                            snoozeMinutes = mins
+                                        },
+                                        shape = SegmentedButtonDefaults.itemShape(index = idx, count = snoozeOptions.size)
+                                    ) {
+                                        Text("${mins}m")
+                                    }
+                                }
                             }
                         }
                     }
                 }
-
-                OutlinedTextField(
-                    value = alarmLabel,
-                    onValueChange = { alarmLabel = it },
-                    label = { Text("Alarm Label", fontFamily = customFont) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "Snooze Interval",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = colorScheme.onSurfaceVariant,
-                        fontFamily = customFont,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        val snoozeOptions = listOf(5, 10, 15, 30)
-                        snoozeOptions.forEachIndexed { idx, mins ->
-                            SegmentedButton(
-                                selected = snoozeMinutes == mins,
-                                onClick = {
-                                    haptics.tick()
-                                    snoozeMinutes = mins
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(index = idx, count = snoozeOptions.size)
-                            ) {
-                                Text("${mins}m")
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val finalHour = if (use24Hour) {
-                        pickedHour
-                    } else {
-                        if (isAm) {
-                            if (pickedHour == 12) 0 else pickedHour
-                        } else {
-                            if (pickedHour == 12) 12 else pickedHour + 12
-                        }
-                    }
-                    onConfirm(finalHour, pickedMinute, alarmLabel, snoozeMinutes)
-                }
-            ) {
-                Text("Save Alarm", fontFamily = customFont)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", fontFamily = customFont)
             }
         }
-    )
+    }
 }

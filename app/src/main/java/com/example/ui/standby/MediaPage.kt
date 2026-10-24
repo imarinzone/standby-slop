@@ -18,8 +18,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Album
@@ -244,143 +246,164 @@ fun MediaPage(
                     }
                 } else {
                     // Material 3 Media Launcher Hub when no track is playing
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 28.dp, vertical = 20.dp)
-                    ) {
-                        Row(
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val isCompactHeight = maxHeight < 380.dp
+                        val isCompactWidth = maxWidth < 600.dp
+                        val hPad = if (isCompactWidth) 18.dp else 28.dp
+                        val vPad = if (isCompactHeight) 12.dp else 20.dp
+
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .fillMaxSize()
+                                .padding(horizontal = hPad, vertical = vPad)
                         ) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = colorScheme.primaryContainer
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.LibraryMusic,
-                                        contentDescription = null,
-                                        tint = colorScheme.onPrimaryContainer,
-                                        modifier = Modifier
-                                            .padding(10.dp)
-                                            .size(24.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = "Media Hub",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        color = colorScheme.onSurface,
-                                        fontFamily = customFont,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "No active playback session detected",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            if (!isNotificationListenerGranted) {
-                                FilledTonalButton(
-                                    onClick = {
-                                        haptics.confirm()
-                                        openNotificationListenerSettings(context)
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Sync,
-                                        contentDescription = "Link System Player",
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Link System Player",
-                                        fontFamily = customFont,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-                        }
-
-                        if (installedApps.isNotEmpty()) {
-                            Text(
-                                text = "Launch an installed music app to start listening",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 12.dp)
-                            )
-
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 156.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(1f)
+                                    .padding(bottom = if (isCompactHeight) 10.dp else 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                items(installedApps) { app ->
-                                    MusicAppItem(app = app) {
-                                        haptics.tick()
-                                        launchMusicApp(context, app.packageName)
-                                    }
-                                }
-                            }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                ElevatedCard(
-                                    shape = RoundedCornerShape(24.dp),
-                                    colors = CardDefaults.elevatedCardColors(
-                                        containerColor = colorScheme.surfaceContainerLow
-                                    ),
-                                    modifier = Modifier.widthIn(max = 460.dp)
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Column(
-                                        modifier = Modifier.padding(32.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = colorScheme.primaryContainer
                                     ) {
-                                        Surface(
-                                            modifier = Modifier.size(64.dp),
-                                            shape = CircleShape,
-                                            color = colorScheme.secondaryContainer
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Album,
-                                                    contentDescription = null,
-                                                    tint = colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.size(32.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Icon(
+                                            imageVector = Icons.Outlined.LibraryMusic,
+                                            contentDescription = null,
+                                            tint = colorScheme.onPrimaryContainer,
+                                            modifier = Modifier
+                                                .padding(if (isCompactHeight) 8.dp else 10.dp)
+                                                .size(if (isCompactHeight) 20.dp else 24.dp)
+                                        )
+                                    }
+                                    Column {
                                         Text(
-                                            text = "Ready for Playback",
-                                            style = MaterialTheme.typography.titleMedium,
+                                            text = "Media Hub",
+                                            style = if (isCompactHeight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
                                             color = colorScheme.onSurface,
                                             fontFamily = customFont,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
-                                        Spacer(modifier = Modifier.height(6.dp))
                                         Text(
-                                            text = "Start playing audio in Spotify, YouTube Music, or any media app to control playback from Standby.",
+                                            text = "No active playback session detected",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = colorScheme.onSurfaceVariant,
-                                            textAlign = TextAlign.Center
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
+                                    }
+                                }
+
+                                if (!isNotificationListenerGranted) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            haptics.confirm()
+                                            openNotificationListenerSettings(context)
+                                        },
+                                        contentPadding = PaddingValues(
+                                            horizontal = if (isCompactWidth) 12.dp else 16.dp,
+                                            vertical = 8.dp
+                                        )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Sync,
+                                            contentDescription = "Link System Player",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isCompactWidth) "Link Player" else "Link System Player",
+                                            fontFamily = customFont,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (installedApps.isNotEmpty()) {
+                                Text(
+                                    text = "Launch an installed music app to start listening",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = if (isCompactHeight) 8.dp else 12.dp)
+                                )
+
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(minSize = 148.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                ) {
+                                    items(installedApps) { app ->
+                                        MusicAppItem(app = app) {
+                                            haptics.tick()
+                                            launchMusicApp(context, app.packageName)
+                                        }
+                                    }
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    ElevatedCard(
+                                        shape = RoundedCornerShape(24.dp),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        ),
+                                        modifier = Modifier.widthIn(max = 460.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .verticalScroll(rememberScrollState())
+                                                .padding(if (isCompactHeight) 18.dp else 28.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Surface(
+                                                modifier = Modifier.size(if (isCompactHeight) 48.dp else 60.dp),
+                                                shape = CircleShape,
+                                                color = colorScheme.secondaryContainer
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Album,
+                                                        contentDescription = null,
+                                                        tint = colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.size(if (isCompactHeight) 24.dp else 30.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(if (isCompactHeight) 10.dp else 16.dp))
+                                            Text(
+                                                text = "Ready for Playback",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface,
+                                                fontFamily = customFont,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Start playing audio in Spotify, YouTube Music, or any media app to control playback from Standby.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = colorScheme.onSurfaceVariant,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -689,267 +712,288 @@ fun MaterialYouExpressivePlayer(
     val pmLabel = appInfo?.first ?: "System Media"
     val dominantColor = remember(albumArt) { getDominantColor(albumArt) }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.surface)
-            .padding(horizontal = 28.dp, vertical = 20.dp),
-        contentAlignment = Alignment.Center
     ) {
-        ElevatedCard(
+        val isCompactHeight = maxHeight < 380.dp
+        val isCompactWidth = maxWidth < 600.dp
+        val outerHPad = if (isCompactWidth) 16.dp else 28.dp
+        val outerVPad = if (isCompactHeight) 10.dp else 18.dp
+        val cardInnerPad = if (isCompactHeight) 16.dp else 24.dp
+
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.92f),
-            shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = colorScheme.surfaceContainerHigh
-            ),
-            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
+                .fillMaxSize()
+                .padding(horizontal = outerHPad, vertical = outerVPad),
+            verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 4.dp else 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (albumArt != null) {
-                    Image(
-                        bitmap = albumArt.asImageBitmap(),
-                        contentDescription = "Album Art",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.5f),
-                                        Color.Black.copy(alpha = 0.86f)
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                shape = RoundedCornerShape(if (isCompactHeight) 24.dp else 32.dp),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = colorScheme.surfaceContainerHigh
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (albumArt != null) {
+                        Image(
+                            bitmap = albumArt.asImageBitmap(),
+                            contentDescription = "Album Art",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.5f),
+                                            Color.Black.copy(alpha = 0.86f)
+                                        )
                                     )
                                 )
-                            )
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        dominantColor.copy(alpha = 0.45f),
-                                        colorScheme.surfaceContainerHighest
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            dominantColor.copy(alpha = 0.45f),
+                                            colorScheme.surfaceContainerHighest
+                                        )
                                     )
                                 )
-                            )
-                    )
-                }
-
-                val contentFg = if (albumArt != null) Color.White else colorScheme.onSurface
-                val secondaryFg = if (albumArt != null) Color.White.copy(alpha = 0.72f) else colorScheme.onSurfaceVariant
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Top M3 Pill Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = colorScheme.secondaryContainer.copy(alpha = 0.88f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.VolumeUp,
-                                    contentDescription = "Active Speaker",
-                                    tint = colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = pmLabel,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = colorScheme.onSecondaryContainer,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        AssistChip(
-                            onClick = {
-                                haptics.tick()
-                                standbyViewModel.setUseClassicMediaTheme(true)
-                            },
-                            label = {
-                                Text(
-                                    text = "Classic Vinyl",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontFamily = customFont
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Album,
-                                    contentDescription = "Classic Theme",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = colorScheme.surfaceContainer.copy(alpha = 0.85f),
-                                labelColor = colorScheme.onSurface,
-                                leadingIconContentColor = accentColor
-                            )
                         )
                     }
 
-                    // Track Metadata & Squiggly M3 Seekbar
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = trackTitle ?: "Unknown Track",
-                            color = contentFg,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = customFont,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = artistName ?: "Unknown Artist",
-                            color = secondaryFg,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontFamily = customFont,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
+                    val contentFg = if (albumArt != null) Color.White else colorScheme.onSurface
+                    val secondaryFg = if (albumArt != null) Color.White.copy(alpha = 0.72f) else colorScheme.onSurfaceVariant
 
-                        Spacer(modifier = Modifier.height(14.dp))
-
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(cardInnerPad),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Top M3 Pill Header
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            var simulatedProgress by remember { mutableFloatStateOf(0.35f) }
+                            Surface(
+                                shape = CircleShape,
+                                color = colorScheme.secondaryContainer.copy(alpha = 0.88f),
+                                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeUp,
+                                        contentDescription = "Active Speaker",
+                                        tint = colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = pmLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colorScheme.onSecondaryContainer,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
 
-                            LaunchedEffect(isPlaying) {
-                                if (isPlaying) {
-                                    while (true) {
-                                        delay(1000)
-                                        simulatedProgress = (simulatedProgress + 0.005f).coerceAtMost(1f)
-                                        if (simulatedProgress >= 1f) {
-                                            simulatedProgress = 0f
+                            AssistChip(
+                                onClick = {
+                                    haptics.tick()
+                                    standbyViewModel.setUseClassicMediaTheme(true)
+                                },
+                                label = {
+                                    Text(
+                                        text = "Classic Vinyl",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontFamily = customFont,
+                                        maxLines = 1
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Album,
+                                        contentDescription = "Classic Theme",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                                    labelColor = colorScheme.onSurface,
+                                    leadingIconContentColor = accentColor
+                                )
+                            )
+                        }
+
+                        // Track Metadata & Squiggly M3 Seekbar
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = trackTitle ?: "Unknown Track",
+                                color = contentFg,
+                                style = if (isCompactHeight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = customFont,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = artistName ?: "Unknown Artist",
+                                color = secondaryFg,
+                                style = if (isCompactHeight) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
+                                fontFamily = customFont,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(if (isCompactHeight) 6.dp else 14.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                var simulatedProgress by remember { mutableFloatStateOf(0.35f) }
+
+                                LaunchedEffect(isPlaying) {
+                                    if (isPlaying) {
+                                        while (true) {
+                                            delay(1000)
+                                            simulatedProgress = (simulatedProgress + 0.005f).coerceAtMost(1f)
+                                            if (simulatedProgress >= 1f) {
+                                                simulatedProgress = 0f
+                                            }
                                         }
                                     }
                                 }
+
+                                val elapsedSeconds = (simulatedProgress * 225).toInt()
+                                val minutesVal = elapsedSeconds / 60
+                                val secondsVal = elapsedSeconds % 60
+                                val elapsedMinutesStr = "$minutesVal:${secondsVal.toString().padStart(2, '0')}"
+
+                                Text(
+                                    text = elapsedMinutesStr,
+                                    color = secondaryFg,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace
+                                )
+
+                                SquigglySeekBar(
+                                    progress = simulatedProgress,
+                                    accentColor = accentColor,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 12.dp),
+                                    onSeek = { newProgress ->
+                                        simulatedProgress = newProgress
+                                    }
+                                )
+
+                                Text(
+                                    text = "3:45",
+                                    color = secondaryFg,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        // Material 3 Expressive Media Transport Controls
+                        val sideBtnSize = if (isCompactHeight) 46.dp else 56.dp
+                        val sideIconSize = if (isCompactHeight) 24.dp else 30.dp
+                        val mainBtnWidth = if (isCompactHeight) 74.dp else 88.dp
+                        val mainBtnHeight = if (isCompactHeight) 50.dp else 64.dp
+                        val mainIconSize = if (isCompactHeight) 28.dp else 36.dp
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilledTonalIconButton(
+                                onClick = {
+                                    haptics.tick()
+                                    sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                                },
+                                modifier = Modifier.size(sideBtnSize)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SkipPrevious,
+                                    contentDescription = "Previous",
+                                    modifier = Modifier.size(sideIconSize)
+                                )
                             }
 
-                            val elapsedSeconds = (simulatedProgress * 225).toInt()
-                            val minutesVal = elapsedSeconds / 60
-                            val secondsVal = elapsedSeconds % 60
-                            val elapsedMinutesStr = "$minutesVal:${secondsVal.toString().padStart(2, '0')}"
+                            Spacer(modifier = Modifier.width(if (isCompactHeight) 18.dp else 24.dp))
 
-                            Text(
-                                text = elapsedMinutesStr,
-                                color = secondaryFg,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace
-                            )
+                            FilledIconButton(
+                                onClick = {
+                                    haptics.confirm()
+                                    sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                                },
+                                modifier = Modifier.size(width = mainBtnWidth, height = mainBtnHeight),
+                                shape = RoundedCornerShape(if (isCompactHeight) 20.dp else 24.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = accentColor,
+                                    contentColor = if (accentColor == Color.White) Color.Black else Color.White
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "Play/Pause",
+                                    modifier = Modifier.size(mainIconSize)
+                                )
+                            }
 
-                            SquigglySeekBar(
-                                progress = simulatedProgress,
-                                accentColor = accentColor,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 12.dp),
-                                onSeek = { newProgress ->
-                                    simulatedProgress = newProgress
-                                }
-                            )
+                            Spacer(modifier = Modifier.width(if (isCompactHeight) 18.dp else 24.dp))
 
-                            Text(
-                                text = "3:45",
-                                color = secondaryFg,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
-
-                    // Material 3 Expressive Media Transport Controls
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                haptics.tick()
-                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-                            },
-                            modifier = Modifier.size(56.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipPrevious,
-                                contentDescription = "Previous",
-                                modifier = Modifier.size(30.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(24.dp))
-
-                        FilledIconButton(
-                            onClick = {
-                                haptics.confirm()
-                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                            },
-                            modifier = Modifier.size(width = 88.dp, height = 64.dp),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = accentColor,
-                                contentColor = if (accentColor == Color.White) Color.Black else Color.White
-                            )
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Play/Pause",
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(24.dp))
-
-                        FilledTonalIconButton(
-                            onClick = {
-                                haptics.tick()
-                                sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT)
-                            },
-                            modifier = Modifier.size(56.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Next",
-                                modifier = Modifier.size(30.dp)
-                            )
+                            FilledTonalIconButton(
+                                onClick = {
+                                    haptics.tick()
+                                    sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+                                },
+                                modifier = Modifier.size(sideBtnSize)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SkipNext,
+                                    contentDescription = "Next",
+                                    modifier = Modifier.size(sideIconSize)
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        EqualizerJumpingBars(
-            isPlaying = isPlaying,
-            accentColor = accentColor,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(22.dp)
-                .padding(horizontal = 40.dp, vertical = 2.dp)
-        )
+            EqualizerJumpingBars(
+                isPlaying = isPlaying,
+                accentColor = accentColor,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (isCompactHeight) 14.dp else 20.dp)
+                    .padding(horizontal = 24.dp)
+            )
+        }
     }
 }
 
@@ -1036,7 +1080,7 @@ fun CinematicRetroPlayer(
         }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -1049,6 +1093,16 @@ fun CinematicRetroPlayer(
             ),
         contentAlignment = Alignment.Center
     ) {
+        val isCompactHeight = maxHeight < 380.dp
+        val isCompactWidth = maxWidth < 600.dp
+        val hPad = if (isCompactWidth) 18.dp else 28.dp
+        val vPad = if (isCompactHeight) 14.dp else 20.dp
+        val discSize = minOf(maxWidth * 0.40f, maxHeight * 0.76f).coerceIn(118.dp, 176.dp)
+        val playBtnSize = (discSize * 0.34f).coerceIn(42.dp, 60.dp)
+        val ringSize = (discSize * 0.42f).coerceIn(50.dp, 72.dp)
+        val skipBtnSize = (discSize * 0.21f).coerceIn(28.dp, 36.dp)
+        val titleFontSize = if (isCompactHeight) 22.sp else 28.sp
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             val centerY = size.height * 0.5f
             val ragaLine = Path()
@@ -1072,14 +1126,15 @@ fun CinematicRetroPlayer(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 28.dp, vertical = 20.dp),
+                .padding(start = hPad, end = hPad, top = vPad, bottom = vPad + 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
                 modifier = Modifier
                     .weight(1.3f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .padding(end = 12.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.Start
             ) {
@@ -1104,15 +1159,15 @@ fun CinematicRetroPlayer(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(if (isCompactHeight) 8.dp else 12.dp))
 
                 Text(
                     text = (trackTitle ?: "MAYABONO BIHARINI").uppercase(),
                     color = Color.White,
-                    fontSize = 28.sp,
+                    fontSize = titleFontSize,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = customFont,
-                    lineHeight = 34.sp,
+                    lineHeight = (titleFontSize.value * 1.2f).sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1139,7 +1194,7 @@ fun CinematicRetroPlayer(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(172.dp)
+                        .size(discSize)
                         .clip(CircleShape)
                         .border(1.5.dp, Color.White.copy(alpha = 0.12f), CircleShape)
                         .background(Color(0xFF051114))
@@ -1162,7 +1217,7 @@ fun CinematicRetroPlayer(
                                 sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
                             },
                             modifier = Modifier
-                                .size(60.dp)
+                                .size(playBtnSize)
                                 .align(Alignment.Center),
                             shape = CircleShape,
                             colors = IconButtonDefaults.filledIconButtonColors(
@@ -1173,18 +1228,18 @@ fun CinematicRetroPlayer(
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play/Pause",
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size((playBtnSize * 0.48f).coerceAtLeast(20.dp))
                             )
                         }
 
                         Canvas(
                             modifier = Modifier
-                                .size(72.dp)
+                                .size(ringSize)
                                 .align(Alignment.Center)
                         ) {
                             drawCircle(
                                 color = Color.White.copy(alpha = 0.15f),
-                                radius = 34.dp.toPx(),
+                                radius = (size.minDimension / 2f) - 2.dp.toPx(),
                                 style = Stroke(width = 1.5.dp.toPx())
                             )
                             drawArc(
@@ -1203,14 +1258,14 @@ fun CinematicRetroPlayer(
                             },
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .padding(start = 6.dp)
-                                .size(36.dp)
+                                .padding(start = 4.dp)
+                                .size(skipBtnSize)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "Previous",
                                 tint = Color.White,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
@@ -1221,14 +1276,14 @@ fun CinematicRetroPlayer(
                             },
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
-                                .padding(end = 6.dp)
-                                .size(36.dp)
+                                .padding(end = 4.dp)
+                                .size(skipBtnSize)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next",
                                 tint = Color.White,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -1242,7 +1297,7 @@ fun CinematicRetroPlayer(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(24.dp)
+                .height(if (isCompactHeight) 16.dp else 22.dp)
                 .padding(horizontal = 24.dp, vertical = 2.dp)
         )
     }
