@@ -618,7 +618,7 @@ fun TopAppBarOverlay(
         "Alarm" to Icons.Outlined.Alarm,
         "Calendar" to Icons.Outlined.CalendarToday,
         "Music" to Icons.Outlined.MusicNote,
-        "Timer" to Icons.Outlined.Timer,
+        "Tools" to Icons.Outlined.Build,
         "Duo" to Icons.Outlined.ViewColumn
     )
 
@@ -744,8 +744,8 @@ fun StandbyCustomizationDialog(
         Triple("Alarm", "Alert Sync", Icons.Outlined.Alarm),
         Triple("Calendar", "Monthly Agenda", Icons.Outlined.CalendarToday),
         Triple("Music", "Media Player", Icons.Outlined.MusicNote),
-        Triple("Timer", "Focus & Laps", Icons.Outlined.Timer),
-        Triple("Duo", "Split Widgets", Icons.Outlined.ViewColumn)
+        Triple("Tools", "Focus, Gallery & Lab", Icons.Outlined.Build),
+        Triple("Duo", "Split Main Screens", Icons.Outlined.ViewColumn)
     )
 
     val selectedColorIdx by viewModel.getColorFlow(activeTab).collectAsState()
@@ -1068,9 +1068,10 @@ fun StandbyCustomizationDialog(
                             }
                         }
 
-                        // 2b. Enable / Disable Clock Faces by Ticking (Clock Tab 0)
+                        // 2b. Enable / Disable Clock Faces (Compact & Collapsible, Clock Tab 0)
                         if (activeTab == 0) {
                             val enabledClockSet by viewModel.enabledClockFaces.collectAsState()
+                            var isClockListExpanded by remember { mutableStateOf(false) }
                             ElevatedCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1084,101 +1085,87 @@ fun StandbyCustomizationDialog(
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                haptics.tick()
+                                                isClockListExpanded = !isClockListExpanded
+                                            },
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Active Clock Faces",
+                                                text = "Active Clock Faces (${enabledClockSet.size}/${viewModel.clockFaceTitles.size})",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 color = colorScheme.onSurface
                                             )
                                             Text(
-                                                text = "Tick to enable or disable clock faces in your StandBy carousel (${enabledClockSet.size}/${viewModel.clockFaceTitles.size} active)",
+                                                text = if (isClockListExpanded) "Tap any clock face to show or hide it in your carousel"
+                                                else "Tap to customize which clock faces appear in your carousel",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = colorScheme.onSurfaceVariant
                                             )
                                         }
-                                        TextButton(
-                                            onClick = {
-                                                haptics.tick()
-                                                viewModel.clockFaceTitles.indices.forEach { idx ->
-                                                    viewModel.setClockFaceEnabled(idx, true)
-                                                }
-                                            },
-                                            modifier = Modifier.testTag("enable_all_clock_faces_button")
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Text("Enable All")
+                                            if (enabledClockSet.size < viewModel.clockFaceTitles.size) {
+                                                TextButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        viewModel.clockFaceTitles.indices.forEach { idx ->
+                                                            viewModel.setClockFaceEnabled(idx, true)
+                                                        }
+                                                    },
+                                                    modifier = Modifier.testTag("enable_all_clock_faces_button")
+                                                ) {
+                                                    Text("Enable All")
+                                                }
+                                            }
+                                            FilledTonalButton(
+                                                onClick = {
+                                                    haptics.tick()
+                                                    isClockListExpanded = !isClockListExpanded
+                                                }
+                                            ) {
+                                                Text(if (isClockListExpanded) "Hide" else "Customize")
+                                            }
                                         }
                                     }
 
-                                    viewModel.clockFaceTitles.forEachIndexed { idx, title ->
-                                        val subtitle = viewModel.clockFaceSubtitles.getOrElse(idx) { "CLOCK FACE" }
-                                        val isEnabled = enabledClockSet.contains(idx)
-                                        val canUncheck = !isEnabled || enabledClockSet.size > 1
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = if (isEnabled) colorScheme.surfaceContainerHigh else colorScheme.surfaceContainer,
+                                    AnimatedVisibility(visible = isClockListExpanded) {
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .clickable(enabled = canUncheck) {
-                                                    haptics.tick()
-                                                    viewModel.toggleClockFace(idx)
-                                                }
-                                                .testTag("clock_face_toggle_row_$idx")
+                                                .padding(top = 4.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Checkbox(
-                                                        checked = isEnabled,
-                                                        onCheckedChange = { checked ->
-                                                            if (checked || enabledClockSet.size > 1) {
-                                                                haptics.tick()
-                                                                viewModel.setClockFaceEnabled(idx, checked)
-                                                            }
-                                                        },
-                                                        enabled = canUncheck,
-                                                        modifier = Modifier.testTag("clock_face_checkbox_$idx")
-                                                    )
-                                                    Column {
-                                                        Text(
-                                                            text = title,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            fontWeight = FontWeight.SemiBold,
-                                                            color = if (isEnabled) colorScheme.onSurface else colorScheme.onSurfaceVariant
-                                                        )
-                                                        Text(
-                                                            text = subtitle,
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = colorScheme.onSurfaceVariant
-                                                        )
-                                                    }
-                                                }
-                                                if (idx >= 10) {
-                                                    Surface(
-                                                        shape = CircleShape,
-                                                        color = colorScheme.primaryContainer
-                                                    ) {
-                                                        Text(
-                                                            text = "StandBy",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = colorScheme.onPrimaryContainer,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                }
+                                            viewModel.clockFaceTitles.forEachIndexed { idx, title ->
+                                                val isEnabled = enabledClockSet.contains(idx)
+                                                val canUncheck = !isEnabled || enabledClockSet.size > 1
+                                                FilterChip(
+                                                    selected = isEnabled,
+                                                    onClick = {
+                                                        if (canUncheck) {
+                                                            haptics.tick()
+                                                            viewModel.toggleClockFace(idx)
+                                                        }
+                                                    },
+                                                    label = { Text(title, style = MaterialTheme.typography.labelMedium) },
+                                                    leadingIcon = if (isEnabled) {
+                                                        {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Check,
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+                                                    } else null,
+                                                    modifier = Modifier.testTag("clock_face_toggle_row_$idx")
+                                                )
                                             }
                                         }
                                     }
@@ -1186,7 +1173,7 @@ fun StandbyCustomizationDialog(
                             }
                         }
 
-                        // 2c. Duo Split Screen Widget Selector & Per-Pane TimeZone (Duo Tab 5)
+                        // 2c. Duo Split Screen Selector & Searchable Per-Pane Location (Duo Tab 5)
                         if (activeTab == 5) {
                             val leftWidgetIdx by viewModel.duoLeftWidgetIndex.collectAsState()
                             val rightWidgetIdx by viewModel.duoRightWidgetIndex.collectAsState()
@@ -1194,6 +1181,11 @@ fun StandbyCustomizationDialog(
                             val rightTzId by viewModel.duoRightTimeZoneId.collectAsState()
                             val leftLocName by viewModel.duoLeftLocationName.collectAsState()
                             val rightLocName by viewModel.duoRightLocationName.collectAsState()
+                            val leftResolved = remember(leftTzId, leftLocName) { viewModel.resolvePaneLocationInfo(1) }
+                            val rightResolved = remember(rightTzId, rightLocName) { viewModel.resolvePaneLocationInfo(2) }
+                            var leftMenuExpanded by remember { mutableStateOf(false) }
+                            var rightMenuExpanded by remember { mutableStateOf(false) }
+
                             ElevatedCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1204,123 +1196,169 @@ fun StandbyCustomizationDialog(
                             ) {
                                 Column(
                                     modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
                                 ) {
                                     Text(
-                                        text = "Duo Split Screens & StandBy Widgets",
+                                        text = "Duo Split Layout",
                                         style = MaterialTheme.typography.titleMedium,
                                         color = colorScheme.onSurface
                                     )
-                                    Text(
-                                        text = "Choose any screen or StandBy clock face and independent Time Zone for the Left and Right Duo panes",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = colorScheme.onSurfaceVariant
-                                    )
 
-                                    Text(
-                                        text = "Left Pane Screen",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colorScheme.primary
-                                    )
                                     FlowRow(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        viewModel.duoWidgetTitles.forEachIndexed { idx, title ->
+                                        val duoPresets = listOf(
+                                            Triple("Airport Board & World Map", 2, 10),
+                                            Triple("Sage Clock & Calendar", 11, 14),
+                                            Triple("Float Clock & Music", 12, 15),
+                                            Triple("Matrix Clock & Tools", 3, 16)
+                                        )
+                                        duoPresets.forEachIndexed { pIdx, (presetLabel, lIdx, rIdx) ->
                                             FilterChip(
-                                                selected = leftWidgetIdx == idx,
+                                                selected = leftWidgetIdx == lIdx && rightWidgetIdx == rIdx,
                                                 onClick = {
                                                     haptics.tick()
-                                                    viewModel.setDuoLeftWidgetIndex(idx)
+                                                    viewModel.setDuoLeftWidgetIndex(lIdx)
+                                                    viewModel.setDuoRightWidgetIndex(rIdx)
                                                 },
-                                                label = { Text(title, style = MaterialTheme.typography.labelSmall) },
-                                                modifier = Modifier.testTag("duo_left_chip_$idx")
+                                                label = { Text(presetLabel, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.testTag("duo_split_preset_$pIdx")
                                             )
                                         }
                                     }
 
-                                    Text(
-                                        text = "Left Pane Time Zone / Location",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = colorScheme.onSurfaceVariant
-                                    )
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        viewModel.selectableTimeZones.forEachIndexed { idx, (tzId, label) ->
-                                            val isSelected = leftTzId.equals(tzId, ignoreCase = true) && leftLocName.isBlank()
-                                            FilterChip(
-                                                selected = isSelected,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    viewModel.setDuoLeftLocationName("")
-                                                    viewModel.setDuoLeftTimeZoneId(tzId)
-                                                },
-                                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                                                modifier = Modifier.testTag("duo_left_tz_chip_$idx")
-                                            )
+                                        // LEFT PANE COMPACT SELECTOR + SEARCHABLE LOCATION
+                                        Surface(
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(14.dp),
+                                            color = colorScheme.surfaceContainer
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Left Pane",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Box {
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            haptics.tick()
+                                                            leftMenuExpanded = true
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Text(
+                                                            text = viewModel.duoWidgetTitles.getOrElse(leftWidgetIdx) { "Clock" },
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                                    }
+                                                    DropdownMenu(
+                                                        expanded = leftMenuExpanded,
+                                                        onDismissRequest = { leftMenuExpanded = false }
+                                                    ) {
+                                                        viewModel.duoWidgetTitles.forEachIndexed { idx, title ->
+                                                            DropdownMenuItem(
+                                                                text = { Text(title) },
+                                                                onClick = {
+                                                                    haptics.tick()
+                                                                    viewModel.setDuoLeftWidgetIndex(idx)
+                                                                    leftMenuExpanded = false
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                SearchableLocationTimeZoneField(
+                                                    viewModel = viewModel,
+                                                    paneIndex = 1,
+                                                    activeSummary = "${leftResolved.regionName} (${leftResolved.airportCode}) • ${leftResolved.standardTimeShort}",
+                                                    label = "Search Left Location / Time Zone",
+                                                    testTag = "duo_left_location_search_input"
+                                                )
+                                            }
                                         }
-                                    }
 
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Right Pane Screen",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colorScheme.primary
-                                    )
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        viewModel.duoWidgetTitles.forEachIndexed { idx, title ->
-                                            FilterChip(
-                                                selected = rightWidgetIdx == idx,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    viewModel.setDuoRightWidgetIndex(idx)
-                                                },
-                                                label = { Text(title, style = MaterialTheme.typography.labelSmall) },
-                                                modifier = Modifier.testTag("duo_right_chip_$idx")
-                                            )
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "Right Pane Time Zone / Location",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = colorScheme.onSurfaceVariant
-                                    )
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        viewModel.selectableTimeZones.forEachIndexed { idx, (tzId, label) ->
-                                            val isSelected = rightTzId.equals(tzId, ignoreCase = true) && rightLocName.isBlank()
-                                            FilterChip(
-                                                selected = isSelected,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    viewModel.setDuoRightLocationName("")
-                                                    viewModel.setDuoRightTimeZoneId(tzId)
-                                                },
-                                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                                                modifier = Modifier.testTag("duo_right_tz_chip_$idx")
-                                            )
+                                        // RIGHT PANE COMPACT SELECTOR + SEARCHABLE LOCATION
+                                        Surface(
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(14.dp),
+                                            color = colorScheme.surfaceContainer
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Right Pane",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Box {
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            haptics.tick()
+                                                            rightMenuExpanded = true
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Text(
+                                                            text = viewModel.duoWidgetTitles.getOrElse(rightWidgetIdx) { "Clock" },
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                                    }
+                                                    DropdownMenu(
+                                                        expanded = rightMenuExpanded,
+                                                        onDismissRequest = { rightMenuExpanded = false }
+                                                    ) {
+                                                        viewModel.duoWidgetTitles.forEachIndexed { idx, title ->
+                                                            DropdownMenuItem(
+                                                                text = { Text(title) },
+                                                                onClick = {
+                                                                    haptics.tick()
+                                                                    viewModel.setDuoRightWidgetIndex(idx)
+                                                                    rightMenuExpanded = false
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                SearchableLocationTimeZoneField(
+                                                    viewModel = viewModel,
+                                                    paneIndex = 2,
+                                                    activeSummary = "${rightResolved.regionName} (${rightResolved.airportCode}) • ${rightResolved.standardTimeShort}",
+                                                    label = "Search Right Location / Time Zone",
+                                                    testTag = "duo_right_location_search_input"
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
 
-                        // 2d. Airport Terminal, World Map Location & Time Zone Selector (Clock Tab 0 or Duo Tab 5)
+                        // 2d. Searchable Location & Time Zone Card (Clock Tab 0 or Duo Tab 5)
                         if (activeTab == 0 || activeTab == 5) {
                             val settingsContext = LocalContext.current
                             val locMode by viewModel.locationMode.collectAsState()
                             val customLoc by viewModel.customLocationName.collectAsState()
                             val clockTzId by viewModel.clockTimeZoneId.collectAsState()
                             val gpsLoc by viewModel.gpsLocationName.collectAsState()
-                            val googleAccount by viewModel.googleConnectedAccount.collectAsState()
                             val resolvedInfo = remember(locMode, customLoc, clockTzId, gpsLoc) {
                                 viewModel.resolveCurrentLocationInfo()
                             }
@@ -1346,7 +1384,7 @@ fun StandbyCustomizationDialog(
                             ) {
                                 Column(
                                     modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -1355,12 +1393,12 @@ fun StandbyCustomizationDialog(
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Airport Terminal, World Map & Time Zone",
+                                                text = "Location & Time Zone",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 color = colorScheme.onSurface
                                             )
                                             Text(
-                                                text = "Active: ${resolvedInfo.airportCityName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort} (${resolvedInfo.utcOffsetLabel})",
+                                                text = "${resolvedInfo.regionName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort} (${resolvedInfo.utcOffsetLabel})",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = colorScheme.primary
                                             )
@@ -1370,6 +1408,7 @@ fun StandbyCustomizationDialog(
                                                 haptics.tick()
                                                 viewModel.setLocationMode("auto")
                                                 viewModel.setClockTimeZoneId("AUTO")
+                                                viewModel.setCustomLocationName("")
                                                 val ok = viewModel.refreshDeviceLocation(settingsContext)
                                                 if (!ok) {
                                                     locPermLauncher.launch(
@@ -1388,142 +1427,17 @@ fun StandbyCustomizationDialog(
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Use GPS / Auto")
+                                            Text("Auto / GPS")
                                         }
                                     }
 
-                                    OutlinedTextField(
-                                        value = customLoc,
-                                        onValueChange = { newText ->
-                                            viewModel.setCustomLocationName(newText)
-                                        },
-                                        label = { Text("Custom Terminal / City Name (e.g. San Francisco (SFO))") },
-                                        singleLine = true,
-                                        trailingIcon = {
-                                            if (customLoc.isNotEmpty()) {
-                                                IconButton(
-                                                    onClick = {
-                                                        haptics.tick()
-                                                        viewModel.setCustomLocationName("")
-                                                        viewModel.setLocationMode("auto")
-                                                    }
-                                                ) {
-                                                    Icon(Icons.Default.Clear, contentDescription = "Reset to Auto")
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("custom_location_input")
+                                    SearchableLocationTimeZoneField(
+                                        viewModel = viewModel,
+                                        paneIndex = 0,
+                                        activeSummary = "${resolvedInfo.regionName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort}",
+                                        label = "Search city, airport, or time zone (e.g. Tokyo, JFK, London)...",
+                                        testTag = "custom_location_input"
                                     )
-
-                                    Text(
-                                        text = "Select Time Zone",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colorScheme.primary
-                                    )
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        viewModel.selectableTimeZones.forEachIndexed { idx, (tzId, label) ->
-                                            val isSelected = clockTzId.equals(tzId, ignoreCase = true)
-                                            FilterChip(
-                                                selected = isSelected,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    viewModel.setClockTimeZoneId(tzId)
-                                                },
-                                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                                                modifier = Modifier.testTag("clock_timezone_preset_$idx")
-                                            )
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "Select Terminal / Region Preset",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colorScheme.onSurfaceVariant
-                                    )
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        FilterChip(
-                                            selected = locMode == "auto" && clockTzId == "AUTO",
-                                            onClick = {
-                                                haptics.tick()
-                                                viewModel.setLocationMode("auto")
-                                                viewModel.setClockTimeZoneId("AUTO")
-                                                viewModel.refreshDeviceLocation(settingsContext)
-                                            },
-                                            label = { Text("Auto (${TimeZone.getDefault().id.substringAfterLast("/").replace("_", " ")})") },
-                                            modifier = Modifier.testTag("location_preset_auto")
-                                        )
-                                        viewModel.selectableLocations.forEachIndexed { idx, preset ->
-                                            val isSelected = locMode == "custom" && customLoc.equals(preset, ignoreCase = true)
-                                            FilterChip(
-                                                selected = isSelected,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    viewModel.setCustomLocationName(preset)
-                                                },
-                                                label = { Text(preset, style = MaterialTheme.typography.labelSmall) },
-                                                modifier = Modifier.testTag("location_preset_$idx")
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 2e. Google Home & Connected Devices Card
-                            ElevatedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("google_home_settings_card"),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Google Home & Fast Pair Devices",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "Connected through Google only ($googleAccount)",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        FilledTonalButton(
-                                            onClick = {
-                                                haptics.tick()
-                                                val detected = GoogleDeviceAndHomeMonitor.detectConnectedGoogleAccount(settingsContext)
-                                                viewModel.setGoogleConnectedAccount(detected)
-                                                GoogleDeviceAndHomeMonitor.openGoogleHomeApp(settingsContext)
-                                            },
-                                            modifier = Modifier.testTag("sync_google_home_button")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Home,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Google Home")
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -2202,8 +2116,8 @@ fun AppOverviewLayout(
                 1 to ("System Alarm" to "ALARM DISPATCH"),
                 2 to ("Calendar Agenda" to "CALENDAR AGENDA"),
                 3 to ("Music Player" to "MUSIC PLAYER"),
-                4 to ("Timer Focus Matrix" to "TIMER FOCUS"),
-                5 to ("Duo Split Views" to "DUO WIDGETS")
+                4 to ("Tools Hub" to "TOOLS & GALLERY"),
+                5 to ("Duo Split Views" to "DUO SCREENS")
             )
 
             LazyRow(
@@ -2604,3 +2518,135 @@ fun PreviewDuoPage(fontFamily: FontFamily) {
         }
     }
 }
+
+@Composable
+fun SearchableLocationTimeZoneField(
+    viewModel: StandbyViewModel,
+    paneIndex: Int,
+    activeSummary: String,
+    label: String,
+    testTag: String = "searchable_location_field",
+    onSelectionApplied: (() -> Unit)? = null
+) {
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
+    var searchQuery by remember { mutableStateOf("") }
+    var showSuggestions by remember { mutableStateOf(false) }
+
+    val results = remember(searchQuery) {
+        viewModel.searchLocationsAndTimeZones(searchQuery).take(5)
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { text ->
+                searchQuery = text
+                showSuggestions = true
+                if (text.trim().length >= 2) {
+                    viewModel.applySearchedLocationSelection(
+                        selectionKey = "",
+                        rawQueryFallback = text.trim(),
+                        pane = paneIndex
+                    )
+                }
+            },
+            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            placeholder = { Text(activeSummary, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search Location",
+                    tint = colorScheme.primary
+                )
+            },
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                haptics.tick()
+                                searchQuery = ""
+                                showSuggestions = false
+                            }
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear Search")
+                        }
+                    } else {
+                        IconButton(
+                            onClick = {
+                                haptics.tick()
+                                showSuggestions = !showSuggestions
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (showSuggestions) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = "Toggle Suggestions"
+                            )
+                        }
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(testTag)
+        )
+
+        AnimatedVisibility(visible = showSuggestions || searchQuery.isNotBlank()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = colorScheme.surfaceContainerHigh,
+                tonalElevation = 3.dp,
+                border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.45f))
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    results.forEachIndexed { idx, (selectionKey, displayDesc) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    haptics.tick()
+                                    viewModel.applySearchedLocationSelection(
+                                        selectionKey = selectionKey,
+                                        rawQueryFallback = searchQuery,
+                                        pane = paneIndex
+                                    )
+                                    searchQuery = ""
+                                    showSuggestions = false
+                                    onSelectionApplied?.invoke()
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                                .testTag("${testTag}_result_$idx"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (selectionKey == "AUTO") Icons.Default.MyLocation else Icons.Default.Public,
+                                contentDescription = null,
+                                tint = colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = displayDesc,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (idx < results.lastIndex) {
+                            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.25f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

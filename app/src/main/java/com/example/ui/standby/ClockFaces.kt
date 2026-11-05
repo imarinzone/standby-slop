@@ -155,7 +155,7 @@ fun ClockFaceRenderer(
             val viewportScale = minOf(widthFactor, heightFactor)
             val effectiveScale = (clockScaleValue * viewportScale).coerceIn(0.42f, 1.65f)
 
-            when (themeIndex.mod(16)) {
+            when (themeIndex.mod(13)) {
                 0 -> DigitalMinimal(zonedCurrentTime, customColor, customFont, effectiveScale, animsEnabled, use24Hour, showAmPm, showSeconds, glowVal, outlineVal, gradientColors)
                 1 -> AnalogClassic(zonedCurrentTime, customColor, effectiveScale, animsEnabled, true)
                 2 -> RetroFlip(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds, isDuoCompact = false, standbyViewModel = standbyViewModel, paneIndex = 0)
@@ -169,9 +169,6 @@ fun ClockFaceRenderer(
                 10 -> WorldTimeZoneMapClockFace(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, nextSystemAlarm, isDuoCompact = false, standbyViewModel = standbyViewModel, paneIndex = 0)
                 11 -> StandbySageComplicationClockFace(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, weather?.temperature_2m, nextSystemAlarm)
                 12 -> OverlappingFloatClockFace(zonedCurrentTime, customColor, effectiveScale, use24Hour)
-                13 -> SquircleTickAndBatteryClockFace(zonedCurrentTime, customColor, effectiveScale, use24Hour)
-                14 -> AnalogSmartHomeClockFace(zonedCurrentTime, customColor, effectiveScale, standbyViewModel = standbyViewModel)
-                15 -> BigDateCalendarSplitClockFace(zonedCurrentTime, customColor)
             }
         }
         
@@ -1429,6 +1426,14 @@ fun MatrixRainBackground(accentColor: Color) {
     }
 }
 
+private val MatrixCrtFontFamily = FontFamily(
+    Font(R.font.vt323, FontWeight.Normal)
+)
+
+private val MatrixTerminalFontFamily = FontFamily(
+    Font(R.font.share_tech_mono, FontWeight.Normal)
+)
+
 @Composable
 fun BinaryStyle(
     calendar: Calendar, 
@@ -1439,53 +1444,180 @@ fun BinaryStyle(
     showAmPm: Boolean = true,
     showSeconds: Boolean = true
 ) {
+    // Use the Matrix CRT / Terminal font by default if the user hasn't picked a specialized font
+    val matrixFont = if (fontFamily == FontFamily.SansSerif || fontFamily == FontFamily.Default) {
+        MatrixCrtFontFamily
+    } else {
+        fontFamily
+    }
+    val matrixNeon = if (color == Color.White) Color(0xFF39FF14) else color
+
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().background(Color.Black),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .testTag("matrix_clock_face"),
         contentAlignment = Alignment.Center
     ) {
-        MatrixRainBackground(accentColor = color)
-        
-        // Slightly reduced overlay to let the dense matrix rain shine through beautifully
+        MatrixRainBackground(accentColor = matrixNeon)
+
+        // Subtle CRT dark vignette so the full-display Matrix typography pops with maximum contrast
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.3f))
+                .background(Color.Black.copy(alpha = 0.32f))
         )
-        
-        val tz = calendar.timeZone ?: TimeZone.getDefault()
-        val formatPattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
-        val format = SimpleDateFormat(formatPattern, Locale.getDefault()).apply { timeZone = tz }
-        val text = format.format(calendar.time).map { char ->
-            when {
-                char == ':' -> ":"
-                char == ' ' -> " "
-                char.isDigit() -> Integer.toBinaryString(char.toString().toInt()).padStart(4, '0')
-                else -> char.toString()
-            }
-        }.joinToString(" ")
-        
-        val availableWidth = (maxWidth.value - 48f).coerceAtLeast(180f)
-        val maxFitFontSize = (availableWidth / (text.length * 0.58f)).coerceIn(13f, 52f)
-        val finalFontSize = minOf(52f * scale, maxFitFontSize).coerceAtLeast(13f)
 
-        Text(
-            text = text,
-            maxLines = 1,
-            softWrap = false,
-            style = androidx.compose.ui.text.TextStyle(
-                color = Color.White,
-                fontSize = finalFontSize.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = fontFamily,
-                textAlign = TextAlign.Center,
-                shadow = androidx.compose.ui.graphics.Shadow(
-                    color = Color(0xFF39FF14).copy(alpha = 0.85f),
-                    offset = Offset(0f, 0f),
-                    blurRadius = 24f
+        val tz = calendar.timeZone ?: TimeZone.getDefault()
+        val hourStr = SimpleDateFormat(if (use24Hour) "HH" else "hh", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
+        val minStr = SimpleDateFormat("mm", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
+        val secStr = SimpleDateFormat("ss", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
+        val amPmStr = SimpleDateFormat("a", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time).uppercase(Locale.getDefault())
+        val mainTimeText = if (showSeconds) "$hourStr:$minStr:$secStr" else "$hourStr:$minStr"
+
+        val binaryGroups = remember(hourStr, minStr, secStr, showSeconds) {
+            val digits = if (showSeconds) "$hourStr$minStr$secStr" else "$hourStr$minStr"
+            digits.map { ch ->
+                if (ch.isDigit()) Integer.toBinaryString(ch.digitToInt()).padStart(4, '0') else "0000"
+            }
+        }
+
+        val availW = maxWidth.value.coerceAtLeast(180f)
+        val availH = maxHeight.value.coerceAtLeast(140f)
+        val isCompactPane = availW < 360f || availH < 210f
+
+        // Compute full-display font size so the Matrix clock numerals span the entire display width & height
+        val charFactor = if (matrixFont == MatrixCrtFontFamily) 0.42f else 0.54f
+        val widthDrivenSize = (availW * 0.96f) / (mainTimeText.length * charFactor)
+        val heightDrivenSize = availH * (if (isCompactPane) 0.62f else 0.68f)
+        val heroFontSize = (minOf(widthDrivenSize, heightDrivenSize) * scale.coerceIn(0.85f, 1.35f))
+            .coerceIn(if (isCompactPane) 54f else 96f, 340f)
+
+        val binaryRowFontSize = (availW / (binaryGroups.size * 5.2f)).coerceIn(11f, 34f)
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    horizontal = if (isCompactPane) 6.dp else 14.dp,
+                    vertical = if (isCompactPane) 6.dp else 10.dp
+                ),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // TOP EDGE: Full-Width Matrix System Header & Binary Bitstream
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "SYS://MATRIX.NODE",
+                    color = matrixNeon.copy(alpha = 0.88f),
+                    fontSize = (binaryRowFontSize * 0.72f).coerceIn(10f, 20f).sp,
+                    fontFamily = MatrixTerminalFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
                 )
-            ),
-            modifier = Modifier.padding(horizontal = 24.dp)
-        )
+                Text(
+                    text = if (!use24Hour && showAmPm) "[$amPmStr • ${tz.id.substringAfterLast("/").uppercase(Locale.getDefault())}]"
+                    else "[24H • ${tz.id.substringAfterLast("/").uppercase(Locale.getDefault())}]",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = (binaryRowFontSize * 0.72f).coerceIn(10f, 20f).sp,
+                    fontFamily = MatrixTerminalFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp
+                )
+            }
+
+            // CENTER FULL-DISPLAY MATRIX HERO TIME (Takes up the entire display width & height)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                // Outer Neon Phosphor Bloom Layer
+                Text(
+                    text = mainTimeText,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = androidx.compose.ui.text.TextStyle(
+                        color = matrixNeon.copy(alpha = 0.55f),
+                        fontSize = heroFontSize.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = matrixFont,
+                        textAlign = TextAlign.Center,
+                        letterSpacing = 2.sp,
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = matrixNeon,
+                            offset = Offset(0f, 0f),
+                            blurRadius = 42f
+                        )
+                    )
+                )
+                // Inner White-Hot CRT Phosphor Core Layer
+                Text(
+                    text = mainTimeText,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = androidx.compose.ui.text.TextStyle(
+                        color = Color(0xFFE8FFE8),
+                        fontSize = heroFontSize.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = matrixFont,
+                        textAlign = TextAlign.Center,
+                        letterSpacing = 2.sp,
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = matrixNeon,
+                            offset = Offset(0f, 0f),
+                            blurRadius = 18f
+                        )
+                    )
+                )
+            }
+
+            // BOTTOM EDGE: Full-Width Live 4-Bit Binary Nibbles Bar spanning edge-to-edge
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF041204).copy(alpha = 0.72f))
+                    .border(1.dp, matrixNeon.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                binaryGroups.forEachIndexed { idx, bits ->
+                    Text(
+                        text = bits,
+                        color = if (idx % 2 == 0) Color.White else matrixNeon,
+                        fontSize = binaryRowFontSize.sp,
+                        fontFamily = MatrixTerminalFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        style = androidx.compose.ui.text.TextStyle(
+                            shadow = androidx.compose.ui.graphics.Shadow(
+                                color = matrixNeon.copy(alpha = 0.9f),
+                                offset = Offset(0f, 0f),
+                                blurRadius = 14f
+                            )
+                        )
+                    )
+                    if (idx == 1 || (showSeconds && idx == 3)) {
+                        Text(
+                            text = ":",
+                            color = matrixNeon,
+                            fontSize = binaryRowFontSize.sp,
+                            fontFamily = MatrixTerminalFontFamily,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -3,9 +3,12 @@ package com.example.ui.standby
 import android.app.Application
 import android.content.Context
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.R
 import com.example.data.Alarm
 import com.example.data.AppDatabase
 import kotlinx.coroutines.delay
@@ -55,10 +58,7 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         "High-Tech Nixie Tube",
         "World Time Zone Map",
         "StandBy Sage & Complications",
-        "Overlapping Float Numerals",
-        "Squircle Tick & Battery Rings",
-        "Analog Smart Home Hub",
-        "Big Date & Calendar Split"
+        "Overlapping Float Numerals"
     )
 
     val clockFaceSubtitles = listOf(
@@ -74,54 +74,48 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         "10 | NIXIE TUBE",
         "11 | WORLD TIME MAP",
         "12 | STANDBY SAGE",
-        "13 | FLOAT NUMERALS",
-        "14 | SQUIRCLE & BATTERY",
-        "15 | ANALOG SMART HOME",
-        "16 | BIG DATE CALENDAR"
+        "13 | FLOAT NUMERALS"
     )
 
     val enabledClockFaces = MutableStateFlow<Set<Int>>(
         prefs.getStringSet("enabledClockFaces", null)
-            ?.mapNotNull { it.toIntOrNull()?.takeIf { idx -> idx in 0..15 } }
+            ?.mapNotNull { it.toIntOrNull()?.takeIf { idx -> idx in 0..12 } }
             ?.toSet()
             ?.takeIf { it.isNotEmpty() }
-            ?: (0..15).toSet()
+            ?: (0..12).toSet()
     )
 
+    // Duo screens strictly match the actual main screens we have built (13 Clock Faces + 4 Utility Screens)
     val duoWidgetTitles = listOf(
-        "Digital Clock & Weather",
-        "Alarms & Quick Toggle",
-        "Calendar & Agenda",
-        "Music Controller",
-        "Pomodoro & Stopwatch",
+        "Digital Minimal",
+        "Analog Classic",
         "Airport Split-Flap Board",
-        "Squircle 60-Tick Clock",
-        "StandBy Numbered Analog",
-        "Overlapping Float Clock",
-        "Sage Clock & Complications",
-        "World Time Zone Map",
-        "Google Battery & Charging (2x2)",
-        "Google Home Controls (2x2)",
-        "Big Date Hero (Tue Jul 4)",
-        "Monthly Calendar Grid",
-        "Now Playing Media Card",
-        "Incoming Call / Contact Card",
-        "Digital Minimal Clock",
-        "Analog Classic Clock",
-        "Binary Matrix Clock",
-        "Modern Bold Clock",
-        "Contrasting Split Clock",
+        "Binary Matrix",
+        "Modern Bold",
+        "Contrasting Split",
         "Analog Motor Dashboard",
-        "Pastel Bubbles Clock",
-        "Ambient Horizon Clock",
-        "High-Tech Nixie Tube Clock"
+        "Pastel Bubbles",
+        "Ambient Horizon",
+        "High-Tech Nixie Tube",
+        "World Time Zone Map",
+        "StandBy Sage & Complications",
+        "Overlapping Float Numerals",
+        "Alarm Screen",
+        "Calendar Screen",
+        "Music Player",
+        "Tools Hub"
     )
 
-    // Persisted Duo widget left/right indices and Timer settings
-    val duoLeftWidgetIndex = MutableStateFlow(prefs.getInt("duoLeftWidgetIndex", 6).coerceIn(0, duoWidgetTitles.lastIndex))
-    val duoRightWidgetIndex = MutableStateFlow(prefs.getInt("duoRightWidgetIndex", 11).coerceIn(0, duoWidgetTitles.lastIndex))
-    val timerModeIndex = MutableStateFlow(prefs.getInt("timerModeIndex", 0).coerceIn(0, 1))
+    // Persisted Duo widget left/right indices and Tools settings
+    val duoLeftWidgetIndex = MutableStateFlow(prefs.getInt("duoLeftWidgetIndex", 2).coerceIn(0, duoWidgetTitles.lastIndex))
+    val duoRightWidgetIndex = MutableStateFlow(prefs.getInt("duoRightWidgetIndex", 10).coerceIn(0, duoWidgetTitles.lastIndex))
+    val timerModeIndex = MutableStateFlow(prefs.getInt("timerModeIndex", 0).coerceIn(0, 3))
     val pomodoroFocusMinutes = MutableStateFlow(prefs.getInt("pomodoroFocusMinutes", 25))
+    val galleryPermissionGranted = MutableStateFlow(prefs.getBoolean("galleryPermissionGranted", false))
+    val galleryPhotoUris = MutableStateFlow<List<String>>(
+        prefs.getStringSet("galleryPhotoUris", emptySet())?.toList()?.sorted() ?: emptyList()
+    )
+    val slideshowIntervalSeconds = MutableStateFlow(prefs.getInt("slideshowIntervalSeconds", 8).coerceIn(3, 60))
 
     // Location & TimeZone settings for Clock, World Map, Airport Split-Flap Terminal, and Duo Panes
     val locationMode = MutableStateFlow(prefs.getString("locationMode", "auto") ?: "auto")
@@ -174,50 +168,7 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         "Pacific/Auckland" to "New Zealand Time • Auckland (NZST)"
     )
 
-    // Google Account & Google Home connected devices (Connected through Google only)
-    val googleConnectedAccount = MutableStateFlow(
-        GoogleDeviceAndHomeMonitor.detectConnectedGoogleAccount(application)
-    )
-
-    val googleHomeDevices = MutableStateFlow(
-        listOf(
-            GoogleHomeDeviceItem(
-                id = "google_nest_thermostat",
-                name = "Nest Thermostat",
-                room = "Google Home • Upstairs",
-                deviceType = "thermostat",
-                isActive = prefs.getBoolean("gh_thermostat_active", true),
-                statusText = "${prefs.getInt("gh_thermostat_temp", 72)}° • Eco Cool",
-                temperatureF = prefs.getInt("gh_thermostat_temp", 72)
-            ),
-            GoogleHomeDeviceItem(
-                id = "google_nest_light_bedroom",
-                name = "Bedroom Light",
-                room = "Google Home • Bedroom",
-                deviceType = "light",
-                isActive = prefs.getBoolean("gh_bedroom_light", true),
-                statusText = if (prefs.getBoolean("gh_bedroom_light", true)) "On • 80% Warm" else "Off"
-            ),
-            GoogleHomeDeviceItem(
-                id = "google_nest_hub",
-                name = "Nest Hub Max",
-                room = "Google Home • Kitchen",
-                deviceType = "display",
-                isActive = prefs.getBoolean("gh_nest_hub", true),
-                statusText = if (prefs.getBoolean("gh_nest_hub", true)) "Ambient Display" else "Standby"
-            ),
-            GoogleHomeDeviceItem(
-                id = "google_tv_living",
-                name = "Google TV Streamer",
-                room = "Google Home • Living",
-                deviceType = "speaker",
-                isActive = prefs.getBoolean("gh_google_tv", false),
-                statusText = if (prefs.getBoolean("gh_google_tv", false)) "Casting Audio" else "Idle • Ready"
-            )
-        )
-    )
-
-    // Per-page customized settings (Page 0: Clock, 1: Alarm, 2: Calendar, 3: Music, 4: Timer, 5: Duo)
+    // Per-page customized settings (Page 0: Clock, 1: Alarm, 2: Calendar, 3: Music, 4: Tools, 5: Duo)
     val colorPage0 = MutableStateFlow(prefs.getInt("colorPage0", prefs.getInt("selectedColorIndex", 0)))
     val colorPage1 = MutableStateFlow(prefs.getInt("colorPage1", 2))
     val colorPage2 = MutableStateFlow(prefs.getInt("colorPage2", 3))
@@ -366,7 +317,7 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setTimerModeIndex(index: Int) {
-        val safeIdx = index.coerceIn(0, 1)
+        val safeIdx = index.coerceIn(0, 3)
         timerModeIndex.value = safeIdx
         prefs.edit().putInt("timerModeIndex", safeIdx).apply()
     }
@@ -374,6 +325,29 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     fun setPomodoroFocusMinutes(minutes: Int) {
         pomodoroFocusMinutes.value = minutes
         prefs.edit().putInt("pomodoroFocusMinutes", minutes).apply()
+    }
+
+    fun setGalleryPermissionGranted(granted: Boolean) {
+        galleryPermissionGranted.value = granted
+        prefs.edit().putBoolean("galleryPermissionGranted", granted).apply()
+    }
+
+    fun addGalleryPhotoUris(uris: List<String>) {
+        val merged = (galleryPhotoUris.value + uris.filter { it.isNotBlank() }).distinct()
+        galleryPhotoUris.value = merged
+        prefs.edit().putStringSet("galleryPhotoUris", merged.toSet()).apply()
+    }
+
+    fun removeGalleryPhotoUri(uri: String) {
+        val updated = galleryPhotoUris.value.filterNot { it == uri }
+        galleryPhotoUris.value = updated
+        prefs.edit().putStringSet("galleryPhotoUris", updated.toSet()).apply()
+    }
+
+    fun setSlideshowIntervalSeconds(seconds: Int) {
+        val safeSecs = seconds.coerceIn(3, 60)
+        slideshowIntervalSeconds.value = safeSecs
+        prefs.edit().putInt("slideshowIntervalSeconds", safeSecs).apply()
     }
 
     fun setUseClassicMediaTheme(enabled: Boolean) {
@@ -472,67 +446,131 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
 
     fun resolveCurrentLocationInfo(): UserTimeZoneRegionInfo = resolvePaneLocationInfo(0)
 
-    fun setGoogleConnectedAccount(accountEmail: String) {
-        val clean = accountEmail.trim().ifBlank { "Google Home Linked" }
-        googleConnectedAccount.value = clean
-        prefs.edit().putString("google_connected_email", clean).apply()
-    }
-
-    fun toggleGoogleHomeDevice(deviceId: String) {
-        val updated = googleHomeDevices.value.map { item ->
-            if (item.id == deviceId) {
-                val nextActive = !item.isActive
-                val nextStatus = when (item.deviceType) {
-                    "thermostat" -> if (nextActive) "${item.temperatureF ?: 72}° • Eco Cool" else "Off • Google Nest"
-                    "light" -> if (nextActive) "On • 80% Warm" else "Off"
-                    "display" -> if (nextActive) "Ambient Display" else "Standby"
-                    else -> if (nextActive) "Casting Audio" else "Idle • Ready"
+    /**
+     * Searches known cities, airport codes, and world time zones for the searchable Location & Time Zone field.
+     * Returns pairs of (selectionValue, displayDescription).
+     */
+    fun searchLocationsAndTimeZones(query: String): List<Pair<String, String>> {
+        val q = query.trim().lowercase(Locale.getDefault())
+        val baseEntries = buildList {
+            add("AUTO" to "Auto (GPS / System Time Zone)")
+            GoogleDeviceAndHomeMonitor.KNOWN_REGIONS.forEach { entry ->
+                val label = "${entry.displayName} (${entry.airportCode})"
+                val sign = if (entry.utcOffsetHours >= 0) "+" else ""
+                val offsetText = if (entry.utcOffsetHours % 1f == 0f) {
+                    "UTC$sign${entry.utcOffsetHours.toInt()}"
+                } else {
+                    "UTC$sign${entry.utcOffsetHours}"
                 }
-                when (deviceId) {
-                    "google_nest_thermostat" -> prefs.edit().putBoolean("gh_thermostat_active", nextActive).apply()
-                    "google_nest_light_bedroom" -> prefs.edit().putBoolean("gh_bedroom_light", nextActive).apply()
-                    "google_nest_hub" -> prefs.edit().putBoolean("gh_nest_hub", nextActive).apply()
-                    "google_tv_living" -> prefs.edit().putBoolean("gh_google_tv", nextActive).apply()
-                }
-                item.copy(isActive = nextActive, statusText = nextStatus)
-            } else {
-                item
+                val subtitle = "$offsetText • ${entry.timeZoneId}"
+                add("LOC:$label" to "$label — $subtitle")
+            }
+            selectableTimeZones.drop(1).forEach { (tzId, label) ->
+                add("TZ:$tzId" to "$label [$tzId]")
             }
         }
-        googleHomeDevices.value = updated
-    }
-
-    fun adjustGoogleNestTemp(deviceId: String, delta: Int) {
-        val updated = googleHomeDevices.value.map { item ->
-            if (item.id == deviceId && item.deviceType == "thermostat") {
-                val nextTemp = ((item.temperatureF ?: 72) + delta).coerceIn(60, 86)
-                prefs.edit().putInt("gh_thermostat_temp", nextTemp).apply()
-                item.copy(
-                    isActive = true,
-                    temperatureF = nextTemp,
-                    statusText = "$nextTemp° • Eco Cool"
-                )
-            } else {
-                item
-            }
+        if (q.isEmpty()) {
+            return baseEntries.take(8)
         }
-        googleHomeDevices.value = updated
+        val matched = baseEntries.filter { (key, desc) ->
+            desc.lowercase(Locale.getDefault()).contains(q) || key.lowercase(Locale.getDefault()).contains(q)
+        }.toMutableList()
+
+        if (matched.size < 8 && q.length >= 2) {
+            java.util.TimeZone.getAvailableIDs()
+                .filter { id ->
+                    id.contains("/") &&
+                        !id.startsWith("Etc/") &&
+                        id.lowercase(Locale.getDefault()).replace("_", " ").contains(q)
+                }
+                .take(8 - matched.size)
+                .forEach { tzId ->
+                    val city = tzId.substringAfterLast("/").replace("_", " ")
+                    val tz = java.util.TimeZone.getTimeZone(tzId)
+                    val shortCode = tz.getDisplayName(tz.inDaylightTime( java.util.Date() ), java.util.TimeZone.SHORT, Locale.getDefault())
+                    val key = "TZ:$tzId"
+                    if (matched.none { it.first.equals(key, ignoreCase = true) }) {
+                        matched.add(key to "$city ($shortCode) — $tzId")
+                    }
+                }
+        }
+        return matched.take(10)
     }
 
-    fun onGoogleCastDeviceDiscovered(serviceName: String) {
-        val cleaned = serviceName.substringBefore("._googlecast").replace("-", " ").trim()
-        if (cleaned.isBlank()) return
-        val current = googleHomeDevices.value.toMutableList()
-        if (current.none { it.name.equals(cleaned, ignoreCase = true) }) {
-            current[current.lastIndex] = GoogleHomeDeviceItem(
-                id = "cast_${cleaned.lowercase(Locale.US)}",
-                name = cleaned.take(18),
-                room = "Google Cast • Local Wi-Fi",
-                deviceType = "speaker",
-                isActive = true,
-                statusText = "Connected • Google Cast"
-            )
-            googleHomeDevices.value = current
+    fun applySearchedLocationSelection(selectionKey: String, rawQueryFallback: String = "", pane: Int = 0) {
+        when {
+            selectionKey == "AUTO" -> {
+                when (pane) {
+                    1 -> {
+                        setDuoLeftLocationName("")
+                        setDuoLeftTimeZoneId("AUTO")
+                    }
+                    2 -> {
+                        setDuoRightLocationName("")
+                        setDuoRightTimeZoneId("AUTO")
+                    }
+                    else -> {
+                        setCustomLocationName("")
+                        setLocationMode("auto")
+                        setClockTimeZoneId("AUTO")
+                    }
+                }
+            }
+            selectionKey.startsWith("LOC:") -> {
+                val locLabel = selectionKey.removePrefix("LOC:").trim()
+                val resolved = GoogleDeviceAndHomeMonitor.resolveTimeZoneAndRegion(customLocationOverride = locLabel)
+                when (pane) {
+                    1 -> {
+                        setDuoLeftLocationName(locLabel)
+                        setDuoLeftTimeZoneId(resolved.timeZoneId)
+                    }
+                    2 -> {
+                        setDuoRightLocationName(locLabel)
+                        setDuoRightTimeZoneId(resolved.timeZoneId)
+                    }
+                    else -> {
+                        setCustomLocationName(locLabel)
+                        setClockTimeZoneId(resolved.timeZoneId)
+                    }
+                }
+            }
+            selectionKey.startsWith("TZ:") -> {
+                val tzId = selectionKey.removePrefix("TZ:").trim()
+                val resolved = GoogleDeviceAndHomeMonitor.resolveTimeZoneAndRegion(customTimeZoneId = tzId)
+                val locLabel = "${resolved.regionName} (${resolved.airportCode})"
+                when (pane) {
+                    1 -> {
+                        setDuoLeftLocationName(locLabel)
+                        setDuoLeftTimeZoneId(tzId)
+                    }
+                    2 -> {
+                        setDuoRightLocationName(locLabel)
+                        setDuoRightTimeZoneId(tzId)
+                    }
+                    else -> {
+                        setCustomLocationName(locLabel)
+                        setClockTimeZoneId(tzId)
+                    }
+                }
+            }
+            rawQueryFallback.isNotBlank() -> {
+                val clean = rawQueryFallback.trim()
+                val resolved = GoogleDeviceAndHomeMonitor.resolveTimeZoneAndRegion(customLocationOverride = clean)
+                when (pane) {
+                    1 -> {
+                        setDuoLeftLocationName(clean)
+                        setDuoLeftTimeZoneId(resolved.timeZoneId)
+                    }
+                    2 -> {
+                        setDuoRightLocationName(clean)
+                        setDuoRightTimeZoneId(resolved.timeZoneId)
+                    }
+                    else -> {
+                        setCustomLocationName(clean)
+                        setClockTimeZoneId(resolved.timeZoneId)
+                    }
+                }
+            }
         }
     }
 
@@ -862,6 +900,10 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         FontFamily.SansSerif to "Modern Sans",
         FontFamily.Serif to "Classic Serif",
         FontFamily.Monospace to "Retro Code",
+        FontFamily(Font(R.font.vt323, FontWeight.Normal)) to "Matrix CRT",
+        FontFamily(Font(R.font.share_tech_mono, FontWeight.Normal)) to "Matrix Terminal",
+        FontFamily(Font(R.font.orbitron, FontWeight.Bold)) to "Cyber Sci-Fi",
+        FontFamily(Font(R.font.oswald, FontWeight.Bold)) to "Solari Condensed",
         FontFamily.Cursive to "Script",
         FontFamily.Default to "Default"
     )
