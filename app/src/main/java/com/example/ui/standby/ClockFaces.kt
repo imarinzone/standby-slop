@@ -155,7 +155,7 @@ fun ClockFaceRenderer(
             val viewportScale = minOf(widthFactor, heightFactor)
             val effectiveScale = (clockScaleValue * viewportScale).coerceIn(0.42f, 1.65f)
 
-            when (themeIndex.mod(13)) {
+            when (themeIndex.mod(14)) {
                 0 -> DigitalMinimal(zonedCurrentTime, customColor, customFont, effectiveScale, animsEnabled, use24Hour, showAmPm, showSeconds, glowVal, outlineVal, gradientColors)
                 1 -> AnalogClassic(zonedCurrentTime, customColor, effectiveScale, animsEnabled, true)
                 2 -> RetroFlip(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds, isDuoCompact = false, standbyViewModel = standbyViewModel, paneIndex = 0)
@@ -169,6 +169,7 @@ fun ClockFaceRenderer(
                 10 -> WorldTimeZoneMapClockFace(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, nextSystemAlarm, isDuoCompact = false, standbyViewModel = standbyViewModel, paneIndex = 0)
                 11 -> StandbySageComplicationClockFace(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, weather?.temperature_2m, nextSystemAlarm)
                 12 -> OverlappingFloatClockFace(zonedCurrentTime, customColor, effectiveScale, use24Hour)
+                13 -> SquircleTickDigitalClockFace(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, isDuoCompact = false, standbyViewModel = standbyViewModel, paneIndex = 0)
             }
         }
         

@@ -58,7 +58,8 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         "High-Tech Nixie Tube",
         "World Time Zone Map",
         "StandBy Sage & Complications",
-        "Overlapping Float Numerals"
+        "Overlapping Float Numerals",
+        "Squircle Border Tick"
     )
 
     val clockFaceSubtitles = listOf(
@@ -74,18 +75,19 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         "10 | NIXIE TUBE",
         "11 | WORLD TIME MAP",
         "12 | STANDBY SAGE",
-        "13 | FLOAT NUMERALS"
+        "13 | FLOAT NUMERALS",
+        "14 | BORDER SECONDS DIGITAL"
     )
 
     val enabledClockFaces = MutableStateFlow<Set<Int>>(
         prefs.getStringSet("enabledClockFaces", null)
-            ?.mapNotNull { it.toIntOrNull()?.takeIf { idx -> idx in 0..12 } }
+            ?.mapNotNull { it.toIntOrNull()?.takeIf { idx -> idx in 0..13 } }
             ?.toSet()
             ?.takeIf { it.isNotEmpty() }
-            ?: (0..12).toSet()
+            ?: (0..13).toSet()
     )
 
-    // Duo screens strictly match the actual main screens we have built (13 Clock Faces + 4 Utility Screens)
+    // Duo screens strictly match the actual main screens we have built (14 Clock Faces + 4 Utility Screens)
     val duoWidgetTitles = listOf(
         "Digital Minimal",
         "Analog Classic",
@@ -100,22 +102,36 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         "World Time Zone Map",
         "StandBy Sage & Complications",
         "Overlapping Float Numerals",
+        "Squircle Border Tick",
         "Alarm Screen",
         "Calendar Screen",
         "Music Player",
         "Tools Hub"
     )
 
-    // Persisted Duo widget left/right indices and Tools settings
+    // Duo screens configuration: Do not show any widget/screens in Duo unless the user has added them
+    private fun loadDuoScreenList(key: String): List<Int> {
+        val raw = prefs.getString(key, null)
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split(",").mapNotNull { it.trim().toIntOrNull() }
+            .filter { it in 0..duoWidgetTitles.lastIndex }
+            .distinct()
+    }
+
+    val duoLeftScreenIndices = MutableStateFlow<List<Int>>(loadDuoScreenList("duoLeftScreenIndices"))
+    val duoRightScreenIndices = MutableStateFlow<List<Int>>(loadDuoScreenList("duoRightScreenIndices"))
+
+    // Persisted Duo widget left/right active indices and Tools settings (0..5: Focus, Chrono, Gallery, Charge, Smart Home, Ambient Flash)
     val duoLeftWidgetIndex = MutableStateFlow(prefs.getInt("duoLeftWidgetIndex", 2).coerceIn(0, duoWidgetTitles.lastIndex))
     val duoRightWidgetIndex = MutableStateFlow(prefs.getInt("duoRightWidgetIndex", 10).coerceIn(0, duoWidgetTitles.lastIndex))
-    val timerModeIndex = MutableStateFlow(prefs.getInt("timerModeIndex", 0).coerceIn(0, 3))
+    val timerModeIndex = MutableStateFlow(prefs.getInt("timerModeIndex", 0).coerceIn(0, 5))
     val pomodoroFocusMinutes = MutableStateFlow(prefs.getInt("pomodoroFocusMinutes", 25))
     val galleryPermissionGranted = MutableStateFlow(prefs.getBoolean("galleryPermissionGranted", false))
     val galleryPhotoUris = MutableStateFlow<List<String>>(
         prefs.getStringSet("galleryPhotoUris", emptySet())?.toList()?.sorted() ?: emptyList()
     )
     val slideshowIntervalSeconds = MutableStateFlow(prefs.getInt("slideshowIntervalSeconds", 8).coerceIn(3, 60))
+    val showSlideshowTimeOverlay = MutableStateFlow(prefs.getBoolean("showSlideshowTimeOverlay", true))
 
     // Location & TimeZone settings for Clock, World Map, Airport Split-Flap Terminal, and Duo Panes
     val locationMode = MutableStateFlow(prefs.getString("locationMode", "auto") ?: "auto")
@@ -316,8 +332,82 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         prefs.edit().putInt("duoRightWidgetIndex", safeIdx).apply()
     }
 
+    fun addScreenToDuoLeft(screenIndex: Int) {
+        val safe = screenIndex.coerceIn(0, duoWidgetTitles.lastIndex)
+        if (safe !in duoLeftScreenIndices.value) {
+            val next = duoLeftScreenIndices.value + safe
+            duoLeftScreenIndices.value = next
+            prefs.edit().putString("duoLeftScreenIndices", next.joinToString(",")).apply()
+        }
+        setDuoLeftWidgetIndex(safe)
+    }
+
+    fun removeScreenFromDuoLeft(screenIndex: Int) {
+        val next = duoLeftScreenIndices.value.filter { it != screenIndex }
+        duoLeftScreenIndices.value = next
+        prefs.edit().putString("duoLeftScreenIndices", next.joinToString(",")).apply()
+        if (next.isNotEmpty() && duoLeftWidgetIndex.value == screenIndex) {
+            setDuoLeftWidgetIndex(next.first())
+        }
+    }
+
+    fun toggleScreenInDuoLeft(screenIndex: Int) {
+        val safe = screenIndex.coerceIn(0, duoWidgetTitles.lastIndex)
+        if (safe in duoLeftScreenIndices.value) {
+            removeScreenFromDuoLeft(safe)
+        } else {
+            addScreenToDuoLeft(safe)
+        }
+    }
+
+    fun setDuoLeftScreenIndices(indices: List<Int>) {
+        val next = indices.filter { it in 0..duoWidgetTitles.lastIndex }.distinct()
+        duoLeftScreenIndices.value = next
+        prefs.edit().putString("duoLeftScreenIndices", next.joinToString(",")).apply()
+        if (next.isNotEmpty() && duoLeftWidgetIndex.value !in next) {
+            setDuoLeftWidgetIndex(next.first())
+        }
+    }
+
+    fun addScreenToDuoRight(screenIndex: Int) {
+        val safe = screenIndex.coerceIn(0, duoWidgetTitles.lastIndex)
+        if (safe !in duoRightScreenIndices.value) {
+            val next = duoRightScreenIndices.value + safe
+            duoRightScreenIndices.value = next
+            prefs.edit().putString("duoRightScreenIndices", next.joinToString(",")).apply()
+        }
+        setDuoRightWidgetIndex(safe)
+    }
+
+    fun removeScreenFromDuoRight(screenIndex: Int) {
+        val next = duoRightScreenIndices.value.filter { it != screenIndex }
+        duoRightScreenIndices.value = next
+        prefs.edit().putString("duoRightScreenIndices", next.joinToString(",")).apply()
+        if (next.isNotEmpty() && duoRightWidgetIndex.value == screenIndex) {
+            setDuoRightWidgetIndex(next.first())
+        }
+    }
+
+    fun toggleScreenInDuoRight(screenIndex: Int) {
+        val safe = screenIndex.coerceIn(0, duoWidgetTitles.lastIndex)
+        if (safe in duoRightScreenIndices.value) {
+            removeScreenFromDuoRight(safe)
+        } else {
+            addScreenToDuoRight(safe)
+        }
+    }
+
+    fun setDuoRightScreenIndices(indices: List<Int>) {
+        val next = indices.filter { it in 0..duoWidgetTitles.lastIndex }.distinct()
+        duoRightScreenIndices.value = next
+        prefs.edit().putString("duoRightScreenIndices", next.joinToString(",")).apply()
+        if (next.isNotEmpty() && duoRightWidgetIndex.value !in next) {
+            setDuoRightWidgetIndex(next.first())
+        }
+    }
+
     fun setTimerModeIndex(index: Int) {
-        val safeIdx = index.coerceIn(0, 3)
+        val safeIdx = index.coerceIn(0, 5)
         timerModeIndex.value = safeIdx
         prefs.edit().putInt("timerModeIndex", safeIdx).apply()
     }
@@ -348,6 +438,11 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         val safeSecs = seconds.coerceIn(3, 60)
         slideshowIntervalSeconds.value = safeSecs
         prefs.edit().putInt("slideshowIntervalSeconds", safeSecs).apply()
+    }
+
+    fun setShowSlideshowTimeOverlay(enabled: Boolean) {
+        showSlideshowTimeOverlay.value = enabled
+        prefs.edit().putBoolean("showSlideshowTimeOverlay", enabled).apply()
     }
 
     fun setUseClassicMediaTheme(enabled: Boolean) {
@@ -415,6 +510,131 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
             return true
         }
         return false
+    }
+
+    // Google Home Connected Smart Devices State for Tools Hub
+    val googleConnectedAccount = MutableStateFlow(prefs.getString("googleConnectedAccount", "Google Home") ?: "Google Home")
+
+    private fun loadUserConfiguredSmartDevices(): List<GoogleHomeDeviceItem> {
+        val rawIds = prefs.getString("user_smart_device_ids", null) ?: return emptyList()
+        val ids = rawIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        return ids.mapNotNull { id ->
+            val name = prefs.getString("${id}_name", null) ?: return@mapNotNull null
+            val room = prefs.getString("${id}_room", "Home") ?: "Home"
+            val type = prefs.getString("${id}_type", "light") ?: "light"
+            val isOn = prefs.getBoolean("${id}_on", false)
+            val valueLevel = prefs.getInt("${id}_val", if (type == "thermostat") 72 else 80)
+            val statusText = when (type) {
+                "light", "strip" -> if (isOn) "$valueLevel%" else "Off"
+                "thermostat" -> if (isOn) "${valueLevel}°F" else "Eco"
+                "plug" -> if (isOn) "On" else "Off"
+                "air" -> if (isOn) "Auto • Clean" else "Standby"
+                "lock" -> if (isOn) "Locked" else "Unlocked"
+                else -> if (isOn) "On" else "Off"
+            }
+            GoogleHomeDeviceItem(
+                id = id,
+                name = name,
+                room = room,
+                type = type,
+                statusText = statusText,
+                isOn = isOn,
+                valueLevel = valueLevel
+            )
+        }
+    }
+
+    val googleHomeDevices = MutableStateFlow<List<GoogleHomeDeviceItem>>(loadUserConfiguredSmartDevices())
+
+    fun addUserSmartDevice(name: String, room: String, type: String) {
+        val id = "device_${System.currentTimeMillis()}"
+        val isThermostat = type.equals("thermostat", ignoreCase = true)
+        val defaultVal = if (isThermostat) 72 else 80
+        val cleanName = name.trim().ifBlank { "Smart Device" }
+        val cleanRoom = room.trim().ifBlank { "Home" }
+        val cleanType = type.lowercase(Locale.US).ifBlank { "light" }
+        val item = GoogleHomeDeviceItem(
+            id = id,
+            name = cleanName,
+            room = cleanRoom,
+            type = cleanType,
+            statusText = "Off",
+            isOn = false,
+            valueLevel = defaultVal
+        )
+        val currentIds = googleHomeDevices.value.map { it.id }
+        prefs.edit()
+            .putString("${id}_name", item.name)
+            .putString("${id}_room", item.room)
+            .putString("${id}_type", item.type)
+            .putBoolean("${id}_on", false)
+            .putInt("${id}_val", defaultVal)
+            .putString("user_smart_device_ids", (currentIds + id).joinToString(","))
+            .apply()
+        googleHomeDevices.value = googleHomeDevices.value + item
+    }
+
+    fun removeUserSmartDevice(deviceId: String) {
+        val next = googleHomeDevices.value.filter { it.id != deviceId }
+        prefs.edit()
+            .remove("${deviceId}_name")
+            .remove("${deviceId}_room")
+            .remove("${deviceId}_type")
+            .remove("${deviceId}_on")
+            .remove("${deviceId}_val")
+            .putString("user_smart_device_ids", next.map { it.id }.joinToString(","))
+            .apply()
+        googleHomeDevices.value = next
+    }
+
+    fun setGoogleConnectedAccount(accountLabel: String) {
+        googleConnectedAccount.value = accountLabel
+        prefs.edit().putString("googleConnectedAccount", accountLabel).apply()
+    }
+
+    fun toggleGoogleHomeDevice(deviceId: String) {
+        val updated = googleHomeDevices.value.map { item ->
+            if (item.id == deviceId) {
+                val nextOn = !item.isOn
+                val nextStatus = when (item.type) {
+                    "light", "strip" -> if (nextOn) "${item.valueLevel}%" else "Off"
+                    "thermostat" -> if (nextOn) "${item.valueLevel}°F" else "Eco"
+                    "plug" -> if (nextOn) "On" else "Off"
+                    "air" -> if (nextOn) "Auto • Clean" else "Standby"
+                    "lock" -> if (nextOn) "Locked" else "Unlocked"
+                    else -> if (nextOn) "On" else "Off"
+                }
+                prefs.edit().putBoolean("${deviceId}_on", nextOn).apply()
+                item.copy(isOn = nextOn, statusText = nextStatus)
+            } else {
+                item
+            }
+        }
+        googleHomeDevices.value = updated
+    }
+
+    fun adjustGoogleHomeDeviceValue(deviceId: String, delta: Int) {
+        val updated = googleHomeDevices.value.map { item ->
+            if (item.id == deviceId) {
+                val nextVal = when (item.type) {
+                    "thermostat" -> (item.valueLevel + delta).coerceIn(60, 86)
+                    else -> (item.valueLevel + delta).coerceIn(10, 100)
+                }
+                val nextStatus = when (item.type) {
+                    "light", "strip" -> "$nextVal%"
+                    "thermostat" -> "${nextVal}°F"
+                    else -> item.statusText
+                }
+                prefs.edit()
+                    .putInt("${deviceId}_val", nextVal)
+                    .putBoolean("${deviceId}_on", true)
+                    .apply()
+                item.copy(isOn = true, valueLevel = nextVal, statusText = nextStatus)
+            } else {
+                item
+            }
+        }
+        googleHomeDevices.value = updated
     }
 
     /**

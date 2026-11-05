@@ -8,19 +8,25 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.*
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -44,10 +50,6 @@ import kotlin.math.sin
  * 1. High-Precision Equirectangular World Map Dot Matrix (96 cols x 44 rows)
  *    Longitude: -180° (col 0) to +180° (col 95) -> 3.75° per col
  *    Latitude:  +82°N (row 0) to -60°S (row 43) -> 3.23° per row
- *    Features distinct continents: North America (Alaska, Hudson Bay, Florida, Mexico),
- *    Greenland, South America, Europe (UK, Scandinavia, Spain, Italy, Mediterranean Sea),
- *    Africa (Sahara, Horn of Africa, Madagascar), Asia (Arabia, India, SE Asia, Indonesia, Japan),
- *    Australia, and New Zealand.
  */
 private val WORLD_MAP_ASCII = listOf(
     "..................................#########.....................................................",
@@ -138,8 +140,11 @@ fun WorldTimeZoneMapClockFace(
         }
     }
 
-    // Toggle between compact bottom-left Squircle-Tick Digital Clock and expanded split view
-    var isClockProminent by remember { mutableStateOf(false) }
+    val timeFormat = remember(use24Hour, activeTimeZone) {
+        SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm", Locale.getDefault()).apply {
+            timeZone = activeTimeZone
+        }
+    }
 
     // Local hours elapsed since 0000 (00:00 midnight is the starting point 0.0f)
     val hourOfDay = zonedCal.get(Calendar.HOUR_OF_DAY)
@@ -156,6 +161,13 @@ fun WorldTimeZoneMapClockFace(
             .testTag("world_map_clock_face")
     ) {
         val mapAccent = if (accentColor == Color.White) Color(0xFFFF9F0A) else accentColor
+        val clockSize = if (isDuoCompact) {
+            (minOf(maxWidth.value, maxHeight.value) * 0.25f).coerceIn(32f, 64f).sp
+        } else {
+            (minOf(maxWidth.value, maxHeight.value) * 0.24f * scale).coerceIn(48f, 108f).sp
+        }
+        val labelSize = if (isDuoCompact) 11.sp else 16.sp
+        val subLabelSize = if (isDuoCompact) 9.sp else 12.sp
 
         // 1. Full-Screen Dot-Matrix World Map + Timezone-Overlapping Parabola (0000 Starting Point)
         Canvas(
@@ -169,7 +181,6 @@ fun WorldTimeZoneMapClockFace(
             val stepY = mapHeight / rows.toFloat()
             val dotRadius = (min(stepX, stepY) * 0.36f).coerceIn(1.3f, 4.4f)
 
-            // Convert longitude/latitude to normalized [0..1] map coordinates
             fun lonToNormX(lon: Float): Float = ((lon + 180f) / 360f).coerceIn(0.03f, 0.97f)
             fun latToNormY(lat: Float): Float = ((82f - lat) / 142f).coerceIn(0.05f, 0.94f)
 
@@ -178,39 +189,31 @@ fun WorldTimeZoneMapClockFace(
             val tzNormX = lonToNormX(
                 if (abs(regionInfo.longitude - tzCenterLon) < 28f) regionInfo.longitude else tzCenterLon
             )
-            // Width of one 15-degree time zone band on the map
             val tzBandHalfWidth = 1f / 24f
 
-            // Parabola / Solar Terminator anchored to 0000 (00:00) starting point and overlapping tzNormX:
-            // At 0000 (progressFrom0000 = 0.0), the parabola vertex starts at tzNormX and sweeps across the timezone
-            // so the curve directly overlaps the active timezone showing Day (above/crest) vs Night (below/trough).
-            val parabolaShiftNormX = tzNormX + (progressFrom0000 - 0.25f) * 0.55f
+            // Parabola / Solar Terminator anchored to 0000 (00:00) starting point and overlapping tzNormX
+            val parabolaShiftNormX = tzNormX + (progressFrom0000 - 0.5f)
 
+            // Pure sinusoidal solar terminator wave, perfectly smooth (C-infinity) and continuous across map boundaries without cusps
             fun terminatorY(normalizedX: Float): Float {
-                // Signed wrapped distance in [-0.5, 0.5] from parabola vertex
-                var dx = (normalizedX - parabolaShiftNormX) % 1.0f
-                if (dx > 0.5f) dx -= 1.0f
-                if (dx < -0.5f) dx += 1.0f
-                // True parabolic arch centered on the timezone shift + smooth cosine wings so it wraps cleanly
-                val parabolicArch = 1f - 7.2f * (dx * dx)
-                val cosineBlend = cos(dx * 2f * PI.toFloat())
-                val wave = (parabolicArch * 0.65f + cosineBlend * 0.35f).coerceIn(-1.05f, 1.05f)
-                return (mapHeight * 0.52f) - wave * (mapHeight * 0.36f)
+                val angleRad = (normalizedX - parabolaShiftNormX) * 2f * PI.toFloat()
+                val wave = cos(angleRad)
+                return (mapHeight * 0.50f) - wave * (mapHeight * 0.33f)
             }
 
-            // Subtle Active Time Zone Meridian Band highlight (shows the timezone strip overlapped by the parabola)
+            // Subtle Active Time Zone Meridian Band highlight
             val bandLeftPx = ((tzNormX - tzBandHalfWidth).coerceIn(0f, 1f)) * mapWidth
             val bandRightPx = ((tzNormX + tzBandHalfWidth).coerceIn(0f, 1f)) * mapWidth
             drawRect(
                 color = mapAccent.copy(alpha = 0.07f),
                 topLeft = Offset(bandLeftPx, 0f),
-                size = androidx.compose.ui.geometry.Size((bandRightPx - bandLeftPx).coerceAtLeast(4f), mapHeight)
+                size = Size((bandRightPx - bandLeftPx).coerceAtLeast(4f), mapHeight)
             )
 
-            // Night-side shaded fill under the parabola curve for instant day/night visual contrast
+            // Night-side shaded fill under the smooth terminator curve for day/night contrast
             val nightShadePath = Path().apply {
                 moveTo(0f, mapHeight)
-                val samples = 120
+                val samples = 240
                 for (i in 0..samples) {
                     val t = i.toFloat() / samples.toFloat()
                     lineTo(t * mapWidth, terminatorY(t).coerceIn(2f, mapHeight - 2f))
@@ -223,7 +226,7 @@ fun WorldTimeZoneMapClockFace(
                 color = Color(0xFF0A0E17).copy(alpha = 0.42f)
             )
 
-            // Render Dot-Matrix World Map (Ocean micro-dots + Continent Day/Night/Timezone-Overlap dots)
+            // Render Dot-Matrix World Map
             for (r in 0 until rows) {
                 val line = WORLD_MAP_ASCII[r]
                 val cy = (r + 0.5f) * stepY
@@ -236,10 +239,10 @@ fun WorldTimeZoneMapClockFace(
 
                     if (line[c] == '#') {
                         val dotColor = when {
-                            inActiveTzBand && isDaylight -> Color(0xFFFFE082) // Bright warm daylight in active TZ
-                            inActiveTzBand && !isDaylight -> mapAccent.copy(alpha = 0.78f) // Glowing night in active TZ
-                            isDaylight -> Color.White.copy(alpha = 0.95f) // Crisp white daylight continents
-                            else -> Color(0xFF3E4656).copy(alpha = 0.72f) // Deep slate night continents
+                            inActiveTzBand && isDaylight -> Color(0xFFFFE082)
+                            inActiveTzBand && !isDaylight -> mapAccent.copy(alpha = 0.78f)
+                            isDaylight -> Color.White.copy(alpha = 0.95f)
+                            else -> Color(0xFF3E4656).copy(alpha = 0.72f)
                         }
                         drawCircle(
                             color = dotColor,
@@ -247,7 +250,6 @@ fun WorldTimeZoneMapClockFace(
                             center = Offset(cx, cy)
                         )
                     } else if ((r + c) % 2 == 0) {
-                        // Subtle dot-matrix ocean background grid
                         drawCircle(
                             color = if (isDaylight) Color(0xFF171C26).copy(alpha = 0.55f) else Color(0xFF0E1118).copy(alpha = 0.40f),
                             radius = dotRadius * 0.34f,
@@ -257,26 +259,32 @@ fun WorldTimeZoneMapClockFace(
                 }
             }
 
-            // Draw Smooth Parabolic Day/Night Terminator Curve
+            // Draw Silk-Smooth Day/Night Terminator Curve with glow and high subpixel resolution
             val curvePath = Path()
-            val samples = 120
-            for (i in 0..samples) {
-                val t = i.toFloat() / samples.toFloat()
+            val curveSamples = 240
+            for (i in 0..curveSamples) {
+                val t = i.toFloat() / curveSamples.toFloat()
                 val x = t * mapWidth
                 val y = terminatorY(t).coerceIn(4f, mapHeight - 4f)
                 if (i == 0) curvePath.moveTo(x, y) else curvePath.lineTo(x, y)
             }
-            // Outer soft glow on the parabola
+            // Ambient outer glow
             drawPath(
                 path = curvePath,
-                color = mapAccent.copy(alpha = 0.28f),
-                style = Stroke(width = (4.5f * scale).coerceIn(3f, 7f), cap = StrokeCap.Round)
+                color = mapAccent.copy(alpha = 0.22f),
+                style = Stroke(width = (5.5f * scale).coerceIn(3.5f, 9f), cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
-            // Crisp core parabola line
+            // Mid glow
             drawPath(
                 path = curvePath,
-                color = Color.White.copy(alpha = 0.72f),
-                style = Stroke(width = (1.8f * scale).coerceIn(1.2f, 3.0f), cap = StrokeCap.Round)
+                color = mapAccent.copy(alpha = 0.55f),
+                style = Stroke(width = (2.8f * scale).coerceIn(1.8f, 4.5f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            )
+            // Sharp core
+            drawPath(
+                path = curvePath,
+                color = Color.White.copy(alpha = 0.88f),
+                style = Stroke(width = (1.4f * scale).coerceIn(1.0f, 2.2f), cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
 
             // Intersection point where the parabola overlaps the active Time Zone meridian
@@ -332,7 +340,7 @@ fun WorldTimeZoneMapClockFace(
             )
         }
 
-        // Top-Right 0000 Solar Telemetry Pill (Shows Day/Night status & 0000 cycle offset for active timezone)
+        // Top-Right 0000 Solar Telemetry Pill
         val isLocalDaylight = hourOfDay in 6..17
         Row(
             modifier = Modifier
@@ -360,46 +368,118 @@ fun WorldTimeZoneMapClockFace(
             )
         }
 
-        // 2. Duo Digital Clock inside the Map Clock:
-        //    60-Second Moving Border Ticks + Digital Clock in the Middle + Region Header
-        val clockBoxWidth = when {
-            isClockProminent -> (maxWidth * 0.54f).coerceIn(190.dp, 380.dp)
-            isDuoCompact -> (maxWidth * 0.56f).coerceIn(136.dp, 220.dp)
-            else -> (maxWidth * 0.36f * scale.coerceIn(0.85f, 1.25f)).coerceIn(185.dp, 310.dp)
-        }
-        val clockBoxHeight = when {
-            isClockProminent -> (maxHeight * 0.62f).coerceIn(135.dp, 250.dp)
-            isDuoCompact -> (maxHeight * 0.48f).coerceIn(92.dp, 150.dp)
-            else -> (maxHeight * 0.44f * scale.coerceIn(0.85f, 1.25f)).coerceIn(118.dp, 195.dp)
-        }
-
-        Box(
+        // Clean StandBy Bottom-Left Time + Region + Standard Time Readout (without border seconds)
+        Column(
             modifier = Modifier
-                .align(if (isClockProminent) Alignment.CenterStart else Alignment.BottomStart)
-                .size(width = clockBoxWidth, height = clockBoxHeight)
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF05070B).copy(alpha = 0.86f))
-                .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(22.dp))
-                .clickable { isClockProminent = !isClockProminent }
-                .padding(6.dp)
-                .testTag("map_squircle_tick_digital_clock")
+                .align(Alignment.BottomStart)
+                .padding(start = if (isDuoCompact) 6.dp else 12.dp, bottom = if (isDuoCompact) 4.dp else 6.dp),
+            horizontalAlignment = Alignment.Start
         ) {
-            SquircleTickClockWidget(
-                calendar = zonedCal,
-                accentColor = Color.White,
-                tickAccentColor = mapAccent,
-                scale = 1.0f,
-                use24Hour = use24Hour,
-                regionLabel = "${regionInfo.regionName} • ${regionInfo.standardTimeShort}",
-                customFont = customFont
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.NearMe,
+                    contentDescription = "Region",
+                    tint = mapAccent,
+                    modifier = Modifier.size(if (isDuoCompact) 13.dp else 18.dp)
+                )
+                Text(
+                    text = "${regionInfo.regionName} • ${regionInfo.standardTimeShort}",
+                    color = mapAccent,
+                    fontSize = labelSize,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = customFont,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = "${regionInfo.standardTimeLong} (${regionInfo.utcOffsetLabel})",
+                color = Color.White.copy(alpha = 0.68f),
+                fontSize = subLabelSize,
+                fontWeight = FontWeight.Medium,
+                fontFamily = customFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = timeFormat.format(zonedCal.time),
+                color = Color.White,
+                fontSize = clockSize,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = customFont,
+                letterSpacing = (-1.5).sp,
+                lineHeight = clockSize,
+                maxLines = 1
             )
         }
     }
 }
 
 /**
- * Duo Digital Clock with 60 seconds moving on the squircle borders and digital clock in the middle.
- * Used inside `WorldTimeZoneMapClockFace` and available for compact/full-screen rendering.
+ * Standalone Clock Screen: Squircle Border Tick Digital Clock (`themeIndex = 13`)
+ * Shows 60 moving second ticks along the squircle perimeter and a bold digital clock in the center.
+ */
+@Composable
+fun SquircleTickDigitalClockFace(
+    calendar: Calendar,
+    accentColor: Color,
+    customFont: FontFamily = FontFamily.SansSerif,
+    scale: Float = 1.0f,
+    use24Hour: Boolean = false,
+    isDuoCompact: Boolean = false,
+    standbyViewModel: StandbyViewModel? = null,
+    paneIndex: Int = 0
+) {
+    val vm: StandbyViewModel = standbyViewModel ?: viewModel()
+    val locationMode by vm.locationMode.collectAsState()
+    val customLocation by vm.customLocationName.collectAsState()
+    val clockTzId by vm.clockTimeZoneId.collectAsState()
+    val duoLeftTzId by vm.duoLeftTimeZoneId.collectAsState()
+    val duoRightTzId by vm.duoRightTimeZoneId.collectAsState()
+    val duoLeftLoc by vm.duoLeftLocationName.collectAsState()
+    val duoRightLoc by vm.duoRightLocationName.collectAsState()
+    val gpsLocation by vm.gpsLocationName.collectAsState()
+    val gpsLat by vm.gpsLatitude.collectAsState()
+    val gpsLon by vm.gpsLongitude.collectAsState()
+
+    val regionInfo = remember(
+        paneIndex, locationMode, customLocation, clockTzId,
+        duoLeftTzId, duoRightTzId, duoLeftLoc, duoRightLoc,
+        gpsLocation, gpsLat, gpsLon, calendar.timeZone
+    ) {
+        vm.resolvePaneLocationInfo(paneIndex)
+    }
+
+    val tickAccent = if (accentColor == Color.White) Color(0xFFFF9F0A) else accentColor
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(
+                horizontal = if (isDuoCompact) 12.dp else 28.dp,
+                vertical = if (isDuoCompact) 10.dp else 18.dp
+            )
+            .testTag("squircle_border_tick_clock_face"),
+        contentAlignment = Alignment.Center
+    ) {
+        SquircleTickClockWidget(
+            calendar = calendar,
+            accentColor = Color.White,
+            tickAccentColor = tickAccent,
+            scale = scale,
+            use24Hour = use24Hour,
+            regionLabel = "${regionInfo.regionName} • ${regionInfo.standardTimeShort}",
+            customFont = customFont
+        )
+    }
+}
+
+/**
+ * Digital Clock with 60 seconds moving on the squircle borders and digital clock in the middle.
  */
 @Composable
 fun SquircleTickClockWidget(
@@ -422,12 +502,12 @@ fun SquircleTickClockWidget(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .padding(2.dp)
+            .padding(4.dp)
             .testTag("squircle_tick_clock_widget"),
         contentAlignment = Alignment.Center
     ) {
-        val fontSize = (minOf(maxWidth.value * 0.34f, maxHeight.value * 0.42f) * scale).coerceIn(26f, 104f).sp
-        val labelSize = (fontSize.value * 0.24f).coerceIn(9.5f, 15f).sp
+        val fontSize = (minOf(maxWidth.value * 0.34f, maxHeight.value * 0.45f) * scale).coerceIn(32f, 168f).sp
+        val labelSize = (fontSize.value * 0.18f).coerceIn(10f, 18f).sp
 
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -439,7 +519,7 @@ fun SquircleTickClockWidget(
                 val cy = size.height / 2f
                 val halfW = size.width * 0.47f
                 val halfH = size.height * 0.46f
-                val tickLength = (size.minDimension * 0.085f).coerceIn(5f, 16f)
+                val tickLength = (size.minDimension * 0.085f).coerceIn(6f, 22f)
 
                 for (i in 0 until 60) {
                     val angleRad = ((i * 6f - 90f) * PI / 180.0).toFloat()
@@ -469,9 +549,9 @@ fun SquircleTickClockWidget(
                         start = start,
                         end = end,
                         strokeWidth = when {
-                            isCurrentSecond -> 4.2f
-                            i % 5 == 0 -> 3.2f
-                            else -> 2.0f
+                            isCurrentSecond -> 4.6f
+                            i % 5 == 0 -> 3.4f
+                            else -> 2.2f
                         },
                         cap = StrokeCap.Round
                     )
@@ -482,18 +562,18 @@ fun SquircleTickClockWidget(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 if (!regionLabel.isNullOrBlank()) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.NearMe,
                             contentDescription = null,
                             tint = tickAccentColor,
-                            modifier = Modifier.size((labelSize.value + 1f).dp)
+                            modifier = Modifier.size((labelSize.value + 2f).dp)
                         )
                         Text(
                             text = regionLabel,
@@ -512,7 +592,7 @@ fun SquircleTickClockWidget(
                     fontSize = fontSize,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = customFont,
-                    letterSpacing = (-1.5).sp,
+                    letterSpacing = (-2).sp,
                     lineHeight = fontSize,
                     maxLines = 1,
                     softWrap = false
@@ -523,7 +603,7 @@ fun SquircleTickClockWidget(
 }
 
 /**
- * 2. StandBy Giant Sage Clock + Right Sidebar Complications (Matches lcimg_b83618b0_1284_459a_b6f6_6647aaa24d8b.jpg)
+ * 2. StandBy Giant Sage Clock + Right Sidebar Complications
  */
 @Composable
 fun StandbySageComplicationClockFace(
@@ -552,15 +632,16 @@ fun StandbySageComplicationClockFace(
         if (weatherTempCelsius != null) {
             "${weatherTempCelsius.roundToInt()}°"
         } else {
-            "76°"
+            null
         }
     }
 
     val alarmShort = remember(nextAlarmLabel) {
         if (!nextAlarmLabel.isNullOrBlank() && nextAlarmLabel != "No Alarm") {
-            nextAlarmLabel.substringAfter(" ").substringBefore(" (").replace(" ", "").uppercase(Locale.getDefault()).ifBlank { "6:30AM" }
+            val parsed = nextAlarmLabel.substringAfter(" ").substringBefore(" (").replace(" ", "").uppercase(Locale.getDefault())
+            parsed.ifBlank { null }
         } else {
-            "6:30AM"
+            null
         }
     }
 
@@ -615,7 +696,7 @@ fun StandbySageComplicationClockFace(
                     .weight(0.28f)
                     .fillMaxHeight()
                     .padding(vertical = if (isDuoCompact) 12.dp else 24.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = if (!alarmShort.isNullOrBlank()) Arrangement.SpaceBetween else Arrangement.Center,
                 horizontalAlignment = Alignment.Start
             ) {
                 Column(horizontalAlignment = Alignment.Start) {
@@ -640,34 +721,38 @@ fun StandbySageComplicationClockFace(
                             maxLines = 1
                         )
                     }
-                    Text(
-                        text = tempDisplay,
-                        color = Color.White,
-                        fontSize = sideSubSize,
-                        fontWeight = FontWeight.SemiBold,
-                        fontFamily = customFont,
-                        maxLines = 1
-                    )
+                    if (!tempDisplay.isNullOrBlank()) {
+                        Text(
+                            text = tempDisplay,
+                            color = Color.White,
+                            fontSize = sideSubSize,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = customFont,
+                            maxLines = 1
+                        )
+                    }
                 }
 
-                Column(
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Alarm,
-                        contentDescription = "Scheduled Alarm",
-                        tint = sageColor,
-                        modifier = Modifier.size(if (isDuoCompact) 22.dp else 28.dp)
-                    )
-                    Text(
-                        text = alarmShort,
-                        color = Color.White,
-                        fontSize = sideLabelSize,
-                        fontWeight = FontWeight.SemiBold,
-                        fontFamily = customFont,
-                        maxLines = 1
-                    )
+                if (!alarmShort.isNullOrBlank()) {
+                    Column(
+                        horizontalAlignment = Alignment.Start,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = "Scheduled Alarm",
+                            tint = sageColor,
+                            modifier = Modifier.size(if (isDuoCompact) 22.dp else 28.dp)
+                        )
+                        Text(
+                            text = alarmShort,
+                            color = Color.White,
+                            fontSize = sideLabelSize,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = customFont,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -676,7 +761,6 @@ fun StandbySageComplicationClockFace(
 
 /**
  * 3. Overlapping Float Bubble Numerals Clock Face
- *    (Matches ios-17-iphone-standby-use-and-customize-8.jpg [6:38] & StandBy-on-iPhone.jpg Top-Right [4:41])
  */
 @Composable
 fun OverlappingFloatClockFace(
@@ -771,6 +855,418 @@ fun OverlappingFloatClockFace(
                         .clip(CircleShape)
                         .background(colonTint)
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Connected Devices Battery Charging Rings Widget (Used in Tools Hub)
+ */
+@Composable
+fun BatteryChargingRingsWidget(
+    scale: Float = 1.0f
+) {
+    val devices = rememberGoogleBatteryDevices()
+    val primaryDevice = devices.firstOrNull()
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp)
+            .testTag("battery_charging_rings_widget")
+    ) {
+        val ringDiameter = (minOf(maxWidth.value * 0.38f, maxHeight.value * 0.34f) * scale).coerceIn(54f, 118f).dp
+        val iconSize = (ringDiameter.value * 0.38f).dp
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.Start
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "${primaryDevice?.level ?: 85}%",
+                        color = Color.White,
+                        fontSize = (ringDiameter.value * 0.36f).coerceIn(22f, 40f).sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = if (primaryDevice?.isCharging == true) "Charging • ${primaryDevice.name}"
+                        else "Google Connected • ${primaryDevice?.name ?: "Phone"}",
+                        color = Color(0xFF34C759),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                val topRow = devices.take(2)
+                val bottomRow = devices.drop(2).take(2)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    topRow.forEach { dev ->
+                        SingleBatteryRingItem(
+                            device = dev,
+                            ringDiameter = ringDiameter,
+                            iconSize = iconSize
+                        )
+                    }
+                }
+                if (bottomRow.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        bottomRow.forEach { dev ->
+                            SingleBatteryRingItem(
+                                device = dev,
+                                ringDiameter = ringDiameter,
+                                iconSize = iconSize
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SingleBatteryRingItem(
+    device: GoogleConnectedBatteryDevice,
+    ringDiameter: androidx.compose.ui.unit.Dp,
+    iconSize: androidx.compose.ui.unit.Dp
+) {
+    val icon = when (device.type) {
+        "phone" -> Icons.Default.Smartphone
+        "watch" -> Icons.Default.Watch
+        "buds" -> Icons.Default.Headphones
+        else -> Icons.Default.Speaker
+    }
+    val ringColor = when {
+        device.level >= 50 -> Color(0xFF34C759)
+        device.level >= 20 -> Color(0xFFFFCC00)
+        device.level >= 0 -> Color(0xFFFF3B30)
+        else -> Color(0xFF38BDF8)
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(ringDiameter),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val stroke = (size.minDimension * 0.12f).coerceIn(6f, 13f)
+                val diameter = size.minDimension - stroke
+                val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+
+                drawArc(
+                    color = Color(0xFF23252B),
+                    startAngle = 0f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = Size(diameter, diameter),
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+                )
+                val sweep = if (device.level >= 0) 360f * (device.level / 100f).coerceIn(0f, 1f) else 360f
+                drawArc(
+                    color = ringColor,
+                    startAngle = -90f,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = Size(diameter, diameter),
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+                )
+            }
+
+            Icon(
+                imageVector = icon,
+                contentDescription = device.name,
+                tint = Color.White,
+                modifier = Modifier.size(iconSize)
+            )
+
+            if (device.isCharging) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .size(15.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = "Charging",
+                        tint = ringColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        }
+        Text(
+            text = if (device.level >= 0) "${device.name.take(10)} ${device.level}%" else device.name.take(12),
+            color = Color.White.copy(alpha = 0.85f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Google Home Smart Devices Control Grid Widget (Used in Tools Hub)
+ */
+@Composable
+fun SmartHomeControlGridWidget(
+    standbyViewModel: StandbyViewModel? = null
+) {
+    val vm: StandbyViewModel = standbyViewModel ?: viewModel()
+    val context = LocalContext.current
+    val haptics = rememberStandbyHaptics()
+    val homeDevices by vm.googleHomeDevices.collectAsState()
+    val googleAccount by vm.googleConnectedAccount.collectAsState()
+
+    LaunchedEffect(context) {
+        val detectedAccount = GoogleDeviceAndHomeMonitor.detectConnectedGoogleAccount(context)
+        vm.setGoogleConnectedAccount(detectedAccount)
+    }
+
+    val rows = remember(homeDevices) { homeDevices.chunked(2) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(6.dp)
+            .testTag("smart_home_control_grid_widget"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = "Google Home",
+                    tint = Color(0xFF8AB4F8),
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = "$googleAccount",
+                    color = Color.White.copy(alpha = 0.78f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = "Open App",
+                color = Color(0xFF8AB4F8),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        haptics.tick()
+                        GoogleDeviceAndHomeMonitor.openGoogleHomeApp(context)
+                    }
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+
+        if (homeDevices.isEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                shape = RoundedCornerShape(18.dp),
+                color = Color(0xFF15171D)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HomeWork,
+                        contentDescription = null,
+                        tint = Color(0xFF8AB4F8),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Real Android Device Controls",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Directly control linked smart devices via Google Play Services & Device Controls",
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        maxLines = 2
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        FilledTonalButton(
+                            onClick = {
+                                haptics.tick()
+                                try {
+                                    val intent = Intent("android.settings.ACTION_DEVICE_CONTROLS_SETTINGS").apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        })
+                                    } catch (_: Exception) {}
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Device Controls", fontSize = 11.sp)
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                haptics.tick()
+                                GoogleDeviceAndHomeMonitor.openGoogleHomeApp(context)
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Google Home", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        } else {
+            rows.forEach { rowItems ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowItems.forEach { device ->
+                        val icon = when (device.type) {
+                            "light" -> Icons.Default.Lightbulb
+                            "thermostat" -> Icons.Default.Thermostat
+                            "plug" -> Icons.Default.Power
+                            "air" -> Icons.Default.Air
+                            "strip" -> Icons.Default.WbTwilight
+                            else -> Icons.Default.Lock
+                        }
+                        val activeTint = when (device.type) {
+                            "light", "strip" -> Color(0xFFFFCC00)
+                            "thermostat" -> Color(0xFFFF9F0A)
+                            "air" -> Color(0xFF38BDF8)
+                            else -> Color(0xFF34C759)
+                        }
+
+                        Surface(
+                            onClick = {
+                                haptics.tick()
+                                vm.toggleGoogleHomeDevice(device.id)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .testTag("google_home_tile_${device.id}"),
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (device.isOn) Color(0xFF262A34) else Color(0xFF15171D)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.SpaceBetween,
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = device.name,
+                                        tint = if (device.isOn) activeTint else Color.White.copy(alpha = 0.40f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(if (device.isOn) activeTint else Color.White.copy(alpha = 0.2f))
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = device.room.uppercase(Locale.getDefault()),
+                                        color = Color.White.copy(alpha = 0.50f),
+                                        fontSize = 8.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = device.name,
+                                        color = Color.White,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = device.statusText,
+                                        color = if (device.isOn) activeTint else Color.White.copy(alpha = 0.45f),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

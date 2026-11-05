@@ -2,13 +2,17 @@ package com.example.ui.standby
 
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -89,7 +93,9 @@ fun TimerPage(
             Triple("Focus", "POMODORO", Icons.Default.Bolt),
             Triple("Chrono", "STOPWATCH", Icons.Default.Timer),
             Triple("Gallery", "SLIDESHOW", Icons.Default.Collections),
-            Triple("Dock Lab", "LEVEL & AMBIENT", Icons.Default.Explore)
+            Triple("Charge", "CONNECTED DEVICES", Icons.Default.BatteryChargingFull),
+            Triple("Smart Home", "GOOGLE HOME", Icons.Default.Home),
+            Triple("Ambient Light", "FLASH & LEVEL", Icons.Default.FlashlightOn)
         )
     }
 
@@ -122,64 +128,9 @@ fun TimerPage(
                     0 -> FocusPomodoroTimer(viewModel)
                     1 -> HighTechStopwatch(viewModel)
                     2 -> StandbyGallerySlideshowTool(viewModel)
-                    3 -> StandbyDockLabTool(viewModel)
-                }
-            }
-
-            // Sleek Bottom-Center OLED Tools Dock Switcher Pill
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 24.dp, bottom = 10.dp),
-                shape = CircleShape,
-                color = OledCardElevated.copy(alpha = 0.92f),
-                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.30f))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    toolItems.forEachIndexed { idx, (label, _, icon) ->
-                        val isSelected = pagerState.currentPage == idx
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isSelected) accentColor.copy(alpha = 0.22f) else Color.Transparent,
-                            border = if (isSelected) BorderStroke(1.dp, accentColor.copy(alpha = 0.65f)) else null,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable {
-                                    haptics.tick()
-                                    viewModel.setTimerModeIndex(idx)
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(idx)
-                                    }
-                                }
-                                .testTag("tools_tab_chip_$idx")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = label,
-                                    tint = if (isSelected) accentColor else Color.White.copy(alpha = 0.60f),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = label,
-                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.65f),
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
+                    3 -> StandbyConnectedDevicesChargeTool(viewModel)
+                    4 -> StandbySmartDevicesControlTool(viewModel)
+                    5 -> StandbyDockLabTool(viewModel)
                 }
             }
 
@@ -314,40 +265,94 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.76f)))
         }
 
-        Row(
+        // Unified Single Full-Screen Pomodoro Card (no 2-pane split)
+        Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = outerHPad, end = outerHPad + 14.dp, top = outerVPad, bottom = outerVPad + 32.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(paneSpacing)
+                .padding(start = outerHPad, end = outerHPad + 14.dp, top = outerVPad, bottom = outerVPad),
+            shape = RoundedCornerShape(28.dp),
+            color = OledCardBg,
+            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.28f))
         ) {
-            // Left Pane: 60-Tick StandBy OLED Countdown Dial
-            Surface(
+            BoxWithConstraints(
                 modifier = Modifier
-                    .weight(1.06f)
-                    .fillMaxHeight(),
-                shape = RoundedCornerShape(26.dp),
-                color = OledCardBg,
-                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.24f))
-            ) {
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(accentColor.copy(alpha = 0.12f), Color.Transparent)
-                            )
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(accentColor.copy(alpha = 0.14f), Color.Transparent)
                         )
-                        .padding(if (isCompactHeight) 10.dp else 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val dialSize = (minOf(maxWidth, maxHeight) * 0.94f).coerceIn(150.dp, 270.dp)
-                    val isSmallDial = dialSize < 220.dp
-                    val timerFontSize = (dialSize.value * 0.21f).coerceIn(30f, 56f).sp
-                    val iconBtnSize = if (isSmallDial) 36.dp else 44.dp
-                    val iconSize = if (isSmallDial) 16.dp else 20.dp
-                    val strokeWidthDp = if (isSmallDial) 7.dp else 9.dp
+                    )
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                val dialSize = (maxHeight * 0.62f).coerceIn(135.dp, 220.dp)
+                val isSmallDial = dialSize < 175.dp
+                val timerFontSize = (dialSize.value * 0.22f).coerceIn(28f, 48f).sp
+                val strokeWidthDp = if (isSmallDial) 7.dp else 9.dp
 
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Top Bar: Visual Duration Chips + Config Icon
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(15, 25, 45, 60).forEach { mins ->
+                                val isSel = focusMinutes == mins
+                                Surface(
+                                    onClick = {
+                                        haptics.tick()
+                                        viewModel.setPomodoroFocusMinutes(mins)
+                                        isRunning = false
+                                        val nextDur = getDurationForSegment(currentSegmentIndex, mins)
+                                        initialSeconds = nextDur
+                                        secondsLeft = nextDur
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isSel) accentColor.copy(alpha = 0.24f) else OledCardElevated,
+                                    border = BorderStroke(1.dp, if (isSel) accentColor else OledBorderSubtle)
+                                ) {
+                                    Text(
+                                        text = "${mins}m",
+                                        color = if (isSel) accentColor else Color.White.copy(alpha = 0.75f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                haptics.tick()
+                                showConfigDialog = true
+                            },
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(OledCardElevated)
+                                .border(1.dp, OledBorderSubtle, CircleShape)
+                                .testTag("pomodoro_config_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = "Set Focus Duration",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    // Center: 60-Tick StandBy Countdown Dial + Start / Reset Controls
                     Box(
                         modifier = Modifier.size(dialSize),
                         contentAlignment = Alignment.Center
@@ -360,9 +365,8 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                             val cx = size.width / 2f
                             val cy = size.height / 2f
                             val outerRadius = (size.minDimension / 2f) - 2.dp.toPx()
-                            val arcRadius = outerRadius - 10.dp.toPx()
+                            val arcRadius = outerRadius - 9.dp.toPx()
 
-                            // Outer 60-tick StandBy ring
                             for (i in 0 until 60) {
                                 val angleRad = ((i * 6f - 90f) * PI / 180.0).toFloat()
                                 val isActiveTick = i <= activeTickBoundary
@@ -371,12 +375,11 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                     color = if (isActiveTick) accentColor.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.14f),
                                     start = Offset(cx + cos(angleRad) * (outerRadius - tickLen), cy + sin(angleRad) * (outerRadius - tickLen)),
                                     end = Offset(cx + cos(angleRad) * outerRadius, cy + sin(angleRad) * outerRadius),
-                                    strokeWidth = if (i % 5 == 0) 2.6f else 1.5f,
+                                    strokeWidth = if (i % 5 == 0) 2.5f else 1.4f,
                                     cap = StrokeCap.Round
                                 )
                             }
 
-                            // Inner smooth progress arc
                             drawCircle(
                                 color = Color.White.copy(alpha = 0.08f),
                                 radius = arcRadius,
@@ -395,8 +398,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(horizontal = strokeWidthDp + 10.dp)
+                            verticalArrangement = Arrangement.Center
                         ) {
                             val minutes = secondsLeft / 60
                             val secs = secondsLeft % 60
@@ -436,59 +438,29 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                 modifier = textGradientModifier
                             )
 
-                            Spacer(modifier = Modifier.height(if (isSmallDial) 8.dp else 12.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
 
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(if (isSmallDial) 6.dp else 10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                IconButton(
-                                    onClick = {
-                                        haptics.tick()
-                                        showConfigDialog = true
-                                    },
-                                    modifier = Modifier
-                                        .size(iconBtnSize)
-                                        .clip(CircleShape)
-                                        .background(OledCardElevated)
-                                        .border(1.dp, OledBorderSubtle, CircleShape)
-                                        .testTag("pomodoro_config_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Tune,
-                                        contentDescription = "Set Focus Duration",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(iconSize)
-                                    )
-                                }
-
                                 Button(
                                     onClick = {
                                         haptics.confirm()
                                         isRunning = !isRunning
                                     },
                                     modifier = Modifier.testTag("pomodoro_start_pause_btn"),
-                                    shape = RoundedCornerShape(18.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = accentColor,
-                                        contentColor = if (accentColor == Color.White) Color.Black else Color.Black
+                                        contentColor = Color.Black
                                     ),
-                                    contentPadding = PaddingValues(
-                                        horizontal = if (isSmallDial) 12.dp else 18.dp,
-                                        vertical = if (isSmallDial) 6.dp else 9.dp
-                                    )
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                 ) {
                                     Icon(
                                         imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(if (isSmallDial) 15.dp else 18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (isRunning) "Pause" else "Start",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = if (isSmallDial) 12.sp else 13.5.sp,
-                                        maxLines = 1
+                                        contentDescription = if (isRunning) "Pause" else "Start",
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
 
@@ -499,7 +471,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         secondsLeft = initialSeconds
                                     },
                                     modifier = Modifier
-                                        .size(iconBtnSize)
+                                        .size(34.dp)
                                         .clip(CircleShape)
                                         .background(OledCardElevated)
                                         .border(1.dp, OledBorderSubtle, CircleShape)
@@ -509,176 +481,65 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         imageVector = Icons.Default.Refresh,
                                         contentDescription = "Reset Timer",
                                         tint = Color.White,
-                                        modifier = Modifier.size(iconSize)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
                         }
                     }
-                }
-            }
 
-            // Right Pane: StandBy OLED Focus Matrix & Phase Telemetry Card
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                shape = RoundedCornerShape(26.dp),
-                color = OledCardBg,
-                border = BorderStroke(1.dp, OledBorderSubtle)
-            ) {
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(if (isCompactHeight) 14.dp else 22.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    val stepBtnSize = ((maxWidth - 20.dp) / 8.5f).coerceIn(22.dp, 36.dp)
-                    val stepIconSize = (stepBtnSize * 0.5f).coerceIn(12.dp, 18.dp)
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.Start
+                    // Bottom Bar: 8-Stage Visual Cycle Indicators
+                    Surface(
+                        color = OledCardElevated,
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, OledBorderSubtle)
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = accentColor.copy(alpha = 0.18f),
-                                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f))
-                            ) {
-                                Text(
-                                    text = "01 • FOCUS MATRIX",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = accentColor,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                            Text(
-                                text = "${focusMinutes}M ROUNDS",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
+                            listOf(
+                                Icons.Default.Adjust to "P1",
+                                Icons.Default.Coffee to "B1",
+                                Icons.Default.Adjust to "P2",
+                                Icons.Default.Coffee to "B2",
+                                Icons.Default.Adjust to "P3",
+                                Icons.Default.Coffee to "B3",
+                                Icons.Default.Adjust to "P4",
+                                Icons.AutoMirrored.Filled.DirectionsRun to "L"
+                            ).forEachIndexed { index, (icon, label) ->
+                                val isCompleted = index < currentSegmentIndex
+                                val isCurrent = index == currentSegmentIndex
 
-                        Spacer(modifier = Modifier.height(if (isCompactHeight) 8.dp else 12.dp))
-
-                        Text(
-                            text = getSegmentLabel(currentSegmentIndex),
-                            style = if (isCompactHeight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
-                            color = Color.White,
-                            fontFamily = customFont,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        val focusCompletedCount = currentSegmentIndex / 2
-                        Text(
-                            text = "$focusCompletedCount of 4 focus blocks completed • Tap any stage below",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.65f),
-                            modifier = Modifier.padding(top = 4.dp, bottom = if (isCompactHeight) 10.dp else 16.dp)
-                        )
-
-                        // Quick Duration Selector Chips right inside the matrix card
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        ) {
-                            listOf(15, 25, 45, 60).forEach { mins ->
-                                val isSel = focusMinutes == mins
                                 Surface(
                                     onClick = {
                                         haptics.tick()
-                                        viewModel.setPomodoroFocusMinutes(mins)
                                         isRunning = false
-                                        val nextDur = getDurationForSegment(currentSegmentIndex, mins)
-                                        initialSeconds = nextDur
-                                        secondsLeft = nextDur
+                                        currentSegmentIndex = index
+                                        val duration = getDurationForSegment(index, focusMinutes)
+                                        initialSeconds = duration
+                                        secondsLeft = duration
                                     },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (isSel) accentColor.copy(alpha = 0.24f) else OledCardElevated,
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (isSel) accentColor else OledBorderSubtle
-                                    )
+                                    modifier = Modifier.size(28.dp),
+                                    shape = CircleShape,
+                                    color = when {
+                                        isCurrent -> accentColor
+                                        isCompleted -> accentColor.copy(alpha = 0.22f)
+                                        else -> Color.Transparent
+                                    }
                                 ) {
-                                    Text(
-                                        text = "${mins}m",
-                                        color = if (isSel) accentColor else Color.White.copy(alpha = 0.75f),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Surface(
-                            color = OledCardElevated,
-                            shape = RoundedCornerShape(18.dp),
-                            border = BorderStroke(1.dp, OledBorderSubtle),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                listOf(
-                                    Icons.Default.Adjust to "P1",
-                                    Icons.Default.Coffee to "B1",
-                                    Icons.Default.Adjust to "P2",
-                                    Icons.Default.Coffee to "B2",
-                                    Icons.Default.Adjust to "P3",
-                                    Icons.Default.Coffee to "B3",
-                                    Icons.Default.Adjust to "P4",
-                                    Icons.AutoMirrored.Filled.DirectionsRun to "L"
-                                ).forEachIndexed { index, (icon, label) ->
-                                    val isCompleted = index < currentSegmentIndex
-                                    val isCurrent = index == currentSegmentIndex
-
-                                    Surface(
-                                        onClick = {
-                                            haptics.tick()
-                                            isRunning = false
-                                            currentSegmentIndex = index
-                                            val duration = getDurationForSegment(index, focusMinutes)
-                                            initialSeconds = duration
-                                            secondsLeft = duration
-                                        },
-                                        modifier = Modifier.size(stepBtnSize),
-                                        shape = CircleShape,
-                                        color = when {
-                                            isCurrent -> accentColor
-                                            isCompleted -> accentColor.copy(alpha = 0.22f)
-                                            else -> Color.Transparent
-                                        }
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = icon,
-                                                contentDescription = label,
-                                                tint = when {
-                                                    isCurrent -> Color.Black
-                                                    isCompleted -> accentColor
-                                                    else -> Color.White.copy(alpha = 0.40f)
-                                                },
-                                                modifier = Modifier.size(stepIconSize)
-                                            )
-                                        }
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = label,
+                                            tint = when {
+                                                isCurrent -> Color.Black
+                                                isCompleted -> accentColor
+                                                else -> Color.White.copy(alpha = 0.40f)
+                                            },
+                                            modifier = Modifier.size(14.dp)
+                                        )
                                     }
                                 }
                             }
@@ -1375,24 +1236,26 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
         label = "kenBurnsScale"
     )
 
+    val showSlideshowTime by viewModel.showSlideshowTimeOverlay.collectAsState()
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(OledCanvasBg)
-            .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 46.dp)
             .testTag("gallery_slideshow_tool")
     ) {
         if (!isPermissionGranted) {
-            // STEP 1: Explicit User Permission Prompt Card before showing Gallery / Slideshow
+            // STEP 1: Minimal Visual Permission Card before showing Gallery / Slideshow
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp)
                     .testTag("gallery_permission_card"),
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(28.dp),
                 color = OledCardBg,
                 border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
@@ -1400,13 +1263,13 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                                 colors = listOf(accentColor.copy(alpha = 0.14f), Color.Transparent)
                             )
                         )
-                        .padding(horizontal = 28.dp, vertical = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(92.dp)
+                            .size(84.dp)
                             .clip(RoundedCornerShape(24.dp))
                             .background(accentColor.copy(alpha = 0.16f))
                             .border(1.5.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(24.dp)),
@@ -1416,74 +1279,121 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                             imageVector = Icons.Default.Collections,
                             contentDescription = "Gallery Permission",
                             tint = accentColor,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(40.dp)
                         )
                     }
 
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.Center
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = accentColor.copy(alpha = 0.18f)
+                        Button(
+                            onClick = {
+                                haptics.confirm()
+                                viewModel.setGalleryPermissionGranted(true)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = accentColor,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.testTag("gallery_grant_permission_btn")
                         ) {
-                            Text(
-                                text = "03 • STANDBY PHOTO FRAME & GALLERY",
-                                color = accentColor,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            Icon(
+                                imageVector = Icons.Default.Slideshow,
+                                contentDescription = "Start Slideshow",
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Allow Gallery & Slideshow Access",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Grant permission to view your photo gallery and run an ambient nightstand slideshow with live clock overlay.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.70f)
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
 
+                        OutlinedButton(
+                            onClick = {
+                                haptics.tick()
+                                viewModel.setGalleryPermissionGranted(true)
+                                try {
+                                    photoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                } catch (_: Exception) {
+                                }
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AddPhotoAlternate,
+                                contentDescription = "Add Photos",
+                                tint = accentColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            // STEP 2: Full-Screen Edge-to-Edge Immersive Slideshow (zero text distractions; optional time overlay from Settings)
+            val safeSlideIdx = currentSlideIndex.mod(totalSlidesCount.coerceAtLeast(1))
+            var showControlsOverlay by remember { mutableStateOf(false) }
+
+            LaunchedEffect(showControlsOverlay) {
+                if (showControlsOverlay) {
+                    delay(3500L)
+                    showControlsOverlay = false
+                }
+            }
+
+            if (!isGridViewMode) {
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable {
+                                haptics.tick()
+                                showControlsOverlay = !showControlsOverlay
+                            }
+                    ) {
+                        if (safeSlideIdx < userPhotoUris.size) {
+                            val uriStr = userPhotoUris[safeSlideIdx]
+                            coil.compose.AsyncImage(
+                                model = uriStr,
+                                contentDescription = "User Gallery Slide",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        scaleX = if (isSlideshowPlaying) kenBurnsScale else 1f
+                                        scaleY = if (isSlideshowPlaying) kenBurnsScale else 1f
+                                    },
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            val art = BuiltInStandbyArtworks[(safeSlideIdx - userPhotoUris.size).mod(BuiltInStandbyArtworks.size)]
+                            CuratedStandbyArtworkCanvas(
+                                slide = art,
+                                zoomScale = if (isSlideshowPlaying) kenBurnsScale else 1f
+                            )
+                        }
+                    }
+
+                    // Subtle Icon-Only Actions revealed only on tap (No Text Labels)
+                    AnimatedVisibility(
+                        visible = showControlsOverlay,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 16.dp, top = 14.dp)
+                    ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Button(
-                                onClick = {
-                                    haptics.confirm()
-                                    viewModel.setGalleryPermissionGranted(true)
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = accentColor,
-                                    contentColor = Color.Black
-                                ),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.testTag("gallery_grant_permission_btn")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Allow Gallery Access",
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-
-                            OutlinedButton(
+                            IconButton(
                                 onClick = {
                                     haptics.tick()
-                                    viewModel.setGalleryPermissionGranted(true)
                                     try {
                                         photoPickerLauncher.launch(
                                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -1491,436 +1401,192 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                                     } catch (_: Exception) {
                                     }
                                 },
-                                shape = RoundedCornerShape(14.dp),
-                                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f))
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.45f))
+                                    .testTag("gallery_add_photos_btn")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AddPhotoAlternate,
-                                    contentDescription = null,
-                                    tint = accentColor,
+                                    contentDescription = "Add Photos",
+                                    tint = Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Select Device Photos", color = Color.White)
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    haptics.tick()
+                                    isGridViewMode = true
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.45f))
+                                    .testTag("gallery_toggle_grid_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.GridView,
+                                    contentDescription = "Gallery Grid",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    haptics.confirm()
+                                    isSlideshowPlaying = !isSlideshowPlaying
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.45f))
+                                    .testTag("slideshow_play_pause_btn")
+                            ) {
+                                Icon(
+                                    imageVector = if (isSlideshowPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "Play/Pause Slideshow",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }
-                }
-            }
-        } else {
-            // STEP 2: Full StandBy Gallery View & Ambient Ken Burns Slideshow
-            val safeSlideIdx = currentSlideIndex.mod(totalSlidesCount.coerceAtLeast(1))
 
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(26.dp),
-                color = OledCardBg,
-                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.30f))
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    if (!isGridViewMode) {
-                        // AMBIENT SLIDESHOW MODE
-                        Box(
+                    // Optional Time-Only Overlay (Opt-On by Default, Controlled in Settings -> Tools -> Slideshow)
+                    if (showSlideshowTime) {
+                        val timeFmt = remember(use24Hour) {
+                            SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm", Locale.getDefault())
+                        }
+                        Text(
+                            text = timeFmt.format(currentTime.time),
+                            color = Color.White.copy(alpha = 0.92f),
+                            fontSize = 48.sp,
+                            fontWeight = FontWeight.Black,
+                            lineHeight = 48.sp,
                             modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(26.dp))
+                                .align(Alignment.BottomStart)
+                                .padding(start = 24.dp, bottom = 20.dp)
+                                .testTag("slideshow_time_overlay_text")
+                        )
+                    }
+                }
+            } else {
+                // GALLERY GRID VIEW MODE (Visual-only photo grid)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = OledCardBg,
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.30f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (safeSlideIdx < userPhotoUris.size) {
-                                val uriStr = userPhotoUris[safeSlideIdx]
-                                coil.compose.AsyncImage(
-                                    model = uriStr,
-                                    contentDescription = "User Gallery Slide",
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer {
-                                            scaleX = if (isSlideshowPlaying) kenBurnsScale else 1f
-                                            scaleY = if (isSlideshowPlaying) kenBurnsScale else 1f
-                                        },
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                val art = BuiltInStandbyArtworks[(safeSlideIdx - userPhotoUris.size).mod(BuiltInStandbyArtworks.size)]
-                                CuratedStandbyArtworkCanvas(
-                                    slide = art,
-                                    zoomScale = if (isSlideshowPlaying) kenBurnsScale else 1f
-                                )
-                            }
-
-                            // Bottom & Top Vignette Scrim for legibility
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Black.copy(alpha = 0.45f),
-                                                Color.Transparent,
-                                                Color.Black.copy(alpha = 0.72f)
-                                            )
-                                        )
-                                    )
-                            )
-
-                            // Top Bar: Slide Info + Controls (Play/Pause, Interval, Add Photos, Grid Toggle)
-                            Row(
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color.Black.copy(alpha = 0.65f),
-                                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
-                                    ) {
-                                        Text(
-                                            text = if (isSlideshowPlaying) "SLIDESHOW • ${intervalSecs}S" else "PAUSED",
-                                            color = accentColor,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontFamily = FontFamily.Monospace,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                    Text(
-                                        text = "${safeSlideIdx + 1} / $totalSlidesCount",
-                                        color = Color.White.copy(alpha = 0.85f),
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    // Cycle Interval Button (5s / 8s / 15s / 30s)
-                                    Surface(
-                                        onClick = {
-                                            haptics.tick()
-                                            val nextInt = when (intervalSecs) {
-                                                5 -> 8
-                                                8 -> 15
-                                                15 -> 30
-                                                else -> 5
-                                            }
-                                            viewModel.setSlideshowIntervalSeconds(nextInt)
-                                        },
-                                        shape = CircleShape,
-                                        color = Color.Black.copy(alpha = 0.65f),
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
-                                    ) {
-                                        Text(
-                                            text = "${intervalSecs}s",
-                                            color = Color.White,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                        )
-                                    }
-
-                                    // Add Photos from Device Picker
-                                    Surface(
-                                        onClick = {
-                                            haptics.tick()
-                                            try {
-                                                photoPickerLauncher.launch(
-                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                                )
-                                            } catch (_: Exception) {
-                                            }
-                                        },
-                                        shape = CircleShape,
-                                        color = Color.Black.copy(alpha = 0.65f),
-                                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f)),
-                                        modifier = Modifier.testTag("gallery_add_photos_btn")
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.AddPhotoAlternate,
-                                                contentDescription = "Add Photos",
-                                                tint = accentColor,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text(
-                                                text = "Add",
-                                                color = Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-
-                                    // Switch to Gallery Grid View
-                                    Surface(
-                                        onClick = {
-                                            haptics.tick()
-                                            isGridViewMode = true
-                                        },
-                                        shape = CircleShape,
-                                        color = Color.Black.copy(alpha = 0.65f),
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                                        modifier = Modifier.testTag("gallery_toggle_grid_btn")
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.GridView,
-                                                contentDescription = "Gallery Grid",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text(
-                                                text = "Grid",
-                                                color = Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Bottom-Left StandBy Live Clock & Date Overlay on Slideshow
-                            val timeFmt = remember(use24Hour) {
-                                SimpleDateFormat(if (use24Hour) "HH:mm" else "h:mm", Locale.getDefault())
-                            }
-                            val dateFmt = remember {
-                                SimpleDateFormat("EEE, MMM d", Locale.getDefault())
-                            }
-
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(start = 18.dp, bottom = 14.dp)
-                            ) {
-                                Text(
-                                    text = dateFmt.format(currentTime.time).uppercase(Locale.getDefault()),
-                                    color = accentColor,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 1.2.sp
-                                )
-                                Text(
-                                    text = timeFmt.format(currentTime.time),
-                                    color = Color.White,
-                                    fontSize = 44.sp,
-                                    fontWeight = FontWeight.Black,
-                                    lineHeight = 44.sp
-                                )
-                            }
-
-                            // Bottom-Right Slideshow Transport Controls (Prev / Play-Pause / Next)
-                            Row(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 18.dp, bottom = 14.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilledTonalIconButton(
                                     onClick = {
                                         haptics.tick()
-                                        currentSlideIndex = (currentSlideIndex - 1 + totalSlidesCount) % totalSlidesCount
-                                    },
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.65f))
-                                        .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                                        try {
+                                            photoPickerLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        } catch (_: Exception) {
+                                        }
+                                    }
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.SkipPrevious,
-                                        contentDescription = "Previous Photo",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
+                                        imageVector = Icons.Default.AddPhotoAlternate,
+                                        contentDescription = "Add Photos",
+                                        tint = accentColor
                                     )
                                 }
 
-                                IconButton(
-                                    onClick = {
-                                        haptics.confirm()
-                                        isSlideshowPlaying = !isSlideshowPlaying
-                                    },
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(accentColor)
-                                        .testTag("slideshow_play_pause_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = if (isSlideshowPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "Play/Pause Slideshow",
-                                        tint = Color.Black,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-
-                                IconButton(
+                                FilledIconButton(
                                     onClick = {
                                         haptics.tick()
-                                        currentSlideIndex = (currentSlideIndex + 1) % totalSlidesCount
+                                        isGridViewMode = false
                                     },
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.65f))
-                                        .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = accentColor,
+                                        contentColor = Color.Black
+                                    )
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.SkipNext,
-                                        contentDescription = "Next Photo",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
+                                        imageVector = Icons.Default.Slideshow,
+                                        contentDescription = "Full Screen Slideshow"
                                     )
                                 }
                             }
                         }
-                    } else {
-                        // GALLERY GRID VIEW MODE
-                        Column(
+
+                        LazyRow(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                .fillMaxWidth()
+                                .weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "StandBy Photo Gallery ($totalSlidesCount items)",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.ExtraBold
+                            items(totalSlidesCount) { idx ->
+                                val isCurrent = idx == safeSlideIdx
+                                Surface(
+                                    onClick = {
+                                        haptics.tick()
+                                        currentSlideIndex = idx
+                                        isGridViewMode = false
+                                    },
+                                    modifier = Modifier
+                                        .width(190.dp)
+                                        .fillMaxHeight(),
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = OledCardElevated,
+                                    border = BorderStroke(
+                                        width = if (isCurrent) 2.dp else 1.dp,
+                                        color = if (isCurrent) accentColor else OledBorderSubtle
                                     )
-                                    Text(
-                                        text = "Tap any photo to launch full-bleed Ken Burns slideshow",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.65f)
-                                    )
-                                }
-
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            haptics.tick()
-                                            try {
-                                                photoPickerLauncher.launch(
-                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        if (idx < userPhotoUris.size) {
+                                            val u = userPhotoUris[idx]
+                                            coil.compose.AsyncImage(
+                                                model = u,
+                                                contentDescription = "User Photo $idx",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            IconButton(
+                                                onClick = {
+                                                    haptics.tick()
+                                                    viewModel.removeGalleryPhotoUri(u)
+                                                },
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(6.dp)
+                                                    .size(28.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.Black.copy(alpha = 0.7f))
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Remove Photo",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(14.dp)
                                                 )
-                                            } catch (_: Exception) {
                                             }
-                                        },
-                                        shape = RoundedCornerShape(12.dp),
-                                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AddPhotoAlternate,
-                                            contentDescription = null,
-                                            tint = accentColor,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Add Photos", color = Color.White, fontSize = 12.sp)
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            haptics.tick()
-                                            isGridViewMode = false
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = accentColor,
-                                            contentColor = Color.Black
-                                        ),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Slideshow,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Slideshow", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    }
-                                }
-                            }
-
-                            LazyRow(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                items(totalSlidesCount) { idx ->
-                                    val isCurrent = idx == safeSlideIdx
-                                    Surface(
-                                        onClick = {
-                                            haptics.tick()
-                                            currentSlideIndex = idx
-                                            isGridViewMode = false
-                                        },
-                                        modifier = Modifier
-                                            .width(190.dp)
-                                            .fillMaxHeight(),
-                                        shape = RoundedCornerShape(18.dp),
-                                        color = OledCardElevated,
-                                        border = BorderStroke(
-                                            width = if (isCurrent) 2.dp else 1.dp,
-                                            color = if (isCurrent) accentColor else OledBorderSubtle
-                                        )
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize()) {
-                                            if (idx < userPhotoUris.size) {
-                                                val u = userPhotoUris[idx]
-                                                coil.compose.AsyncImage(
-                                                    model = u,
-                                                    contentDescription = "User Photo $idx",
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentScale = ContentScale.Crop
-                                                )
-                                                IconButton(
-                                                    onClick = {
-                                                        haptics.tick()
-                                                        viewModel.removeGalleryPhotoUri(u)
-                                                    },
-                                                    modifier = Modifier
-                                                        .align(Alignment.TopEnd)
-                                                        .padding(6.dp)
-                                                        .size(28.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color.Black.copy(alpha = 0.7f))
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Close,
-                                                        contentDescription = "Remove Photo",
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                }
-                                            } else {
-                                                val art = BuiltInStandbyArtworks[(idx - userPhotoUris.size).mod(BuiltInStandbyArtworks.size)]
-                                                CuratedStandbyArtworkCanvas(slide = art, zoomScale = 1f)
-                                            }
+                                        } else {
+                                            val art = BuiltInStandbyArtworks[(idx - userPhotoUris.size).mod(BuiltInStandbyArtworks.size)]
+                                            CuratedStandbyArtworkCanvas(slide = art, zoomScale = 1f)
                                         }
                                     }
                                 }
@@ -1985,31 +1651,404 @@ private fun CuratedStandbyArtworkCanvas(
                 }
             }
         }
+    }
+}
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 18.dp, top = 52.dp)
+/**
+ * TOOL 04: Connected Devices Charge Telemetry (Google Fast Pair / Bluetooth & System Battery)
+ */
+@Composable
+fun StandbyConnectedDevicesChargeTool(viewModel: StandbyViewModel) {
+    val context = LocalContext.current
+    val selectedColorIdx by viewModel.colorPage4.collectAsState()
+    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color(0xFF34D399)
+    val devices = rememberGoogleBatteryDevices()
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(OledCanvasBg)
+            .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp)
+            .testTag("connected_devices_charge_tool")
+    ) {
+        var showBtInfo by remember { mutableStateOf(false) }
+
+        // Unified Single Full-Screen Charge Card (no 2-pane split)
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(28.dp),
+            color = OledCardBg,
+            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.28f))
         ) {
-            Text(
-                text = slide.subtitle,
-                color = slide.accent,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                fontFamily = FontFamily.Monospace
-            )
-            Text(
-                text = slide.title,
-                color = Color.White.copy(alpha = 0.92f),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BatteryChargingFull,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Text(
+                            text = "Connected Devices",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        IconButton(
+                            onClick = { showBtInfo = !showBtInfo },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Info",
+                                tint = if (showBtInfo) accentColor else Color.White.copy(alpha = 0.55f),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            try {
+                                context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } catch (_: Exception) {}
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Pair", fontSize = 11.sp)
+                    }
+                }
+
+                AnimatedVisibility(visible = showBtInfo) {
+                    Text(
+                        text = "Pair your Pixel Buds, Wear OS watch, or Bluetooth headphones in Android Settings to monitor live battery telemetry here.",
+                        color = Color.White.copy(alpha = 0.60f),
+                        fontSize = 11.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    BatteryChargingRingsWidget(scale = 1.0f)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * TOOL 05: Smart Devices Control Hub (Connected through Google Home & Android Device Controls)
+ */
+@Composable
+fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
+    val context = LocalContext.current
+    val haptics = rememberStandbyHaptics()
+    val selectedColorIdx by viewModel.colorPage4.collectAsState()
+    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color(0xFF38BDF8)
+    val homeDevices by viewModel.googleHomeDevices.collectAsState()
+    var selectedDeviceId by remember { mutableStateOf(homeDevices.firstOrNull()?.id ?: "") }
+    val activeDevice = homeDevices.firstOrNull { it.id == selectedDeviceId } ?: homeDevices.firstOrNull()
+    var showAddDeviceDialog by remember { mutableStateOf(false) }
+
+    var showSmartInfo by remember { mutableStateOf(false) }
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(OledCanvasBg)
+            .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp)
+            .testTag("smart_devices_control_tool")
+    ) {
+        // Unified Single Full-Screen Smart Home Card (no 2-pane split)
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(28.dp),
+            color = OledCardBg,
+            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.28f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Text(
+                            text = "Smart Home",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        IconButton(
+                            onClick = { showSmartInfo = !showSmartInfo },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Info",
+                                tint = if (showSmartInfo) accentColor else Color.White.copy(alpha = 0.55f),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                haptics.tick()
+                                showAddDeviceDialog = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Add", fontSize = 11.sp)
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                haptics.confirm()
+                                try {
+                                    context.startActivity(Intent("android.settings.ACTION_DEVICE_CONTROLS_SETTINGS").apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    })
+                                } catch (_: Exception) {
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        })
+                                    } catch (_: Exception) {}
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Controls", fontSize = 11.sp)
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                haptics.tick()
+                                GoogleDeviceAndHomeMonitor.openGoogleHomeApp(context)
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Google Home", fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                AnimatedVisibility(visible = showSmartInfo) {
+                    Text(
+                        text = "Manage your real smart lights, thermostat, and plugs through Android's system Device Controls or add custom tiles here.",
+                        color = Color.White.copy(alpha = 0.60f),
+                        fontSize = 11.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    SmartHomeControlGridWidget(standbyViewModel = viewModel)
+                }
+
+                if (activeDevice != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            homeDevices.forEach { item ->
+                                val isSel = item.id == activeDevice.id
+                                FilterChip(
+                                    selected = isSel,
+                                    onClick = {
+                                        haptics.tick()
+                                        selectedDeviceId = item.id
+                                    },
+                                    label = { Text(item.name, fontSize = 11.sp, maxLines = 1) }
+                                )
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                haptics.tick()
+                                val step = if (activeDevice.type == "thermostat") -1 else -10
+                                viewModel.adjustGoogleHomeDeviceValue(activeDevice.id, step)
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(if (activeDevice.type == "thermostat") "-1°F" else "-10%", color = Color.White, fontSize = 11.sp)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                haptics.tick()
+                                val step = if (activeDevice.type == "thermostat") 1 else 10
+                                viewModel.adjustGoogleHomeDeviceValue(activeDevice.id, step)
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(if (activeDevice.type == "thermostat") "+1°F" else "+10%", color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showAddDeviceDialog) {
+            var newName by remember { mutableStateOf("") }
+            var newRoom by remember { mutableStateOf("Living Room") }
+            var newType by remember { mutableStateOf("light") }
+
+            AlertDialog(
+                onDismissRequest = { showAddDeviceDialog = false },
+                title = { Text("Add Smart Device Controller", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Add a controller for your real smart appliances:", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+                        OutlinedTextField(
+                            value = newName,
+                            onValueChange = { newName = it },
+                            label = { Text("Device Name (e.g. Desk Lamp)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = newRoom,
+                            onValueChange = { newRoom = it },
+                            label = { Text("Room (e.g. Bedroom, Office)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("light" to "Light", "thermostat" to "Thermostat", "plug" to "Plug", "air" to "Air").forEach { (typeKey, typeLabel) ->
+                                FilterChip(
+                                    selected = newType == typeKey,
+                                    onClick = { newType = typeKey },
+                                    label = { Text(typeLabel, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (newName.isNotBlank()) {
+                                viewModel.addUserSmartDevice(newName, newRoom, newType)
+                                showAddDeviceDialog = false
+                            }
+                        }
+                    ) {
+                        Text("Add Device")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddDeviceDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
             )
         }
     }
 }
 
 /**
- * TOOL 04: StandBy Dock Lab — Real Hardware 2D Spirit Level, Compass & Bedside Soundscape / Nightlight
+ * Helper to control the phone's rear LED Camera Flash / Torch as an indirect nightstand wall ambient light.
+ * Uses Android `CameraManager.setTorchMode` (and `turnOnTorchWithStrengthLevel` on Android 13+ when supported).
+ */
+private fun setHardwareFlashlightAmbient(
+    context: Context,
+    enabled: Boolean,
+    intensityFraction: Float = 1.0f
+): Boolean {
+    return try {
+        val cm = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return false
+        val torchCamId = cm.cameraIdList.firstOrNull { id ->
+            val chars = cm.getCameraCharacteristics(id)
+            chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        } ?: return false
+
+        if (!enabled) {
+            cm.setTorchMode(torchCamId, false)
+            return true
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val chars = cm.getCameraCharacteristics(torchCamId)
+            val maxLevel = chars.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL) ?: 1
+            if (maxLevel > 1) {
+                val targetLevel = (intensityFraction.coerceIn(0.1f, 1.0f) * maxLevel).roundToInt().coerceIn(1, maxLevel)
+                cm.turnOnTorchWithStrengthLevel(torchCamId, targetLevel)
+                return true
+            }
+        }
+        cm.setTorchMode(torchCamId, true)
+        true
+    } catch (_: Exception) {
+        false
+    }
+}
+
+/**
+ * TOOL 06: StandBy Full-Screen Ambient Light Studio
+ * - Dedicated full-screen phone rear Camera Flash / Torch (`CameraManager.setTorchMode`) indirect
+ *   wall-bounce ambient light (Steady Torch, Gentle Breathing Pulse, or Candlelight Flicker),
+ *   OLED Screen Halo Diffuser, and Sleep Audio Synthesizer.
  */
 @Composable
 fun StandbyDockLabTool(viewModel: StandbyViewModel) {
@@ -2018,77 +2057,61 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
     val selectedColorIdx by viewModel.colorPage4.collectAsState()
     val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color(0xFF38BDF8)
 
-    // Real Android Accelerometer + Magnetometer sensor listener for Dock Spirit Level & Compass
-    var pitchDeg by remember { mutableFloatStateOf(0f) }
-    var rollDeg by remember { mutableFloatStateOf(0f) }
-    var azimuthDeg by remember { mutableFloatStateOf(0f) }
+    // Camera Flash / Torch Ambient Light state:
+    // 0 = Off, 1 = Steady Wall-Bounce Torch, 2 = Breathing Ambient Pulse, 3 = Candlelight Flicker
+    var flashAmbientMode by remember { mutableIntStateOf(0) }
+    var flashIntensity by remember { mutableFloatStateOf(0.65f) }
+    var isHardwareFlashActive by remember { mutableStateOf(false) }
 
     DisposableEffect(context) {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        val accelSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        val magSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
-        val gravity = FloatArray(3)
-        val geomag = FloatArray(3)
-        var hasGravity = false
-        var hasGeomag = false
-
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent?) {
-                if (event == null) return
-                if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-                    System.arraycopy(event.values, 0, gravity, 0, 3)
-                    hasGravity = true
-                    val gx = gravity[0]
-                    val gy = gravity[1]
-                    val gz = gravity[2]
-                    pitchDeg = (kotlin.math.atan2(gy.toDouble(), kotlin.math.sqrt((gx * gx + gz * gz).toDouble())) * 180.0 / PI).toFloat()
-                    rollDeg = (kotlin.math.atan2(gx.toDouble(), gz.toDouble()) * 180.0 / PI).toFloat()
-                } else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
-                    System.arraycopy(event.values, 0, geomag, 0, 3)
-                    hasGeomag = true
-                }
-                if (hasGravity && hasGeomag) {
-                    val rMat = FloatArray(9)
-                    val iMat = FloatArray(9)
-                    if (SensorManager.getRotationMatrix(rMat, iMat, gravity, geomag)) {
-                        val orientation = FloatArray(3)
-                        SensorManager.getOrientation(rMat, orientation)
-                        val deg = ((Math.toDegrees(orientation[0].toDouble()) + 360.0) % 360.0).toFloat()
-                        azimuthDeg = deg
-                    }
-                }
-            }
-
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-        }
-
-        try {
-            if (accelSensor != null) {
-                sensorManager.registerListener(listener, accelSensor, SensorManager.SENSOR_DELAY_UI)
-            }
-            if (magSensor != null) {
-                sensorManager.registerListener(listener, magSensor, SensorManager.SENSOR_DELAY_UI)
-            }
-        } catch (_: Exception) {
-        }
-
         onDispose {
-            try {
-                sensorManager?.unregisterListener(listener)
-            } catch (_: Exception) {
+            // Always turn off hardware camera flash when leaving the screen
+            setHardwareFlashlightAmbient(context, enabled = false)
+        }
+    }
+
+    // Drive the hardware Camera Flash / Torch in Steady, Breathing Pulse, or Candlelight mode
+    LaunchedEffect(flashAmbientMode, flashIntensity) {
+        if (flashAmbientMode == 0) {
+            setHardwareFlashlightAmbient(context, enabled = false)
+            isHardwareFlashActive = false
+            return@LaunchedEffect
+        }
+        when (flashAmbientMode) {
+            1 -> { // Steady Ambient Wall-Bounce Torch
+                isHardwareFlashActive = setHardwareFlashlightAmbient(context, enabled = true, intensityFraction = flashIntensity)
+            }
+            2 -> { // Gentle Breathing Ambient Flash
+                var step = 0
+                while (isActive && flashAmbientMode == 2) {
+                    val wave = ((sin(step * 0.35) + 1.0) / 2.0).toFloat().coerceIn(0.15f, 1.0f)
+                    val level = (wave * flashIntensity).coerceIn(0.15f, 1.0f)
+                    val onCycle = wave > 0.35f
+                    isHardwareFlashActive = setHardwareFlashlightAmbient(context, enabled = onCycle, intensityFraction = level)
+                    step++
+                    delay(260L)
+                }
+            }
+            3 -> { // Warm Candlelight Flicker Flash
+                while (isActive && flashAmbientMode == 3) {
+                    val flicker = Random.nextFloat().coerceIn(0.25f, 1.0f) * flashIntensity
+                    val onCycle = flicker > 0.22f
+                    isHardwareFlashActive = setHardwareFlashlightAmbient(context, enabled = onCycle, intensityFraction = flicker)
+                    delay(Random.nextLong(120L, 320L))
+                }
             }
         }
     }
 
-    // Procedural Ambient Soundscape Synthesizer (Brown Noise / Soft Rain / 432Hz Zen Drone)
+    // Procedural Ambient Soundscape Synthesizer + OLED Screen Nightlight
     var activeSoundMode by remember { mutableIntStateOf(0) } // 0 = Off, 1 = Brown Noise, 2 = Night Rain, 3 = 432Hz Zen
-    var nightlightWarmthIdx by remember { mutableIntStateOf(0) } // 0 = Off, 1 = Amber 2000K, 2 = Crimson 1500K, 3 = Soft Cyan
+    var nightlightWarmthIdx by remember { mutableIntStateOf(1) } // Default Warm Amber 2000K screen glow
 
     val nightlightColors = listOf(
         Color.Transparent to "Off",
-        Color(0xFFFF9500) to "Amber 2000K",
-        Color(0xFFFF3B30) to "Crimson 1500K",
-        Color(0xFF38BDF8) to "Soft Cyan"
+        Color(0xFFFF9500) to "Amber",
+        Color(0xFFFF3B30) to "Crimson",
+        Color(0xFF38BDF8) to "Cyan"
     )
     val activeNightlightColor = nightlightColors[nightlightWarmthIdx].first
 
@@ -2132,17 +2155,17 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
                 while (isActive && activeSoundMode != 0) {
                     for (i in pcm.indices) {
                         val sample = when (activeSoundMode) {
-                            1 -> { // Soothing Brown Noise
+                            1 -> {
                                 val white = Random.nextDouble(-1.0, 1.0)
                                 lastOut = (lastOut + (0.02 * white)) / 1.02
                                 (lastOut * 3.2).coerceIn(-0.9, 0.9)
                             }
-                            2 -> { // Soft Night Rain
+                            2 -> {
                                 val white = Random.nextDouble(-1.0, 1.0)
                                 lastOut = 0.85 * lastOut + 0.15 * white
                                 (lastOut * 0.45).coerceIn(-0.9, 0.9)
                             }
-                            else -> { // 432Hz + 216Hz Warm Zen Chord
+                            else -> {
                                 phase += (2.0 * PI * 216.0) / sampleRate
                                 val s1 = sin(phase)
                                 val s2 = sin(phase * 2.0) * 0.4
@@ -2168,282 +2191,242 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .background(OledCanvasBg)
-            .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 46.dp)
+            .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp)
             .testTag("dock_lab_tool")
     ) {
-        Row(
+        // Unified Single Full-Screen Ambient Light Studio (no 2-pane split, no 2D level)
+        Surface(
             modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            shape = RoundedCornerShape(28.dp),
+            color = OledCardBg,
+            border = BorderStroke(
+                1.5.dp,
+                if (flashAmbientMode != 0) Color(0xFFFFD54F).copy(alpha = 0.75f)
+                else if (activeNightlightColor != Color.Transparent) activeNightlightColor.copy(alpha = 0.55f)
+                else OledBorderSubtle
+            )
         ) {
-            // LEFT PANE: 2D Hardware Dock Spirit Level & Magnetic Compass
-            Surface(
+            Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                shape = RoundedCornerShape(26.dp),
-                color = OledCardBg,
-                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.28f))
+                    .fillMaxSize()
+                    .background(
+                        if (flashAmbientMode != 0) {
+                            Brush.radialGradient(
+                                colors = listOf(Color(0xFFFFD54F).copy(alpha = 0.38f), Color.Transparent)
+                            )
+                        } else if (activeNightlightColor != Color.Transparent) {
+                            Brush.radialGradient(
+                                colors = listOf(activeNightlightColor.copy(alpha = 0.32f), Color.Transparent)
+                            )
+                        } else {
+                            Brush.radialGradient(
+                                colors = listOf(accentColor.copy(alpha = 0.12f), Color.Transparent)
+                            )
+                        }
+                    )
+                    .padding(horizontal = 24.dp, vertical = 18.dp)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
+                    // Header with Hero Flash Toggle Button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = accentColor.copy(alpha = 0.16f)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            Icon(
+                                imageVector = Icons.Default.WbIncandescent,
+                                contentDescription = null,
+                                tint = if (flashAmbientMode != 0) Color(0xFFFFD54F) else accentColor,
+                                modifier = Modifier.size(24.dp)
+                            )
                             Text(
-                                text = "04 • DOCK SPIRIT LEVEL",
-                                color = accentColor,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                text = "Ambient Light",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
 
-                        val cardinal = when (((azimuthDeg + 22.5f) / 45f).toInt() % 8) {
-                            0 -> "N"
-                            1 -> "NE"
-                            2 -> "E"
-                            3 -> "SE"
-                            4 -> "S"
-                            5 -> "SW"
-                            6 -> "W"
-                            else -> "NW"
+                        IconButton(
+                            onClick = {
+                                haptics.confirm()
+                                flashAmbientMode = if (flashAmbientMode == 0) 1 else 0
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (flashAmbientMode != 0) Color(0xFFFFD54F) else OledCardElevated
+                                )
+                                .border(
+                                    1.dp,
+                                    if (flashAmbientMode != 0) Color(0xFFFFD54F) else OledBorderSubtle,
+                                    CircleShape
+                                )
+                                .testTag("camera_flash_ambient_toggle_btn")
+                        ) {
+                            Icon(
+                                imageVector = if (flashAmbientMode != 0) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
+                                contentDescription = "Toggle Phone Flash Ambient Light",
+                                tint = if (flashAmbientMode != 0) Color.Black else Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
+                    }
+
+                    // Phone Rear Flash Mode Chips (Off / Steady / Breathe / Candle)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        listOf(
+                            0 to "Flash Off",
+                            1 to "Steady Glow",
+                            2 to "Breathe",
+                            3 to "Candle"
+                        ).forEach { (modeIdx, label) ->
+                            val isSel = flashAmbientMode == modeIdx
+                            Surface(
+                                onClick = {
+                                    haptics.tick()
+                                    flashAmbientMode = modeIdx
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isSel) Color(0xFFFFD54F).copy(alpha = 0.24f) else OledCardElevated,
+                                border = BorderStroke(1.dp, if (isSel) Color(0xFFFFD54F) else OledBorderSubtle),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("flash_ambient_mode_$modeIdx")
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSel) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.85f),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 6.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Brightness Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LightMode,
+                            contentDescription = "Brightness",
+                            tint = Color(0xFFFFD54F),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Slider(
+                            value = flashIntensity,
+                            onValueChange = { flashIntensity = it },
+                            valueRange = 0.15f..1.0f,
+                            modifier = Modifier.weight(1f)
+                        )
                         Text(
-                            text = "${azimuthDeg.roundToInt()}° $cardinal",
-                            color = Color.White.copy(alpha = 0.85f),
+                            text = "${(flashIntensity * 100).roundToInt()}%",
+                            color = Color(0xFFFFD54F),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                     }
 
-                    // 2D Crosshair Spirit Bubble Canvas
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val isLevel = abs(pitchDeg) < 2.5f && abs(rollDeg) < 2.5f
-                        val bubbleColor = if (isLevel) Color(0xFF34D399) else accentColor
-
-                        Canvas(modifier = Modifier.size(136.dp)) {
-                            val cx = size.width / 2f
-                            val cy = size.height / 2f
-                            val maxR = size.minDimension / 2f - 6f
-
-                            drawCircle(
-                                color = OledCardElevated,
-                                radius = maxR,
-                                center = Offset(cx, cy)
-                            )
-                            drawCircle(
-                                color = bubbleColor.copy(alpha = 0.45f),
-                                radius = maxR,
-                                center = Offset(cx, cy),
-                                style = Stroke(width = 2.5f)
-                            )
-                            drawCircle(
-                                color = Color.White.copy(alpha = 0.16f),
-                                radius = maxR * 0.42f,
-                                center = Offset(cx, cy),
-                                style = Stroke(width = 1.5f)
-                            )
-                            // Crosshairs
-                            drawLine(
-                                color = Color.White.copy(alpha = 0.15f),
-                                start = Offset(cx - maxR, cy),
-                                end = Offset(cx + maxR, cy),
-                                strokeWidth = 1.2f
-                            )
-                            drawLine(
-                                color = Color.White.copy(alpha = 0.15f),
-                                start = Offset(cx, cy - maxR),
-                                end = Offset(cx, cy + maxR),
-                                strokeWidth = 1.2f
-                            )
-
-                            // Bubble position mapped from pitch/roll
-                            val normX = (pitchDeg / 45f).coerceIn(-0.75f, 0.75f)
-                            val normY = (rollDeg / 45f).coerceIn(-0.75f, 0.75f)
-                            val bx = cx + normX * maxR
-                            val by = cy + normY * maxR
-
-                            drawCircle(
-                                color = bubbleColor.copy(alpha = 0.30f),
-                                radius = 20f,
-                                center = Offset(bx, by)
-                            )
-                            drawCircle(
-                                color = bubbleColor,
-                                radius = 11f,
-                                center = Offset(bx, by)
-                            )
-                        }
-                    }
-
+                    // Bottom Row: OLED Screen Halo Color Swatches + Ambient Soundscape Chips
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = String.format(Locale.US, "PITCH %+.1f°", pitchDeg),
-                            color = Color.White.copy(alpha = 0.75f),
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = String.format(Locale.US, "TILT %+.1f°", rollDeg),
-                            color = Color.White.copy(alpha = 0.75f),
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            // RIGHT PANE: Bedside Soundscape Synthesizer & Warm OLED Nightlight
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                shape = RoundedCornerShape(26.dp),
-                color = OledCardBg,
-                border = BorderStroke(
-                    1.dp,
-                    if (activeNightlightColor != Color.Transparent) activeNightlightColor.copy(alpha = 0.65f) else OledBorderSubtle
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            if (activeNightlightColor != Color.Transparent) {
-                                Brush.radialGradient(
-                                    colors = listOf(activeNightlightColor.copy(alpha = 0.36f), Color.Transparent)
-                                )
-                            } else {
-                                Brush.radialGradient(
-                                    colors = listOf(accentColor.copy(alpha = 0.08f), Color.Transparent)
-                                )
-                            }
-                        )
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                text = "Bedside Soundscape & Nightlight",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Text(
-                                text = "Real-time synthesized sleep audio & warm OLED dock glow",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.65f)
-                            )
-                        }
-
-                        // Soundscape Generator Chips
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "AMBIENT AUDIO SYNTHESIZER",
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                listOf(
-                                    0 to "Mute",
-                                    1 to "Brown Noise",
-                                    2 to "Soft Rain",
-                                    3 to "432Hz Zen"
-                                ).forEach { (modeIdx, title) ->
-                                    val isSel = activeSoundMode == modeIdx
-                                    Surface(
-                                        onClick = {
+                        // Visual Color Swatches for OLED Halo
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            nightlightColors.forEachIndexed { idx, (glowCol, label) ->
+                                val isSel = nightlightWarmthIdx == idx
+                                val chipAccent = if (glowCol == Color.Transparent) Color.White.copy(alpha = 0.35f) else glowCol
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(if (glowCol == Color.Transparent) OledCardElevated else glowCol)
+                                        .border(
+                                            width = if (isSel) 2.5.dp else 1.dp,
+                                            color = if (isSel) Color.White else chipAccent.copy(alpha = 0.5f),
+                                            shape = CircleShape
+                                        )
+                                        .clickable {
                                             haptics.tick()
-                                            activeSoundMode = modeIdx
+                                            nightlightWarmthIdx = idx
                                         },
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = if (isSel) accentColor.copy(alpha = 0.24f) else OledCardElevated,
-                                        border = BorderStroke(1.dp, if (isSel) accentColor else OledBorderSubtle),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = title,
-                                            color = if (isSel) accentColor else Color.White.copy(alpha = 0.8f),
-                                            fontSize = 10.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center,
-                                            maxLines = 1,
-                                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (glowCol == Color.Transparent) {
+                                        Icon(
+                                            imageVector = Icons.Default.Block,
+                                            contentDescription = label,
+                                            tint = Color.White.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    } else if (isSel) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = label,
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
                             }
                         }
 
-                        // Warm OLED Nightlight Glow Selector
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "WARM OLED NIGHTSTAND LAMP",
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                nightlightColors.forEachIndexed { idx, (glowCol, label) ->
-                                    val isSel = nightlightWarmthIdx == idx
-                                    val chipAccent = if (glowCol == Color.Transparent) accentColor else glowCol
-                                    Surface(
-                                        onClick = {
-                                            haptics.tick()
-                                            nightlightWarmthIdx = idx
-                                        },
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = if (isSel) chipAccent.copy(alpha = 0.25f) else OledCardElevated,
-                                        border = BorderStroke(1.dp, if (isSel) chipAccent else OledBorderSubtle),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = label.substringBefore(" "),
-                                            color = if (isSel) chipAccent else Color.White.copy(alpha = 0.8f),
-                                            fontSize = 10.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center,
-                                            maxLines = 1,
-                                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
-                                        )
-                                    }
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Sleep Audio Synthesizer Chips
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                0 to "Mute",
+                                1 to "Brown",
+                                2 to "Rain",
+                                3 to "432Hz"
+                            ).forEach { (modeIdx, title) ->
+                                val isSel = activeSoundMode == modeIdx
+                                Surface(
+                                    onClick = {
+                                        haptics.tick()
+                                        activeSoundMode = modeIdx
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isSel) accentColor.copy(alpha = 0.22f) else OledCardElevated,
+                                    border = BorderStroke(1.dp, if (isSel) accentColor else OledBorderSubtle),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = title,
+                                        color = if (isSel) accentColor else Color.White.copy(alpha = 0.78f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
+                                    )
                                 }
                             }
                         }

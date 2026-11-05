@@ -95,6 +95,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
     // Filtering preferences
     val calendarFilter = MutableStateFlow(prefs.getInt("calendarFilter", 0)) // 0 = Daily, 1 = Weekly, 2 = Monthly
+    val calendarScreenIndex = MutableStateFlow(prefs.getInt("calendarScreenIndex", 0).coerceIn(0, 2)) // 0 = Today Day Hero, 1 = Month View Grid, 2 = Events Agenda
     
     // Split View (Slide-Up) Theme Preferences
     val startWeekOnMonday = MutableStateFlow(prefs.getBoolean("startWeekOnMonday", false))
@@ -103,6 +104,11 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     val use24HourFormat = MutableStateFlow(prefs.getBoolean("use24HourFormat", false))
 
     fun setCalendarFilter(filter: Int) { calendarFilter.value = filter; prefs.edit().putInt("calendarFilter", filter).apply() }
+    fun setCalendarScreenIndex(index: Int) {
+        val safe = index.coerceIn(0, 2)
+        calendarScreenIndex.value = safe
+        prefs.edit().putInt("calendarScreenIndex", safe).apply()
+    }
     fun setStartWeekOnMonday(start: Boolean) { startWeekOnMonday.value = start; prefs.edit().putBoolean("startWeekOnMonday", start).apply() }
     fun setShowEventDots(show: Boolean) { showEventDots.value = show; prefs.edit().putBoolean("showEventDots", show).apply() }
     fun setLeftThemeStyle(style: Int) { leftThemeStyle.value = style; prefs.edit().putInt("leftThemeStyle", style).apply() }

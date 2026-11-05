@@ -736,22 +736,20 @@ fun StandbyCustomizationDialog(
     onDismiss: () -> Unit
 ) {
     val haptics = rememberStandbyHaptics()
-    val colorScheme = MaterialTheme.colorScheme
     var activeTab by remember { mutableIntStateOf(currentPage.coerceIn(0, 5)) }
 
     val tabItems = listOf(
-        Triple("Clock", "Main Display", Icons.Outlined.Schedule),
-        Triple("Alarm", "Alert Sync", Icons.Outlined.Alarm),
-        Triple("Calendar", "Monthly Agenda", Icons.Outlined.CalendarToday),
-        Triple("Music", "Media Player", Icons.Outlined.MusicNote),
-        Triple("Tools", "Focus, Gallery & Lab", Icons.Outlined.Build),
-        Triple("Duo", "Split Main Screens", Icons.Outlined.ViewColumn)
+        Triple("Clock", "Customize clock faces, time format, and display styling.", Icons.Outlined.Schedule),
+        Triple("Alarm", "Configure pre-alarm gradual dimming and alarm appearance.", Icons.Outlined.Alarm),
+        Triple("Calendar", "Adjust agenda timeline format and calendar grid layout.", Icons.Outlined.CalendarToday),
+        Triple("Music", "Choose player visual theme and accent styling.", Icons.Outlined.MusicNote),
+        Triple("Tools", "Customize accent color and backdrop for Standby Tools.", Icons.Outlined.Build),
+        Triple("Duo", "Add or remove visual screens for Left and Right Duo panes.", Icons.Outlined.ViewColumn)
     )
 
     val selectedColorIdx by viewModel.getColorFlow(activeTab).collectAsState()
     val selectedFontIdx by viewModel.getFontFlow(activeTab).collectAsState()
     val clockScaleVal by viewModel.getScaleFlow(activeTab).collectAsState()
-    val animationsEnabledVal by viewModel.getAnimFlow(activeTab).collectAsState()
 
     val glowVal by viewModel.getGlowFlow(activeTab).collectAsState()
     val outlineVal by viewModel.getOutlineFlow(activeTab).collectAsState()
@@ -771,863 +769,567 @@ fun StandbyCustomizationDialog(
     val nextAlarmLabel by viewModel.nextSystemAlarm.collectAsState()
     val minutesUntilAlarm by viewModel.minutesUntilNextAlarm.collectAsState()
 
-    val pageColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: colorScheme.primary
+    var showHeaderInfo by remember(activeTab) { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding(),
-            color = colorScheme.surface
-        ) {
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val isCompactHeight = maxHeight < 380.dp
-                val isCompactWidth = maxWidth < 620.dp
-                val railWidth = if (isCompactWidth) 88.dp else 108.dp
-                val contentHPad = if (isCompactWidth) 16.dp else 28.dp
-                val contentVPad = if (isCompactHeight) 12.dp else 20.dp
+        com.example.ui.theme.MyApplicationTheme {
+            val colorScheme = MaterialTheme.colorScheme
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding(),
+                color = colorScheme.surface
+            ) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val isCompactHeight = maxHeight < 380.dp
+                    val isCompactWidth = maxWidth < 620.dp
+                    val railWidth = if (isCompactWidth) 84.dp else 100.dp
+                    val contentHPad = if (isCompactWidth) 16.dp else 24.dp
+                    val contentVPad = if (isCompactHeight) 10.dp else 16.dp
 
-                Row(modifier = Modifier.fillMaxSize()) {
-                    // LEFT PANE: Material 3 NavigationRail optimized for landscape ergonomics
-                    NavigationRail(
-                        containerColor = colorScheme.surfaceContainerLow,
-                        contentColor = colorScheme.onSurface,
-                        header = {
-                            if (!isCompactHeight) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.padding(top = 10.dp, bottom = 6.dp, start = 8.dp, end = 8.dp)
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        // LEFT PANE: Material 3 NavigationRail following system theme
+                        NavigationRail(
+                            containerColor = colorScheme.surfaceContainerLow,
+                            contentColor = colorScheme.onSurface,
+                            header = {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = colorScheme.primaryContainer,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Tune,
+                                        contentDescription = "Settings",
+                                        tint = colorScheme.onPrimaryContainer,
+                                        modifier = Modifier
+                                            .padding(8.dp)
+                                            .size(20.dp)
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(railWidth)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                tabItems.forEachIndexed { idx, (title, _, icon) ->
+                                    val isSelected = activeTab == idx
+                                    NavigationRailItem(
+                                        selected = isSelected,
+                                        onClick = {
+                                            haptics.tick()
+                                            activeTab = idx
+                                        },
+                                        icon = {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = title
+                                            )
+                                        },
+                                        label = {
+                                            Text(
+                                                text = title,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                maxLines = 1
+                                            )
+                                        },
+                                        alwaysShowLabel = true,
+                                        modifier = Modifier.testTag("studio_rail_tab_$idx")
+                                    )
+                                }
+                            }
+                        }
+
+                        VerticalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        // RIGHT PANE: Material 3 Settings Deck
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .padding(horizontal = contentHPad, vertical = contentVPad)
+                        ) {
+                            // Clean M3 Header Bar with (i) info button instead of permanent sub-text
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = if (isCompactHeight) 8.dp else 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
-                                        color = colorScheme.primaryContainer
+                                        color = colorScheme.secondaryContainer
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Tune,
-                                            contentDescription = "Studio Hub",
-                                            tint = colorScheme.onPrimaryContainer,
+                                            imageVector = tabItems[activeTab].third,
+                                            contentDescription = null,
+                                            tint = colorScheme.onSecondaryContainer,
                                             modifier = Modifier
                                                 .padding(8.dp)
                                                 .size(20.dp)
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Studio",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colorScheme.onSurface,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = "Studio",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(railWidth)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            tabItems.forEachIndexed { idx, (title, _, icon) ->
-                                val isSelected = activeTab == idx
-                                NavigationRailItem(
-                                    selected = isSelected,
-                                    onClick = {
-                                        haptics.tick()
-                                        activeTab = idx
-                                    },
-                                    icon = {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = title
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = title,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            maxLines = 1
-                                        )
-                                    },
-                                    alwaysShowLabel = true,
-                                    modifier = Modifier.testTag("studio_rail_tab_$idx")
-                                )
-                            }
-                        }
-                    }
-
-                    VerticalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                    // RIGHT PANE: Material 3 Tonal Settings Deck
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .padding(horizontal = contentHPad, vertical = contentVPad)
-                    ) {
-                        // Header Bar
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = if (isCompactHeight) 10.dp else 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = pageColor.copy(alpha = 0.2f),
-                                    border = BorderStroke(1.dp, pageColor.copy(alpha = 0.5f))
-                                ) {
-                                    Text(
-                                        text = "0${activeTab + 1}",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colorScheme.onSurface,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = "${tabItems[activeTab].first} Settings",
+                                        text = tabItems[activeTab].first,
                                         style = if (isCompactHeight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
                                         color = colorScheme.onSurface,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    IconButton(
+                                        onClick = {
+                                            haptics.tick()
+                                            showHeaderInfo = !showHeaderInfo
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Info,
+                                            contentDescription = "Info",
+                                            tint = if (showHeaderInfo) colorScheme.primary else colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                FilledTonalButton(
+                                    onClick = onDismiss,
+                                    modifier = Modifier.testTag("studio_apply_close_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Done")
+                                }
+                            }
+
+                            AnimatedVisibility(visible = showHeaderInfo) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 10.dp)
+                                ) {
                                     Text(
                                         text = tabItems[activeTab].second,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        color = colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                                     )
                                 }
                             }
 
-                            FilledTonalButton(
-                                onClick = onDismiss,
-                                modifier = Modifier.testTag("studio_apply_close_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Done")
-                            }
-                        }
-
-                        // Scrollable Material 3 Cards
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 12.dp else 16.dp)
-                        ) {
-                        // 1. Interface Color Accent Card
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.elevatedCardColors(
-                                containerColor = colorScheme.surfaceContainerLow
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(18.dp)) {
-                                Text(
-                                    text = "Accent Color Palette",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Saved automatically for ${tabItems[activeTab].first}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(bottom = 14.dp)
-                                )
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    viewModel.colors.forEachIndexed { index, (color, name) ->
-                                        val isSelected = index == selectedColorIdx
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    haptics.tick()
-                                                    viewModel.setColorIndexForPage(activeTab, index)
-                                                }
-                                                .padding(4.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                                    .background(color)
-                                                    .border(
-                                                        width = if (isSelected) 3.dp else 1.dp,
-                                                        color = if (isSelected) colorScheme.onSurface else colorScheme.outlineVariant,
-                                                        shape = CircleShape
-                                                    ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (isSelected) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = "Selected",
-                                                        tint = if (color == Color.White) Color.Black else Color.White,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                            }
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = name.split(" ").lastOrNull() ?: name,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (isSelected) colorScheme.onSurface else colorScheme.onSurfaceVariant,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // 2. Typography Style Card
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.elevatedCardColors(
-                                containerColor = colorScheme.surfaceContainerLow
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(18.dp)) {
-                                Text(
-                                    text = "Typography Style",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = colorScheme.onSurface,
-                                    modifier = Modifier.padding(bottom = 12.dp)
-                                )
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    viewModel.fonts.forEachIndexed { index, (fontFamily, name) ->
-                                        val isSelected = index == selectedFontIdx
-                                        FilterChip(
-                                            selected = isSelected,
-                                            onClick = {
-                                                haptics.tick()
-                                                viewModel.setFontIndexForPage(activeTab, index)
-                                            },
-                                            label = {
-                                                Text(
-                                                    text = name,
-                                                    fontFamily = fontFamily,
-                                                    style = MaterialTheme.typography.labelLarge
-                                                )
-                                            },
-                                            leadingIcon = if (isSelected) {
-                                                {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                            } else null
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // 2b. Enable / Disable Clock Faces (Compact & Collapsible, Clock Tab 0)
-                        if (activeTab == 0) {
-                            val enabledClockSet by viewModel.enabledClockFaces.collectAsState()
-                            var isClockListExpanded by remember { mutableStateOf(false) }
-                            ElevatedCard(
+                            // Scrollable Material 3 Cards (Filtered strictly to relevant page settings)
+                            Column(
                                 modifier = Modifier
+                                    .weight(1f)
                                     .fillMaxWidth()
-                                    .testTag("clock_faces_toggle_card"),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                )
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 10.dp else 14.dp)
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                haptics.tick()
-                                                isClockListExpanded = !isClockListExpanded
-                                            },
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                // 1. Visual Color Swatches (Relevant on tabs 0..4; Duo uses each added screen's own page styling)
+                                if (activeTab != 5) {
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Active Clock Faces (${enabledClockSet.size}/${viewModel.clockFaceTitles.size})",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = if (isClockListExpanded) "Tap any clock face to show or hide it in your carousel"
-                                                else "Tap to customize which clock faces appear in your carousel",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            if (enabledClockSet.size < viewModel.clockFaceTitles.size) {
-                                                TextButton(
-                                                    onClick = {
-                                                        haptics.tick()
-                                                        viewModel.clockFaceTitles.indices.forEach { idx ->
-                                                            viewModel.setClockFaceEnabled(idx, true)
-                                                        }
-                                                    },
-                                                    modifier = Modifier.testTag("enable_all_clock_faces_button")
-                                                ) {
-                                                    Text("Enable All")
-                                                }
-                                            }
-                                            FilledTonalButton(
-                                                onClick = {
-                                                    haptics.tick()
-                                                    isClockListExpanded = !isClockListExpanded
-                                                }
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
-                                                Text(if (isClockListExpanded) "Hide" else "Customize")
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Palette,
+                                                    contentDescription = null,
+                                                    tint = colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Text(
+                                                    text = "Accent Color",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = colorScheme.onSurface
+                                                )
                                             }
-                                        }
-                                    }
-
-                                    AnimatedVisibility(visible = isClockListExpanded) {
-                                        FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 4.dp)
-                                        ) {
-                                            viewModel.clockFaceTitles.forEachIndexed { idx, title ->
-                                                val isEnabled = enabledClockSet.contains(idx)
-                                                val canUncheck = !isEnabled || enabledClockSet.size > 1
-                                                FilterChip(
-                                                    selected = isEnabled,
-                                                    onClick = {
-                                                        if (canUncheck) {
-                                                            haptics.tick()
-                                                            viewModel.toggleClockFace(idx)
-                                                        }
-                                                    },
-                                                    label = { Text(title, style = MaterialTheme.typography.labelMedium) },
-                                                    leadingIcon = if (isEnabled) {
-                                                        {
+                                            // Visual-only color circles (no text labels underneath)
+                                            FlowRow(
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                viewModel.colors.forEachIndexed { index, (color, name) ->
+                                                    val isSelected = index == selectedColorIdx
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(42.dp)
+                                                            .clip(CircleShape)
+                                                            .background(color)
+                                                            .border(
+                                                                width = if (isSelected) 3.dp else 1.dp,
+                                                                color = if (isSelected) colorScheme.onSurface else colorScheme.outlineVariant,
+                                                                shape = CircleShape
+                                                            )
+                                                            .clickable {
+                                                                haptics.tick()
+                                                                viewModel.setColorIndexForPage(activeTab, index)
+                                                            },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        if (isSelected) {
                                                             Icon(
                                                                 imageVector = Icons.Default.Check,
-                                                                contentDescription = null,
-                                                                modifier = Modifier.size(16.dp)
+                                                                contentDescription = name,
+                                                                tint = if (color == Color.White) Color.Black else Color.White,
+                                                                modifier = Modifier.size(20.dp)
                                                             )
                                                         }
-                                                    } else null,
-                                                    modifier = Modifier.testTag("clock_face_toggle_row_$idx")
-                                                )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                        }
 
-                        // 2c. Duo Split Screen Selector & Searchable Per-Pane Location (Duo Tab 5)
-                        if (activeTab == 5) {
-                            val leftWidgetIdx by viewModel.duoLeftWidgetIndex.collectAsState()
-                            val rightWidgetIdx by viewModel.duoRightWidgetIndex.collectAsState()
-                            val leftTzId by viewModel.duoLeftTimeZoneId.collectAsState()
-                            val rightTzId by viewModel.duoRightTimeZoneId.collectAsState()
-                            val leftLocName by viewModel.duoLeftLocationName.collectAsState()
-                            val rightLocName by viewModel.duoRightLocationName.collectAsState()
-                            val leftResolved = remember(leftTzId, leftLocName) { viewModel.resolvePaneLocationInfo(1) }
-                            val rightResolved = remember(rightTzId, rightLocName) { viewModel.resolvePaneLocationInfo(2) }
-                            var leftMenuExpanded by remember { mutableStateOf(false) }
-                            var rightMenuExpanded by remember { mutableStateOf(false) }
+                                // 2. Clock Tab (activeTab == 0): Active Clock Faces Visual Picker, Typography, Location, Format & Visual Styling
+                                if (activeTab == 0) {
+                                    val enabledClockSet by viewModel.enabledClockFaces.collectAsState()
+                                    var isClockListExpanded by remember { mutableStateOf(false) }
 
-                            ElevatedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("duo_widgets_selector_card"),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Text(
-                                        text = "Duo Split Layout",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = colorScheme.onSurface
-                                    )
-
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        val duoPresets = listOf(
-                                            Triple("Airport Board & World Map", 2, 10),
-                                            Triple("Sage Clock & Calendar", 11, 14),
-                                            Triple("Float Clock & Music", 12, 15),
-                                            Triple("Matrix Clock & Tools", 3, 16)
+                                    // 2a. Active Clock Faces Visual Selector
+                                    ElevatedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("clock_faces_toggle_card"),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
                                         )
-                                        duoPresets.forEachIndexed { pIdx, (presetLabel, lIdx, rIdx) ->
-                                            FilterChip(
-                                                selected = leftWidgetIdx == lIdx && rightWidgetIdx == rIdx,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    viewModel.setDuoLeftWidgetIndex(lIdx)
-                                                    viewModel.setDuoRightWidgetIndex(rIdx)
-                                                },
-                                                label = { Text(presetLabel, style = MaterialTheme.typography.labelSmall) },
-                                                modifier = Modifier.testTag("duo_split_preset_$pIdx")
-                                            )
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        // LEFT PANE COMPACT SELECTOR + SEARCHABLE LOCATION
-                                        Surface(
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(14.dp),
-                                            color = colorScheme.surfaceContainer
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
                                         ) {
-                                            Column(
-                                                modifier = Modifier.padding(12.dp),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        haptics.tick()
+                                                        isClockListExpanded = !isClockListExpanded
+                                                    },
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text(
-                                                    text = "Left Pane",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = colorScheme.primary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Box {
-                                                    OutlinedButton(
-                                                        onClick = {
-                                                            haptics.tick()
-                                                            leftMenuExpanded = true
-                                                        },
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    ) {
-                                                        Text(
-                                                            text = viewModel.duoWidgetTitles.getOrElse(leftWidgetIdx) { "Clock" },
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            modifier = Modifier.weight(1f)
-                                                        )
-                                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                                    }
-                                                    DropdownMenu(
-                                                        expanded = leftMenuExpanded,
-                                                        onDismissRequest = { leftMenuExpanded = false }
-                                                    ) {
-                                                        viewModel.duoWidgetTitles.forEachIndexed { idx, title ->
-                                                            DropdownMenuItem(
-                                                                text = { Text(title) },
-                                                                onClick = {
-                                                                    haptics.tick()
-                                                                    viewModel.setDuoLeftWidgetIndex(idx)
-                                                                    leftMenuExpanded = false
-                                                                }
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                                SearchableLocationTimeZoneField(
-                                                    viewModel = viewModel,
-                                                    paneIndex = 1,
-                                                    activeSummary = "${leftResolved.regionName} (${leftResolved.airportCode}) • ${leftResolved.standardTimeShort}",
-                                                    label = "Search Left Location / Time Zone",
-                                                    testTag = "duo_left_location_search_input"
-                                                )
-                                            }
-                                        }
-
-                                        // RIGHT PANE COMPACT SELECTOR + SEARCHABLE LOCATION
-                                        Surface(
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(14.dp),
-                                            color = colorScheme.surfaceContainer
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(12.dp),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Text(
-                                                    text = "Right Pane",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = colorScheme.primary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Box {
-                                                    OutlinedButton(
-                                                        onClick = {
-                                                            haptics.tick()
-                                                            rightMenuExpanded = true
-                                                        },
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    ) {
-                                                        Text(
-                                                            text = viewModel.duoWidgetTitles.getOrElse(rightWidgetIdx) { "Clock" },
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            modifier = Modifier.weight(1f)
-                                                        )
-                                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                                    }
-                                                    DropdownMenu(
-                                                        expanded = rightMenuExpanded,
-                                                        onDismissRequest = { rightMenuExpanded = false }
-                                                    ) {
-                                                        viewModel.duoWidgetTitles.forEachIndexed { idx, title ->
-                                                            DropdownMenuItem(
-                                                                text = { Text(title) },
-                                                                onClick = {
-                                                                    haptics.tick()
-                                                                    viewModel.setDuoRightWidgetIndex(idx)
-                                                                    rightMenuExpanded = false
-                                                                }
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                                SearchableLocationTimeZoneField(
-                                                    viewModel = viewModel,
-                                                    paneIndex = 2,
-                                                    activeSummary = "${rightResolved.regionName} (${rightResolved.airportCode}) • ${rightResolved.standardTimeShort}",
-                                                    label = "Search Right Location / Time Zone",
-                                                    testTag = "duo_right_location_search_input"
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // 2d. Searchable Location & Time Zone Card (Clock Tab 0 or Duo Tab 5)
-                        if (activeTab == 0 || activeTab == 5) {
-                            val settingsContext = LocalContext.current
-                            val locMode by viewModel.locationMode.collectAsState()
-                            val customLoc by viewModel.customLocationName.collectAsState()
-                            val clockTzId by viewModel.clockTimeZoneId.collectAsState()
-                            val gpsLoc by viewModel.gpsLocationName.collectAsState()
-                            val resolvedInfo = remember(locMode, customLoc, clockTzId, gpsLoc) {
-                                viewModel.resolveCurrentLocationInfo()
-                            }
-                            val locPermLauncher = rememberLauncherForActivityResult(
-                                ActivityResultContracts.RequestMultiplePermissions()
-                            ) { perms ->
-                                val granted = perms[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
-                                    perms[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
-                                if (granted) {
-                                    viewModel.setLocationMode("auto")
-                                    viewModel.setClockTimeZoneId("AUTO")
-                                    viewModel.refreshDeviceLocation(settingsContext)
-                                }
-                            }
-
-                            ElevatedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("terminal_location_settings_card"),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Location & Time Zone",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "${resolvedInfo.regionName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort} (${resolvedInfo.utcOffsetLabel})",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = colorScheme.primary
-                                            )
-                                        }
-                                        FilledTonalButton(
-                                            onClick = {
-                                                haptics.tick()
-                                                viewModel.setLocationMode("auto")
-                                                viewModel.setClockTimeZoneId("AUTO")
-                                                viewModel.setCustomLocationName("")
-                                                val ok = viewModel.refreshDeviceLocation(settingsContext)
-                                                if (!ok) {
-                                                    locPermLauncher.launch(
-                                                        arrayOf(
-                                                            android.Manifest.permission.ACCESS_COARSE_LOCATION,
-                                                            android.Manifest.permission.ACCESS_FINE_LOCATION
-                                                        )
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.WatchLater,
+                                                        contentDescription = null,
+                                                        tint = colorScheme.primary,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Text(
+                                                        text = "Clock Faces (${enabledClockSet.size}/${viewModel.clockFaceTitles.size})",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = colorScheme.onSurface
                                                     )
                                                 }
-                                            },
-                                            modifier = Modifier.testTag("detect_gps_location_button")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.MyLocation,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Auto / GPS")
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    if (enabledClockSet.size < viewModel.clockFaceTitles.size) {
+                                                        TextButton(
+                                                            onClick = {
+                                                                haptics.tick()
+                                                                viewModel.clockFaceTitles.indices.forEach { idx ->
+                                                                    viewModel.setClockFaceEnabled(idx, true)
+                                                                }
+                                                            },
+                                                            modifier = Modifier.testTag("enable_all_clock_faces_button")
+                                                        ) {
+                                                            Text("Enable All")
+                                                        }
+                                                    }
+                                                    FilledTonalButton(
+                                                        onClick = {
+                                                            haptics.tick()
+                                                            isClockListExpanded = !isClockListExpanded
+                                                        }
+                                                    ) {
+                                                        Text(if (isClockListExpanded) "Hide" else "Customize")
+                                                    }
+                                                }
+                                            }
+
+                                            AnimatedVisibility(visible = isClockListExpanded) {
+                                                LazyRow(
+                                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(top = 4.dp)
+                                                ) {
+                                                    items(viewModel.clockFaceTitles.size) { idx ->
+                                                        val isEnabled = enabledClockSet.contains(idx)
+                                                        val canUncheck = !isEnabled || enabledClockSet.size > 1
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(width = 148.dp, height = 88.dp)
+                                                                .clip(RoundedCornerShape(14.dp))
+                                                                .background(Color.Black)
+                                                                .border(
+                                                                    width = if (isEnabled) 2.5.dp else 1.dp,
+                                                                    color = if (isEnabled) colorScheme.primary else colorScheme.outlineVariant,
+                                                                    shape = RoundedCornerShape(14.dp)
+                                                                )
+                                                                .clickable {
+                                                                    if (canUncheck) {
+                                                                        haptics.tick()
+                                                                        viewModel.toggleClockFace(idx)
+                                                                    }
+                                                                }
+                                                                .testTag("clock_face_toggle_row_$idx"),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .requiredSize(400.dp, 220.dp)
+                                                                    .graphicsLayer {
+                                                                        scaleX = 0.34f
+                                                                        scaleY = 0.34f
+                                                                    }
+                                                            ) {
+                                                                ClockPage(themeIndex = idx)
+                                                            }
+                                                            Surface(
+                                                                modifier = Modifier
+                                                                    .align(Alignment.TopEnd)
+                                                                    .padding(6.dp)
+                                                                    .size(22.dp),
+                                                                shape = CircleShape,
+                                                                color = if (isEnabled) colorScheme.primary else colorScheme.surfaceContainerHighest.copy(alpha = 0.8f)
+                                                            ) {
+                                                                Box(contentAlignment = Alignment.Center) {
+                                                                    Icon(
+                                                                        imageVector = if (isEnabled) Icons.Default.Check else Icons.Default.Add,
+                                                                        contentDescription = null,
+                                                                        tint = if (isEnabled) colorScheme.onPrimary else colorScheme.onSurface,
+                                                                        modifier = Modifier.size(13.dp)
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
 
-                                    SearchableLocationTimeZoneField(
-                                        viewModel = viewModel,
-                                        paneIndex = 0,
-                                        activeSummary = "${resolvedInfo.regionName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort}",
-                                        label = "Search city, airport, or time zone (e.g. Tokyo, JFK, London)...",
-                                        testTag = "custom_location_input"
-                                    )
-                                }
-                            }
-                        }
+                                    // 2b. Typography Style Card (Clock tab only, visual font sample)
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.FontDownload,
+                                                    contentDescription = null,
+                                                    tint = colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Text(
+                                                    text = "Typography",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = colorScheme.onSurface
+                                                )
+                                            }
+                                            FlowRow(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                viewModel.fonts.forEachIndexed { index, (fontFamily, name) ->
+                                                    val isSelected = index == selectedFontIdx
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = {
+                                                            haptics.tick()
+                                                            viewModel.setFontIndexForPage(activeTab, index)
+                                                        },
+                                                        label = {
+                                                            Text(
+                                                                text = name,
+                                                                fontFamily = fontFamily,
+                                                                style = MaterialTheme.typography.labelLarge
+                                                            )
+                                                        },
+                                                        leadingIcon = if (isSelected) {
+                                                            {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Check,
+                                                                    contentDescription = null,
+                                                                    modifier = Modifier.size(16.dp)
+                                                                )
+                                                            }
+                                                        } else null
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
 
-                        // 3. Clock Scale & Format Preferences (Clock Tab 0 or Duo Tab 5)
-                        if (activeTab == 0 || activeTab == 5) {
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    if (activeTab == 0) {
-                                        var lastScaleBucket by remember { mutableIntStateOf((clockScaleVal * 10).roundToInt()) }
-                                        Column {
+                                    // 2c. Location & Time Zone Card (Clock tab only)
+                                    val settingsContext = LocalContext.current
+                                    val locMode by viewModel.locationMode.collectAsState()
+                                    val customLoc by viewModel.customLocationName.collectAsState()
+                                    val clockTzId by viewModel.clockTimeZoneId.collectAsState()
+                                    val gpsLoc by viewModel.gpsLocationName.collectAsState()
+                                    val resolvedInfo = remember(locMode, customLoc, clockTzId, gpsLoc) {
+                                        viewModel.resolveCurrentLocationInfo()
+                                    }
+                                    val locPermLauncher = rememberLauncherForActivityResult(
+                                        ActivityResultContracts.RequestMultiplePermissions()
+                                    ) { perms ->
+                                        val granted = perms[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                                            perms[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
+                                        if (granted) {
+                                            viewModel.setLocationMode("auto")
+                                            viewModel.setClockTimeZoneId("AUTO")
+                                            viewModel.refreshDeviceLocation(settingsContext)
+                                        }
+                                    }
+
+                                    ElevatedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("terminal_location_settings_card"),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text(
-                                                    text = "Clock Display Scale",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    color = colorScheme.onSurface
-                                                )
-                                                Surface(
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    color = colorScheme.secondaryContainer
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    modifier = Modifier.weight(1f)
                                                 ) {
-                                                    Text(
-                                                        text = String.format(Locale.getDefault(), "%.1fx", clockScaleVal),
-                                                        style = MaterialTheme.typography.labelLarge,
-                                                        color = colorScheme.onSecondaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Public,
+                                                        contentDescription = null,
+                                                        tint = colorScheme.primary,
+                                                        modifier = Modifier.size(18.dp)
                                                     )
-                                                }
-                                            }
-                                            Slider(
-                                                value = clockScaleVal,
-                                                onValueChange = { newValue ->
-                                                    val bucket = (newValue * 10).roundToInt()
-                                                    if (bucket != lastScaleBucket) {
-                                                        lastScaleBucket = bucket
-                                                        haptics.step()
+                                                    Text(
+                                                        text = "${resolvedInfo.regionName} (${resolvedInfo.airportCode})",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = colorScheme.secondaryContainer
+                                                    ) {
+                                                        Text(
+                                                            text = resolvedInfo.standardTimeShort,
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            color = colorScheme.onSecondaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                        )
                                                     }
-                                                    viewModel.setClockScaleForPage(activeTab, newValue)
-                                                },
-                                                valueRange = 0.8f..1.8f,
-                                                steps = 9,
-                                                modifier = Modifier.padding(top = 4.dp)
-                                            )
-                                        }
-                                    }
-
-                                    M3SettingSwitchRow(
-                                        title = "24-Hour Time Format",
-                                        subtitle = "Display hours in 24-hour military format (e.g. 14:30)",
-                                        checked = use24Hour,
-                                        onCheckedChange = {
-                                            haptics.confirm()
-                                            viewModel.setUse24HourFormat(it)
-                                        }
-                                    )
-
-                                    AnimatedVisibility(visible = !use24Hour) {
-                                        M3SettingSwitchRow(
-                                            title = "Show AM / PM Indicator",
-                                            subtitle = "Display meridian badge alongside 12-hour clocks",
-                                            checked = showAmPm,
-                                            onCheckedChange = {
-                                                haptics.confirm()
-                                                viewModel.setShowAmPm(it)
-                                            }
-                                        )
-                                    }
-
-                                    M3SettingSwitchRow(
-                                        title = "Display Seconds Tracker",
-                                        subtitle = "Show live ticking seconds on compatible clock faces",
-                                        checked = showSeconds,
-                                        onCheckedChange = {
-                                            haptics.confirm()
-                                            viewModel.setShowSeconds(it)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        // 3b. Pre-Alarm Gradual Brightness Lowering (Clock Tab 0, Alarm Tab 1, or Duo Tab 5)
-                        if (activeTab == 0 || activeTab == 1 || activeTab == 5) {
-                            ElevatedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("pre_alarm_dimming_settings_card"),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                                            Text(
-                                                text = "Pre-Alarm Gradual Dimming",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = if (!nextAlarmLabel.isNullOrBlank() && nextAlarmLabel != "No Alarm") {
-                                                    "Next alarm: $nextAlarmLabel"
-                                                } else {
-                                                    "Avoid harsh light before your scheduled alarm"
-                                                },
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = colorScheme.onSurfaceVariant
-                                            )
-                                        }
-
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (isPreAlarmDimming) colorScheme.primaryContainer else colorScheme.secondaryContainer
-                                        ) {
-                                            Text(
-                                                text = when {
-                                                    !gradualDimEnabled -> "Off"
-                                                    isPreAlarmDimming -> "Dimming ${(liveBrightnessFactor * 100).roundToInt()}%"
-                                                    minutesUntilAlarm != null -> "Standby (${minutesUntilAlarm}m)"
-                                                    else -> "Ready"
-                                                },
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = if (isPreAlarmDimming) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                            )
-                                        }
-                                    }
-
-                                    M3SettingSwitchRow(
-                                        title = "Gradually Lower Clock Brightness",
-                                        subtitle = "Smoothly dim the clock face as your scheduled alarm time approaches",
-                                        checked = gradualDimEnabled,
-                                        onCheckedChange = {
-                                            haptics.confirm()
-                                            viewModel.setGradualAlarmDimEnabled(it)
-                                        },
-                                        modifier = Modifier.testTag("gradual_alarm_dim_switch")
-                                    )
-
-                                    AnimatedVisibility(visible = gradualDimEnabled) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text(
-                                                    text = "Lead-Up Dimming Window",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = colorScheme.onSurfaceVariant
-                                                )
-                                                val windowOptions = listOf(15, 30, 45, 60)
-                                                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                                    windowOptions.forEachIndexed { idx, mins ->
-                                                        SegmentedButton(
-                                                            selected = gradualDimWindowMins == mins,
-                                                            onClick = {
-                                                                haptics.tick()
-                                                                viewModel.setGradualAlarmDimWindowMinutes(mins)
-                                                            },
-                                                            shape = SegmentedButtonDefaults.itemShape(
-                                                                index = idx,
-                                                                count = windowOptions.size
-                                                            ),
-                                                            modifier = Modifier.testTag("gradual_dim_window_$mins")
-                                                        ) {
-                                                            Text("${mins}m")
+                                                }
+                                                FilledTonalButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        viewModel.setLocationMode("auto")
+                                                        viewModel.setClockTimeZoneId("AUTO")
+                                                        viewModel.setCustomLocationName("")
+                                                        val ok = viewModel.refreshDeviceLocation(settingsContext)
+                                                        if (!ok) {
+                                                            locPermLauncher.launch(
+                                                                arrayOf(
+                                                                    android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                                                                    android.Manifest.permission.ACCESS_FINE_LOCATION
+                                                                )
+                                                            )
                                                         }
-                                                    }
+                                                    },
+                                                    modifier = Modifier.testTag("detect_gps_location_button")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.MyLocation,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("GPS")
                                                 }
                                             }
 
-                                            var lastBrightnessBucket by remember {
-                                                mutableIntStateOf((gradualDimMinBrightness * 20).roundToInt())
-                                            }
+                                            SearchableLocationTimeZoneField(
+                                                viewModel = viewModel,
+                                                paneIndex = 0,
+                                                activeSummary = "${resolvedInfo.regionName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort}",
+                                                label = "Search city, airport, or time zone...",
+                                                testTag = "custom_location_input"
+                                            )
+                                        }
+                                    }
+
+                                    // 2d. Clock Scale & Time Format Card (Clock tab only)
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            var lastScaleBucket by remember { mutableIntStateOf((clockScaleVal * 10).roundToInt()) }
                                             Column {
                                                 Row(
                                                     modifier = Modifier.fillMaxWidth(),
@@ -1635,9 +1337,8 @@ fun StandbyCustomizationDialog(
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     Text(
-                                                        text = "Minimum Clock Brightness Floor",
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Medium,
+                                                        text = "Clock Scale",
+                                                        style = MaterialTheme.typography.titleMedium,
                                                         color = colorScheme.onSurface
                                                     )
                                                     Surface(
@@ -1645,7 +1346,7 @@ fun StandbyCustomizationDialog(
                                                         color = colorScheme.secondaryContainer
                                                     ) {
                                                         Text(
-                                                            text = "${(gradualDimMinBrightness * 100).roundToInt()}%",
+                                                            text = String.format(Locale.getDefault(), "%.1fx", clockScaleVal),
                                                             style = MaterialTheme.typography.labelLarge,
                                                             color = colorScheme.onSecondaryContainer,
                                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -1653,321 +1354,830 @@ fun StandbyCustomizationDialog(
                                                     }
                                                 }
                                                 Slider(
-                                                    value = gradualDimMinBrightness,
-                                                    onValueChange = { newVal ->
-                                                        val bucket = (newVal * 20).roundToInt()
-                                                        if (bucket != lastBrightnessBucket) {
-                                                            lastBrightnessBucket = bucket
+                                                    value = clockScaleVal,
+                                                    onValueChange = { newValue ->
+                                                        val bucket = (newValue * 10).roundToInt()
+                                                        if (bucket != lastScaleBucket) {
+                                                            lastScaleBucket = bucket
                                                             haptics.step()
                                                         }
-                                                        viewModel.setGradualAlarmMinBrightness(newVal)
+                                                        viewModel.setClockScaleForPage(activeTab, newValue)
                                                     },
-                                                    valueRange = 0.15f..0.60f,
-                                                    steps = 8,
-                                                    modifier = Modifier
-                                                        .padding(top = 4.dp)
-                                                        .testTag("gradual_dim_min_brightness_slider")
+                                                    valueRange = 0.8f..1.8f,
+                                                    steps = 9,
+                                                    modifier = Modifier.padding(top = 2.dp)
                                                 )
                                             }
+
+                                            M3SettingSwitchRow(
+                                                title = "24-Hour Format",
+                                                subtitle = "Display hours in 24-hour military format (e.g. 14:30)",
+                                                checked = use24Hour,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    viewModel.setUse24HourFormat(it)
+                                                }
+                                            )
+
+                                            AnimatedVisibility(visible = !use24Hour) {
+                                                M3SettingSwitchRow(
+                                                    title = "AM / PM Indicator",
+                                                    subtitle = "Display meridian badge alongside 12-hour clocks",
+                                                    checked = showAmPm,
+                                                    onCheckedChange = {
+                                                        haptics.confirm()
+                                                        viewModel.setShowAmPm(it)
+                                                    }
+                                                )
+                                            }
+
+                                            M3SettingSwitchRow(
+                                                title = "Seconds Tracker",
+                                                subtitle = "Show live ticking seconds on compatible clock faces",
+                                                checked = showSeconds,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    viewModel.setShowSeconds(it)
+                                                }
+                                            )
                                         }
                                     }
-                                }
-                            }
-                        }
 
-                        // 4. Calendar Specific Settings (Tab 2)
-                        if (activeTab == 2) {
-                            val calendarFilter by calendarViewModel.calendarFilter.collectAsState()
-                            val startOnMon by calendarViewModel.startWeekOnMonday.collectAsState()
-                            val showDots by calendarViewModel.showEventDots.collectAsState()
-                            val calUse24Hour by calendarViewModel.use24HourFormat.collectAsState()
+                                    // 2e. Clock Numeral Effects & Visual Shader Gradients (Clock tab only, no text under gradient boxes)
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "Numeral Finish & Shader",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
 
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Text(
-                                        text = "Calendar Agenda & Grid",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = colorScheme.onSurface
-                                    )
+                                            M3SettingSwitchRow(
+                                                title = "Ambient Glow",
+                                                subtitle = "Render soft tonal luminance around display numerals",
+                                                checked = glowVal,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    viewModel.setTextGlowForPage(activeTab, it)
+                                                }
+                                            )
 
-                                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                        val options = listOf("Daily" to 0, "Weekly" to 1, "Monthly" to 2)
-                                        options.forEachIndexed { idx, (label, filterVal) ->
-                                            SegmentedButton(
-                                                selected = calendarFilter == filterVal,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    calendarViewModel.setCalendarFilter(filterVal)
-                                                },
-                                                shape = SegmentedButtonDefaults.itemShape(index = idx, count = options.size)
+                                            M3SettingSwitchRow(
+                                                title = "Outline Mode",
+                                                subtitle = "Draw hollow architectural strokes instead of solid fills",
+                                                checked = outlineVal,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    viewModel.setTextOutlineForPage(activeTab, it)
+                                                }
+                                            )
+
+                                            // Visual-only Gradient Swatches (zero text labels underneath)
+                                            LazyRow(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Text(label)
+                                                items(viewModel.gradients.size) { index ->
+                                                    val (gradName, gradColors) = viewModel.gradients[index]
+                                                    val isSelected = (index == gradientIdx) || (index == 0 && gradientIdx <= 0)
+                                                    val brush = if (index == 0) {
+                                                        Brush.linearGradient(
+                                                            listOf(colorScheme.surfaceContainerHighest, colorScheme.surfaceContainerHigh)
+                                                        )
+                                                    } else {
+                                                        Brush.linearGradient(gradColors)
+                                                    }
+
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(width = 64.dp, height = 40.dp)
+                                                            .clip(RoundedCornerShape(12.dp))
+                                                            .background(brush)
+                                                            .border(
+                                                                width = if (isSelected) 3.dp else 1.dp,
+                                                                color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                                                shape = RoundedCornerShape(12.dp)
+                                                            )
+                                                            .clickable {
+                                                                haptics.tick()
+                                                                viewModel.setTextGradientForPage(activeTab, if (index == 0) -1 else index)
+                                                            },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        if (isSelected) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Check,
+                                                                contentDescription = gradName,
+                                                                tint = if (index == 0) colorScheme.onSurface else Color.White,
+                                                                modifier = Modifier.size(18.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
-
-                                    M3SettingSwitchRow(
-                                        title = "Start Week on Monday",
-                                        subtitle = "Align monthly calendar grid weeks starting Monday",
-                                        checked = startOnMon,
-                                        onCheckedChange = {
-                                            haptics.confirm()
-                                            calendarViewModel.setStartWeekOnMonday(it)
-                                        }
-                                    )
-
-                                    M3SettingSwitchRow(
-                                        title = "Show Event Day Dots",
-                                        subtitle = "Highlight scheduled dates with subtle accent markers",
-                                        checked = showDots,
-                                        onCheckedChange = {
-                                            haptics.confirm()
-                                            calendarViewModel.setShowEventDots(it)
-                                        }
-                                    )
-
-                                    M3SettingSwitchRow(
-                                        title = "24-Hour Agenda Timeline",
-                                        subtitle = "Format event timestamps using 24-hour notation",
-                                        checked = calUse24Hour,
-                                        onCheckedChange = {
-                                            haptics.confirm()
-                                            calendarViewModel.setUse24HourFormat(it)
-                                        }
-                                    )
                                 }
-                            }
-                        }
 
-                        // 5. Music Player Theme Mode (Tab 3)
-                        if (activeTab == 3) {
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Text(
-                                        text = "Player Visual Style",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = colorScheme.onSurface
-                                    )
-                                    M3SettingSwitchRow(
-                                        title = "Cinematic Retro Turntable Theme",
-                                        subtitle = "Switch between Material 3 Expressive player and Classic Vinyl deck",
-                                        checked = isClassicMediaTheme,
-                                        onCheckedChange = {
-                                            haptics.confirm()
-                                            viewModel.setUseClassicMediaTheme(it)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        // 6. Advanced Styling & Gradients Card
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.elevatedCardColors(
-                                containerColor = colorScheme.surfaceContainerLow
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(18.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Text(
-                                    text = "Advanced Text & Motion Styling",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = colorScheme.onSurface
-                                )
-
-                                M3SettingSwitchRow(
-                                    title = "Ambient Text Glow",
-                                    subtitle = "Render soft tonal luminance around display numerals",
-                                    checked = glowVal,
-                                    onCheckedChange = {
-                                        haptics.confirm()
-                                        viewModel.setTextGlowForPage(activeTab, it)
-                                    }
-                                )
-
-                                M3SettingSwitchRow(
-                                    title = "Stroke Outline Mode",
-                                    subtitle = "Draw hollow architectural strokes instead of solid fills",
-                                    checked = outlineVal,
-                                    onCheckedChange = {
-                                        haptics.confirm()
-                                        viewModel.setTextOutlineForPage(activeTab, it)
-                                    }
-                                )
-
-                                M3SettingSwitchRow(
-                                    title = "Distraction-Free Motion",
-                                    subtitle = "Calm down secondary animations for deep focus environments",
-                                    checked = !animationsEnabledVal,
-                                    onCheckedChange = { isDistractionFree ->
-                                        haptics.confirm()
-                                        viewModel.setAnimationsEnabledForPage(activeTab, !isDistractionFree)
-                                    }
-                                )
-
-                                Text(
-                                    text = "Text Shader Gradient",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    items(viewModel.gradients.size) { index ->
-                                        val (gradName, gradColors) = viewModel.gradients[index]
-                                        val isSelected = (index == gradientIdx) || (index == 0 && gradientIdx <= 0)
-                                        val brush = if (index == 0) {
-                                            Brush.linearGradient(
-                                                listOf(colorScheme.surfaceContainerHighest, colorScheme.surfaceContainerHigh)
-                                            )
-                                        } else {
-                                            Brush.linearGradient(gradColors)
-                                        }
-
+                                // 3. Alarm Tab (activeTab == 1): Pre-Alarm Gradual Dimming
+                                if (activeTab == 1) {
+                                    var showAlarmDimInfo by remember { mutableStateOf(false) }
+                                    ElevatedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("pre_alarm_dimming_settings_card"),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
+                                    ) {
                                         Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    haptics.tick()
-                                                    viewModel.setTextGradientForPage(activeTab, if (index == 0) -1 else index)
-                                                }
-                                                .padding(4.dp)
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(width = 68.dp, height = 40.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(brush)
-                                                    .border(
-                                                        width = if (isSelected) 2.5.dp else 1.dp,
-                                                        color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
-                                                        shape = RoundedCornerShape(10.dp)
-                                                    ),
-                                                contentAlignment = Alignment.Center
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                if (isSelected) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = null,
-                                                        tint = if (index == 0) colorScheme.onSurface else Color.White,
-                                                        modifier = Modifier.size(18.dp)
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(
+                                                        text = "Pre-Alarm Dimming",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = colorScheme.onSurface
+                                                    )
+                                                    IconButton(
+                                                        onClick = {
+                                                            haptics.tick()
+                                                            showAlarmDimInfo = !showAlarmDimInfo
+                                                        },
+                                                        modifier = Modifier.size(28.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Info,
+                                                            contentDescription = "Pre-Alarm Info",
+                                                            tint = if (showAlarmDimInfo) colorScheme.primary else colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                }
+
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = if (isPreAlarmDimming) colorScheme.primaryContainer else colorScheme.secondaryContainer
+                                                ) {
+                                                    Text(
+                                                        text = when {
+                                                            !gradualDimEnabled -> "Off"
+                                                            isPreAlarmDimming -> "${(liveBrightnessFactor * 100).roundToInt()}%"
+                                                            minutesUntilAlarm != null -> "${minutesUntilAlarm}m"
+                                                            else -> "Ready"
+                                                        },
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        color = if (isPreAlarmDimming) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                                     )
                                                 }
                                             }
-                                            Spacer(modifier = Modifier.height(4.dp))
+
+                                            AnimatedVisibility(visible = showAlarmDimInfo) {
+                                                Text(
+                                                    text = if (!nextAlarmLabel.isNullOrBlank() && nextAlarmLabel != "No Alarm") {
+                                                        "Next scheduled alarm: $nextAlarmLabel. Smoothly lowers screen brightness before wake-up."
+                                                    } else {
+                                                        "Smoothly lowers screen brightness during the lead-up window before your scheduled alarm."
+                                                    },
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = colorScheme.onSurfaceVariant
+                                                )
+                                            }
+
+                                            M3SettingSwitchRow(
+                                                title = "Gradual Dimming",
+                                                subtitle = "Smoothly dim the display as your scheduled alarm time approaches",
+                                                checked = gradualDimEnabled,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    viewModel.setGradualAlarmDimEnabled(it)
+                                                },
+                                                modifier = Modifier.testTag("gradual_alarm_dim_switch")
+                                            )
+
+                                            AnimatedVisibility(visible = gradualDimEnabled) {
+                                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                    val windowOptions = listOf(15, 30, 45, 60)
+                                                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                                        windowOptions.forEachIndexed { idx, mins ->
+                                                            SegmentedButton(
+                                                                selected = gradualDimWindowMins == mins,
+                                                                onClick = {
+                                                                    haptics.tick()
+                                                                    viewModel.setGradualAlarmDimWindowMinutes(mins)
+                                                                },
+                                                                shape = SegmentedButtonDefaults.itemShape(
+                                                                    index = idx,
+                                                                    count = windowOptions.size
+                                                                ),
+                                                                modifier = Modifier.testTag("gradual_dim_window_$mins")
+                                                            ) {
+                                                                Text("${mins}m")
+                                                            }
+                                                        }
+                                                    }
+
+                                                    var lastBrightnessBucket by remember {
+                                                        mutableIntStateOf((gradualDimMinBrightness * 20).roundToInt())
+                                                    }
+                                                    Column {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text(
+                                                                text = "Minimum Brightness",
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = FontWeight.Medium,
+                                                                color = colorScheme.onSurface
+                                                            )
+                                                            Surface(
+                                                                shape = RoundedCornerShape(8.dp),
+                                                                color = colorScheme.secondaryContainer
+                                                            ) {
+                                                                Text(
+                                                                    text = "${(gradualDimMinBrightness * 100).roundToInt()}%",
+                                                                    style = MaterialTheme.typography.labelLarge,
+                                                                    color = colorScheme.onSecondaryContainer,
+                                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                        Slider(
+                                                            value = gradualDimMinBrightness,
+                                                            onValueChange = { newVal ->
+                                                                val bucket = (newVal * 20).roundToInt()
+                                                                if (bucket != lastBrightnessBucket) {
+                                                                    lastBrightnessBucket = bucket
+                                                                    haptics.step()
+                                                                }
+                                                                viewModel.setGradualAlarmMinBrightness(newVal)
+                                                            },
+                                                            valueRange = 0.15f..0.60f,
+                                                            steps = 8,
+                                                            modifier = Modifier
+                                                                .padding(top = 2.dp)
+                                                                .testTag("gradual_dim_min_brightness_slider")
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 4. Calendar Tab (activeTab == 2)
+                                if (activeTab == 2) {
+                                    val calendarFilter by calendarViewModel.calendarFilter.collectAsState()
+                                    val startOnMon by calendarViewModel.startWeekOnMonday.collectAsState()
+                                    val showDots by calendarViewModel.showEventDots.collectAsState()
+                                    val calUse24Hour by calendarViewModel.use24HourFormat.collectAsState()
+
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
                                             Text(
-                                                text = gradName,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (isSelected) colorScheme.onSurface else colorScheme.onSurfaceVariant
+                                                text = "Calendar Layout",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
+
+                                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                                val options = listOf("Daily" to 0, "Weekly" to 1, "Monthly" to 2)
+                                                options.forEachIndexed { idx, (label, filterVal) ->
+                                                    SegmentedButton(
+                                                        selected = calendarFilter == filterVal,
+                                                        onClick = {
+                                                            haptics.tick()
+                                                            calendarViewModel.setCalendarFilter(filterVal)
+                                                        },
+                                                        shape = SegmentedButtonDefaults.itemShape(index = idx, count = options.size)
+                                                    ) {
+                                                        Text(label)
+                                                    }
+                                                }
+                                            }
+
+                                            M3SettingSwitchRow(
+                                                title = "Start Week on Monday",
+                                                subtitle = "Align monthly calendar grid weeks starting Monday",
+                                                checked = startOnMon,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    calendarViewModel.setStartWeekOnMonday(it)
+                                                }
+                                            )
+
+                                            M3SettingSwitchRow(
+                                                title = "Event Day Dots",
+                                                subtitle = "Highlight scheduled dates with subtle accent markers",
+                                                checked = showDots,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    calendarViewModel.setShowEventDots(it)
+                                                }
+                                            )
+
+                                            M3SettingSwitchRow(
+                                                title = "24-Hour Timeline",
+                                                subtitle = "Format event timestamps using 24-hour notation",
+                                                checked = calUse24Hour,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    calendarViewModel.setUse24HourFormat(it)
+                                                }
                                             )
                                         }
                                     }
                                 }
-                            }
-                        }
 
-                        // 7. Custom Background Image Card
-                        val context = LocalContext.current
-                        val launcher = rememberLauncherForActivityResult(
-                            ActivityResultContracts.GetContent()
-                        ) { uri ->
-                            if (uri != null) {
-                                try {
-                                    context.contentResolver.takePersistableUriPermission(
-                                        uri,
-                                        Intent.FLAG_GRANT_READ_URI_PERMISSION
-                                    )
-                                } catch (_: Exception) {
-                                }
-                                viewModel.setBgUriForPage(activeTab, uri.toString())
-                            }
-                        }
-
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.elevatedCardColors(
-                                containerColor = colorScheme.surfaceContainerLow
-                            )
-                        ) {
-                            FlowRow(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(18.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(end = 12.dp)
-                                ) {
-                                    Text(
-                                        text = "Custom Backdrop Image",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = if (bgUri != null) "Custom wallpaper active for this screen"
-                                        else "Choose a local photo backdrop for ${tabItems[activeTab].first}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (bgUri != null) colorScheme.primary else colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (bgUri != null) {
-                                        OutlinedButton(
-                                            onClick = {
-                                                haptics.tick()
-                                                viewModel.setBgUriForPage(activeTab, null)
-                                            }
-                                        ) {
-                                            Text("Clear")
-                                        }
-                                    }
-                                    FilledTonalButton(
-                                        onClick = {
-                                            haptics.tick()
-                                            launcher.launch("image/*")
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Image,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
+                                // 5. Music Tab (activeTab == 3)
+                                if (activeTab == 3) {
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Choose Photo")
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Text(
+                                                text = "Player Visual Theme",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
+                                            M3SettingSwitchRow(
+                                                title = "Retro Vinyl Turntable",
+                                                subtitle = "Switch between Material 3 Expressive player and Classic Vinyl deck",
+                                                checked = isClassicMediaTheme,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    viewModel.setUseClassicMediaTheme(it)
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // 5b. Tools Tab (activeTab == 4): Immersive Slideshow Time Overlay & Interval
+                                if (activeTab == 4) {
+                                    val showSlideshowTime by viewModel.showSlideshowTimeOverlay.collectAsState()
+                                    val slideshowInterval by viewModel.slideshowIntervalSeconds.collectAsState()
+
+                                    ElevatedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("tools_slideshow_settings_card"),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "Slideshow",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
+
+                                            M3SettingSwitchRow(
+                                                title = "Show Time Overlay",
+                                                subtitle = "Display live clock time over the full-screen immersive photo slideshow",
+                                                checked = showSlideshowTime,
+                                                onCheckedChange = {
+                                                    haptics.confirm()
+                                                    viewModel.setShowSlideshowTimeOverlay(it)
+                                                },
+                                                modifier = Modifier.testTag("slideshow_time_overlay_switch")
+                                            )
+
+                                            val speedOptions = listOf(5, 8, 15, 30)
+                                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                                speedOptions.forEachIndexed { idx, secs ->
+                                                    SegmentedButton(
+                                                        selected = slideshowInterval == secs,
+                                                        onClick = {
+                                                            haptics.tick()
+                                                            viewModel.setSlideshowIntervalSeconds(secs)
+                                                        },
+                                                        shape = SegmentedButtonDefaults.itemShape(
+                                                            index = idx,
+                                                            count = speedOptions.size
+                                                        )
+                                                    ) {
+                                                        Text("${secs}s")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 6. Duo Tab (activeTab == 5): Visual-Only Left & Right Pane Screen Previews + Plus Picker
+                                if (activeTab == 5) {
+                                    val leftWidgetIdx by viewModel.duoLeftWidgetIndex.collectAsState()
+                                    val rightWidgetIdx by viewModel.duoRightWidgetIndex.collectAsState()
+                                    val leftScreens by viewModel.duoLeftScreenIndices.collectAsState()
+                                    val rightScreens by viewModel.duoRightScreenIndices.collectAsState()
+                                    val leftTzId by viewModel.duoLeftTimeZoneId.collectAsState()
+                                    val rightTzId by viewModel.duoRightTimeZoneId.collectAsState()
+                                    val leftLocName by viewModel.duoLeftLocationName.collectAsState()
+                                    val rightLocName by viewModel.duoRightLocationName.collectAsState()
+                                    val leftResolved = remember(leftTzId, leftLocName) { viewModel.resolvePaneLocationInfo(1) }
+                                    val rightResolved = remember(rightTzId, rightLocName) { viewModel.resolvePaneLocationInfo(2) }
+                                    var visualPickerPane by remember { mutableIntStateOf(0) } // 0 = closed, 1 = left, 2 = right
+
+                                    ElevatedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("duo_widgets_selector_card"),
+                                        colors = CardDefaults.elevatedCardColors(
+                                            containerColor = colorScheme.surfaceContainerLow
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                // LEFT PANE VISUAL-ONLY CONFIGURATION
+                                                Surface(
+                                                    modifier = Modifier.weight(1f),
+                                                    shape = RoundedCornerShape(16.dp),
+                                                    color = colorScheme.surfaceContainer
+                                                ) {
+                                                    Column(
+                                                        modifier = Modifier.padding(12.dp),
+                                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Outlined.ViewSidebar,
+                                                                contentDescription = "Left Pane",
+                                                                tint = colorScheme.primary,
+                                                                modifier = Modifier.size(18.dp)
+                                                            )
+                                                            FilledTonalIconButton(
+                                                                onClick = {
+                                                                    haptics.confirm()
+                                                                    visualPickerPane = 1
+                                                                },
+                                                                modifier = Modifier
+                                                                    .size(32.dp)
+                                                                    .testTag("duo_settings_left_add_btn")
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Add,
+                                                                    contentDescription = "Add Left Screen",
+                                                                    modifier = Modifier.size(18.dp)
+                                                                )
+                                                            }
+                                                        }
+
+                                                        if (leftScreens.isEmpty()) {
+                                                            // Empty State: Visual + button only
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .height(92.dp)
+                                                                    .clip(RoundedCornerShape(14.dp))
+                                                                    .background(colorScheme.surfaceContainerHigh)
+                                                                    .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                                                                    .clickable {
+                                                                        haptics.confirm()
+                                                                        visualPickerPane = 1
+                                                                    },
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Add,
+                                                                    contentDescription = "Add Left Screen",
+                                                                    tint = colorScheme.primary,
+                                                                    modifier = Modifier.size(32.dp)
+                                                                )
+                                                            }
+                                                        } else {
+                                                            LazyRow(
+                                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                                modifier = Modifier.fillMaxWidth()
+                                                            ) {
+                                                                itemsIndexed(leftScreens) { _, sIdx ->
+                                                                    val isActive = leftWidgetIdx == sIdx
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .size(width = 132.dp, height = 88.dp)
+                                                                            .clip(RoundedCornerShape(12.dp))
+                                                                            .background(Color.Black)
+                                                                            .border(
+                                                                                width = if (isActive) 2.5.dp else 1.dp,
+                                                                                color = if (isActive) colorScheme.primary else colorScheme.outlineVariant,
+                                                                                shape = RoundedCornerShape(12.dp)
+                                                                            )
+                                                                            .clickable {
+                                                                                haptics.tick()
+                                                                                viewModel.setDuoLeftWidgetIndex(sIdx)
+                                                                            }
+                                                                    ) {
+                                                                        RenderDuoWidget(
+                                                                            pageIndex = sIdx,
+                                                                            paneIndex = 1,
+                                                                            viewModel = viewModel,
+                                                                            calendarViewModel = calendarViewModel,
+                                                                            weatherViewModel = viewModel()
+                                                                        )
+                                                                        Surface(
+                                                                            modifier = Modifier
+                                                                                .align(Alignment.TopEnd)
+                                                                                .padding(4.dp)
+                                                                                .size(20.dp)
+                                                                                .clickable {
+                                                                                    haptics.tick()
+                                                                                    viewModel.removeScreenFromDuoLeft(sIdx)
+                                                                                },
+                                                                            shape = CircleShape,
+                                                                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                                                                        ) {
+                                                                            Box(contentAlignment = Alignment.Center) {
+                                                                                Icon(
+                                                                                    imageVector = Icons.Default.Close,
+                                                                                    contentDescription = "Remove",
+                                                                                    tint = colorScheme.onSurface,
+                                                                                    modifier = Modifier.size(12.dp)
+                                                                                )
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
+                                                        SearchableLocationTimeZoneField(
+                                                            viewModel = viewModel,
+                                                            paneIndex = 1,
+                                                            activeSummary = "${leftResolved.regionName} (${leftResolved.airportCode}) • ${leftResolved.standardTimeShort}",
+                                                            label = "Left Location / Time Zone",
+                                                            testTag = "duo_left_location_search_input"
+                                                        )
+                                                    }
+                                                }
+
+                                                // RIGHT PANE VISUAL-ONLY CONFIGURATION
+                                                Surface(
+                                                    modifier = Modifier.weight(1f),
+                                                    shape = RoundedCornerShape(16.dp),
+                                                    color = colorScheme.surfaceContainer
+                                                ) {
+                                                    Column(
+                                                        modifier = Modifier.padding(12.dp),
+                                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Outlined.ViewSidebar,
+                                                                contentDescription = "Right Pane",
+                                                                tint = colorScheme.primary,
+                                                                modifier = Modifier
+                                                                    .size(18.dp)
+                                                                    .graphicsLayer { scaleX = -1f }
+                                                            )
+                                                            FilledTonalIconButton(
+                                                                onClick = {
+                                                                    haptics.confirm()
+                                                                    visualPickerPane = 2
+                                                                },
+                                                                modifier = Modifier
+                                                                    .size(32.dp)
+                                                                    .testTag("duo_settings_right_add_btn")
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Add,
+                                                                    contentDescription = "Add Right Screen",
+                                                                    modifier = Modifier.size(18.dp)
+                                                                )
+                                                            }
+                                                        }
+
+                                                        if (rightScreens.isEmpty()) {
+                                                            // Empty State: Visual + button only
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .height(92.dp)
+                                                                    .clip(RoundedCornerShape(14.dp))
+                                                                    .background(colorScheme.surfaceContainerHigh)
+                                                                    .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                                                                    .clickable {
+                                                                        haptics.confirm()
+                                                                        visualPickerPane = 2
+                                                                    },
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Add,
+                                                                    contentDescription = "Add Right Screen",
+                                                                    tint = colorScheme.primary,
+                                                                    modifier = Modifier.size(32.dp)
+                                                                )
+                                                            }
+                                                        } else {
+                                                            LazyRow(
+                                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                                modifier = Modifier.fillMaxWidth()
+                                                            ) {
+                                                                itemsIndexed(rightScreens) { _, sIdx ->
+                                                                    val isActive = rightWidgetIdx == sIdx
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .size(width = 132.dp, height = 88.dp)
+                                                                            .clip(RoundedCornerShape(12.dp))
+                                                                            .background(Color.Black)
+                                                                            .border(
+                                                                                width = if (isActive) 2.5.dp else 1.dp,
+                                                                                color = if (isActive) colorScheme.primary else colorScheme.outlineVariant,
+                                                                                shape = RoundedCornerShape(12.dp)
+                                                                            )
+                                                                            .clickable {
+                                                                                haptics.tick()
+                                                                                viewModel.setDuoRightWidgetIndex(sIdx)
+                                                                            }
+                                                                    ) {
+                                                                        RenderDuoWidget(
+                                                                            pageIndex = sIdx,
+                                                                            paneIndex = 2,
+                                                                            viewModel = viewModel,
+                                                                            calendarViewModel = calendarViewModel,
+                                                                            weatherViewModel = viewModel()
+                                                                        )
+                                                                        Surface(
+                                                                            modifier = Modifier
+                                                                                .align(Alignment.TopEnd)
+                                                                                .padding(4.dp)
+                                                                                .size(20.dp)
+                                                                                .clickable {
+                                                                                    haptics.tick()
+                                                                                    viewModel.removeScreenFromDuoRight(sIdx)
+                                                                                },
+                                                                            shape = CircleShape,
+                                                                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                                                                        ) {
+                                                                            Box(contentAlignment = Alignment.Center) {
+                                                                                Icon(
+                                                                                    imageVector = Icons.Default.Close,
+                                                                                    contentDescription = "Remove",
+                                                                                    tint = colorScheme.onSurface,
+                                                                                    modifier = Modifier.size(12.dp)
+                                                                                )
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
+                                                        SearchableLocationTimeZoneField(
+                                                            viewModel = viewModel,
+                                                            paneIndex = 2,
+                                                            activeSummary = "${rightResolved.regionName} (${rightResolved.airportCode}) • ${rightResolved.standardTimeShort}",
+                                                            label = "Right Location / Time Zone",
+                                                            testTag = "duo_right_location_search_input"
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (visualPickerPane != 0) {
+                                        DuoPaneScreenManagerDialog(
+                                            paneIndex = visualPickerPane,
+                                            viewModel = viewModel,
+                                            calendarViewModel = calendarViewModel,
+                                            onDismiss = { visualPickerPane = 0 }
+                                        )
+                                    }
+                                }
+
+                                // 7. Custom Backdrop Image Card (Visual row without permanent sub-text)
+                                val context = LocalContext.current
+                                val launcher = rememberLauncherForActivityResult(
+                                    ActivityResultContracts.GetContent()
+                                ) { uri ->
+                                    if (uri != null) {
+                                        try {
+                                            context.contentResolver.takePersistableUriPermission(
+                                                uri,
+                                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                            )
+                                        } catch (_: Exception) {
+                                        }
+                                        viewModel.setBgUriForPage(activeTab, uri.toString())
+                                    }
+                                }
+
+                                ElevatedCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.elevatedCardColors(
+                                        containerColor = colorScheme.surfaceContainerLow
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Wallpaper,
+                                                contentDescription = null,
+                                                tint = colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = "Backdrop Photo",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (bgUri != null) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        viewModel.setBgUriForPage(activeTab, null)
+                                                    }
+                                                ) {
+                                                    Text("Clear")
+                                                }
+                                            }
+                                            FilledTonalButton(
+                                                onClick = {
+                                                    haptics.tick()
+                                                    launcher.launch("image/*")
+                                                }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Image,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Choose Photo")
+                                            }
+                                        }
                                     }
                                 }
                             }
-                        }
                         }
                     }
                 }
@@ -1985,6 +2195,8 @@ private fun M3SettingSwitchRow(
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    var showInfo by remember { mutableStateOf(false) }
+
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = colorScheme.surfaceContainer,
@@ -1993,30 +2205,56 @@ private fun M3SettingSwitchRow(
             .clip(RoundedCornerShape(14.dp))
             .clickable { onCheckedChange(!checked) }
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colorScheme.onSurface
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onSurface
+                    )
+                    if (subtitle.isNotBlank()) {
+                        IconButton(
+                            onClick = { showInfo = !showInfo },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Info,
+                                contentDescription = "More Info",
+                                tint = if (showInfo) colorScheme.primary else colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+                }
+                Switch(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange
                 )
+            }
+            AnimatedVisibility(visible = showInfo && subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = colorScheme.onSurfaceVariant
+                    color = colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, end = 12.dp)
                 )
             }
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
         }
     }
 }
@@ -2079,19 +2317,12 @@ fun AppOverviewLayout(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Standby Spaces",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Select any clock face or utility workspace",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = "Standby Spaces",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
 
                 FilledTonalIconButton(
                     onClick = onDismiss,
@@ -2113,11 +2344,11 @@ fun AppOverviewLayout(
             }
 
             val utilityPages = listOf(
-                1 to ("System Alarm" to "ALARM DISPATCH"),
-                2 to ("Calendar Agenda" to "CALENDAR AGENDA"),
-                3 to ("Music Player" to "MUSIC PLAYER"),
-                4 to ("Tools Hub" to "TOOLS & GALLERY"),
-                5 to ("Duo Split Views" to "DUO SCREENS")
+                1 to "Alarm",
+                2 to "Calendar",
+                3 to "Music",
+                4 to "Tools",
+                5 to "Duo"
             )
 
             LazyRow(
@@ -2127,7 +2358,7 @@ fun AppOverviewLayout(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                // Column 1: Enabled Clock Faces
+                // Column 1: Enabled Clock Faces (Visual-only cards)
                 item {
                     ElevatedCard(
                         modifier = Modifier
@@ -2144,15 +2375,10 @@ fun AppOverviewLayout(
                                 .padding(12.dp)
                         ) {
                             Text(
-                                text = "Clock Faces",
+                                text = "Clock",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "${clockThemes.size} interactive styles",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(bottom = 10.dp)
                             )
 
@@ -2163,7 +2389,7 @@ fun AppOverviewLayout(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 contentPadding = PaddingValues(bottom = 8.dp)
                             ) {
-                                itemsIndexed(clockThemes) { _, (clockThemeIdx, _, label) ->
+                                itemsIndexed(clockThemes) { _, (clockThemeIdx, _, _) ->
                                     val isActive = (activePage == 0 && activeClockFace == clockThemeIdx)
 
                                     OutlinedCard(
@@ -2173,39 +2399,27 @@ fun AppOverviewLayout(
                                             containerColor = if (isActive) colorScheme.secondaryContainer else colorScheme.surfaceContainer
                                         ),
                                         border = BorderStroke(
-                                            width = if (isActive) 2.dp else 1.dp,
+                                            width = if (isActive) 2.5.dp else 1.dp,
                                             color = if (isActive) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.5f)
                                         )
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(8.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(6.dp)
+                                                .size(160.dp, 90.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Color.Black),
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            Text(
-                                                text = label.substringAfter("| ").trim(),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (isActive) colorScheme.onSecondaryContainer else colorScheme.onSurface,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1
-                                            )
-                                            Spacer(Modifier.height(6.dp))
                                             Box(
                                                 modifier = Modifier
-                                                    .size(156.dp, 84.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(Color.Black),
-                                                contentAlignment = Alignment.Center
+                                                    .requiredSize(400.dp, 220.dp)
+                                                    .graphicsLayer {
+                                                        scaleX = 0.36f
+                                                        scaleY = 0.36f
+                                                    }
                                             ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .requiredSize(400.dp, 220.dp)
-                                                        .graphicsLayer {
-                                                            scaleX = 0.36f
-                                                            scaleY = 0.36f
-                                                        }
-                                                ) {
-                                                    ClockPage(themeIndex = clockThemeIdx)
-                                                }
+                                                ClockPage(themeIndex = clockThemeIdx)
                                             }
                                         }
                                     }
@@ -2215,10 +2429,8 @@ fun AppOverviewLayout(
                     }
                 }
 
-                // Columns 2..6: Utility Screens
-                itemsIndexed(utilityPages) { _, uItem ->
-                    val pageIdx = uItem.first
-                    val (title, label) = uItem.second
+                // Columns 2..6: Utility Screens (Visual cards without sub-labels)
+                itemsIndexed(utilityPages) { _, (pageIdx, title) ->
                     val isActive = (activePage == pageIdx)
 
                     val pageColor = when (pageIdx) {
@@ -2254,14 +2466,8 @@ fun AppOverviewLayout(
                             Text(
                                 text = title,
                                 style = MaterialTheme.typography.titleSmall,
-                                color = if (isActive) colorScheme.onSurface else colorScheme.onSurface,
+                                color = colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 modifier = Modifier.padding(bottom = 10.dp)
                             )

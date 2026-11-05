@@ -5,6 +5,8 @@ import android.content.Context
 import android.media.AudioManager
 import android.provider.Settings
 import android.view.KeyEvent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -175,33 +177,32 @@ class ExampleRobolectricTest {
     @Test
     fun `clock face enable disable ticking and shared preferences persistence`() {
         val vm1 = StandbyViewModel(application)
-        // All 13 single-screen clock faces (0..12) are enabled by default; the last 3 split screens are only in Duo
-        assertEquals(13, vm1.enabledClockFaces.value.size)
+        // All 14 single-screen clock faces (0..13, including Squircle Border Tick) are enabled by default
+        assertEquals(14, vm1.enabledClockFaces.value.size)
         assertTrue(vm1.enabledClockFaces.value.contains(2)) // Airport Split-Flap Board
         assertTrue(vm1.enabledClockFaces.value.contains(10)) // World Time Zone Map
-        assertFalse(vm1.clockFaceTitles.contains("Squircle Tick & Battery Rings"))
-        assertFalse(vm1.clockFaceTitles.contains("Analog Smart Home Hub"))
-        assertFalse(vm1.clockFaceTitles.contains("Big Date & Calendar Split"))
+        assertTrue(vm1.enabledClockFaces.value.contains(13)) // Squircle Border Tick
+        assertTrue(vm1.clockFaceTitles.contains("Squircle Border Tick"))
 
         // Disable clock face 0 and toggle clock face 5
         vm1.setClockFaceEnabled(0, false)
         vm1.toggleClockFace(5)
         assertFalse(vm1.enabledClockFaces.value.contains(0))
         assertFalse(vm1.enabledClockFaces.value.contains(5))
-        assertEquals(11, vm1.enabledClockFaces.value.size)
+        assertEquals(12, vm1.enabledClockFaces.value.size)
 
         // Persist Duo screens and Pomodoro settings
         vm1.setDuoLeftWidgetIndex(2) // Airport Split-Flap Board
-        vm1.setDuoRightWidgetIndex(10) // World Time Zone Map
+        vm1.setDuoRightWidgetIndex(13) // Squircle Border Tick
         vm1.setPomodoroFocusMinutes(45)
 
         // Re-instantiate ViewModel to verify SharedPreferences round-trip
         val vm2 = StandbyViewModel(application)
         assertFalse(vm2.enabledClockFaces.value.contains(0))
         assertFalse(vm2.enabledClockFaces.value.contains(5))
-        assertEquals(11, vm2.enabledClockFaces.value.size)
+        assertEquals(12, vm2.enabledClockFaces.value.size)
         assertEquals(2, vm2.duoLeftWidgetIndex.value)
-        assertEquals(10, vm2.duoRightWidgetIndex.value)
+        assertEquals(13, vm2.duoRightWidgetIndex.value)
         assertEquals(45, vm2.pomodoroFocusMinutes.value)
     }
 
@@ -236,8 +237,9 @@ class ExampleRobolectricTest {
     @Test
     fun `new standby clock faces duo timezones and single clock world map rendering`() {
         val vm = StandbyViewModel(application)
-        // Verify Duo Mode only includes the 17 actual main screens (13 clock faces + 4 main utility screens)
-        assertEquals(17, vm.duoWidgetTitles.size)
+        // Verify Duo Mode includes the 18 actual main screens (14 clock faces + 4 main utility screens)
+        assertEquals(18, vm.duoWidgetTitles.size)
+        assertEquals("Squircle Border Tick", vm.duoWidgetTitles[13])
         assertEquals("Tools Hub", vm.duoWidgetTitles.last())
 
         // Set different TimeZones / Locations for Main Clock (0), Left Duo Pane (1), and Right Duo Pane (2)
@@ -259,21 +261,50 @@ class ExampleRobolectricTest {
 
         val cal = GoogleDeviceAndHomeMonitor.calendarForTimeZone(Calendar.getInstance(), leftRegion.timeZoneId)
         composeTestRule.setContent {
-            WorldTimeZoneMapClockFace(
-                calendar = cal,
-                accentColor = Color(0xFFFF9800),
-                customFont = FontFamily.Default,
-                nextAlarmLabel = "6:30 AM",
-                standbyViewModel = vm,
-                paneIndex = 1
-            )
+            Column {
+                Box(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+                    WorldTimeZoneMapClockFace(
+                        calendar = cal,
+                        accentColor = Color(0xFFFF9800),
+                        customFont = FontFamily.Default,
+                        nextAlarmLabel = "No Alarm",
+                        standbyViewModel = vm,
+                        paneIndex = 1
+                    )
+                }
+                Box(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+                    StandbySageComplicationClockFace(
+                        calendar = cal,
+                        accentColor = Color(0xFF7CC67F),
+                        customFont = FontFamily.Default,
+                        nextAlarmLabel = "No Alarm"
+                    )
+                }
+            }
         }
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("world_map_clock_face").assertIsDisplayed()
-        // Verify embedded Squircle Tick Digital Clock is displayed inside the World Map Clock
-        composeTestRule.onNodeWithTag("map_squircle_tick_digital_clock").assertIsDisplayed()
-        // Verify top 6:30 AM alarm clock was removed
-        composeTestRule.onNodeWithText("6:30 AM").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("standby_sage_complication_clock").assertIsDisplayed()
+        // Verify no fake 6:30AM alarm is displayed on the Sage clock when no alarm has been added
+        composeTestRule.onNodeWithText("6:30AM").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Scheduled Alarm").assertDoesNotExist()
+
+        // Verify Duo custom screen lists start empty until the user adds screens and support user add/remove
+        assertEquals(emptyList<Int>(), vm.duoLeftScreenIndices.value)
+        assertEquals(emptyList<Int>(), vm.duoRightScreenIndices.value)
+        vm.addScreenToDuoLeft(2)
+        vm.addScreenToDuoLeft(13) // Add Squircle Border Tick
+        assertEquals(listOf(2, 13), vm.duoLeftScreenIndices.value)
+        vm.removeScreenFromDuoLeft(2)
+        assertEquals(listOf(13), vm.duoLeftScreenIndices.value)
+
+        // Verify zero mock data in Connected Devices and Smart Home
+        val liveBatteryDevices = GoogleDeviceAndHomeMonitor.readLiveBatteryDevices(application)
+        assertFalse(liveBatteryDevices.any { it.id == "google_pixel_watch" || it.id == "google_pixel_buds_pro" || it.id == "google_nest_hub" })
+        assertTrue(vm.googleHomeDevices.value.isEmpty())
+        vm.addUserSmartDevice("Desk Lamp", "Study", "light")
+        assertEquals(1, vm.googleHomeDevices.value.size)
+        assertEquals("Desk Lamp", vm.googleHomeDevices.value.first().name)
 
         // Verify searchable location & time zone helper and Matrix CRT font styles
         val searchMatches = vm.searchLocationsAndTimeZones("Tokyo")
@@ -285,9 +316,10 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `tools page pomodoro presets stopwatch and gallery permission UI test`() {
+    fun `tools page pomodoro presets stopwatch gallery charge smart home and flash UI test`() {
         val vm = StandbyViewModel(application)
         vm.setTimerModeIndex(0) // Focus Pomodoro mode
+        assertTrue(vm.showSlideshowTimeOverlay.value) // Opt-on by default
 
         composeTestRule.setContent {
             TimerPage(viewModel = vm)
@@ -307,10 +339,64 @@ class ExampleRobolectricTest {
         assertEquals(1, vm.timerModeIndex.value)
 
         // Switch to Gallery & Slideshow tool (index 2) and verify permission gate card is shown initially
-        composeTestRule.onNodeWithTag("tools_tab_chip_2").performClick()
+        composeTestRule.onNodeWithTag("timer_mode_dot_2").performClick()
         composeTestRule.waitForIdle()
         assertEquals(2, vm.timerModeIndex.value)
         composeTestRule.onNodeWithTag("gallery_permission_card").assertIsDisplayed()
+
+        // Grant gallery access to enter immersive full-screen slideshow and verify time overlay opt-on by default
+        composeTestRule.onNodeWithTag("gallery_grant_permission_btn").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("slideshow_time_overlay_text").assertIsDisplayed()
+        vm.setShowSlideshowTimeOverlay(false)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("slideshow_time_overlay_text").assertDoesNotExist()
+
+        // Switch to Connected Devices Charge tool (index 3)
+        composeTestRule.onNodeWithTag("timer_mode_dot_3").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(3, vm.timerModeIndex.value)
+        composeTestRule.onNodeWithTag("connected_devices_charge_tool").assertIsDisplayed()
+
+        // Switch to Smart Devices Control tool (index 4)
+        composeTestRule.onNodeWithTag("timer_mode_dot_4").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(4, vm.timerModeIndex.value)
+        composeTestRule.onNodeWithTag("smart_devices_control_tool").assertIsDisplayed()
+
+        // Switch to Full-Screen Ambient Light tool (index 5)
+        composeTestRule.onNodeWithTag("timer_mode_dot_5").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(5, vm.timerModeIndex.value)
+        composeTestRule.onNodeWithTag("camera_flash_ambient_toggle_btn").assertIsDisplayed()
+    }
+
+    @Test
+    fun `multi-screen calendar hero day month view and events agenda UI test`() {
+        val standbyVm = StandbyViewModel(application)
+        val calVm = CalendarViewModel(application)
+        calVm.setCalendarScreenIndex(0)
+
+        composeTestRule.setContent {
+            CalendarPage(viewModel = calVm, standbyViewModel = standbyVm)
+        }
+        composeTestRule.waitForIdle()
+
+        // Screen 0: Dedicated Hero Day screen
+        composeTestRule.onNodeWithTag("calendar_screen_day_hero").assertIsDisplayed()
+
+        // Screen 1: Dedicated Month View calendar highlighting today's date
+        composeTestRule.onNodeWithTag("calendar_mode_dot_1").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(1, calVm.calendarScreenIndex.value)
+        composeTestRule.onNodeWithTag("calendar_screen_month_grid").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("calendar_today_highlighted_cell").assertIsDisplayed()
+
+        // Screen 2: Dedicated Material 3 Calendar Events / Agenda screen
+        composeTestRule.onNodeWithTag("calendar_mode_dot_2").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(2, calVm.calendarScreenIndex.value)
+        composeTestRule.onNodeWithTag("calendar_screen_events_agenda").assertIsDisplayed()
     }
 
     @Test
