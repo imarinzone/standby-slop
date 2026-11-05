@@ -10,6 +10,10 @@ data class Alarm(
     val minute: Int,
     val isEnabled: Boolean = true,
     val label: String = "Alarm",
-    val toneUri: String = "",
-    val snoozeMinutes: Int = 5
+    val toneUri: String = "default_alarm",
+    val snoozeMinutes: Int = 5,
+    val musicPackageName: String = "",
+    val musicAppName: String = "Default Alarm Tone",
+    val gradualVolume: Boolean = true,
+    val gradualVolumeSeconds: Int = 30
 )

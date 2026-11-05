@@ -26,7 +26,7 @@ import java.util.Locale
 class StandbyViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val prefs = application.getSharedPreferences("standby_prefs", Context.MODE_PRIVATE)
-    private val alarmWriteMutex = Mutex()
+    private val alarmWriteLock = Any()
 
     val alarms: StateFlow<List<Alarm>> = db.alarmDao().getAllAlarms()
         .map { list -> list.distinctBy { it.hour to it.minute } }
@@ -39,19 +39,183 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     private val _nextSystemAlarm = MutableStateFlow<String?>("No Alarm")
     val nextSystemAlarm: StateFlow<String?> = _nextSystemAlarm
 
-    // Persisted active clock face index (0..9) so the app always opens on the last used clock face
-    val lastClockFaceIndex = MutableStateFlow(prefs.getInt("lastClockFaceIndex", 0).coerceIn(0, 9))
+    // Persisted active clock face index (0..15) so the app always opens on the last used clock face
+    val lastClockFaceIndex = MutableStateFlow(prefs.getInt("lastClockFaceIndex", 0).coerceIn(0, 15))
+
+    val clockFaceTitles = listOf(
+        "Digital Minimal",
+        "Analog Classic",
+        "Airport Split-Flap Board",
+        "Binary Matrix",
+        "Modern Bold",
+        "Contrasting Split",
+        "Analog Motor Dashboard",
+        "Pastel Bubbles",
+        "Ambient Horizon",
+        "High-Tech Nixie Tube",
+        "World Time Zone Map",
+        "StandBy Sage & Complications",
+        "Overlapping Float Numerals",
+        "Squircle Tick & Battery Rings",
+        "Analog Smart Home Hub",
+        "Big Date & Calendar Split"
+    )
+
+    val clockFaceSubtitles = listOf(
+        "01 | DIGITAL MINIMAL",
+        "02 | ANALOG CLASSIC",
+        "03 | AIRPORT FLIPBOARD",
+        "04 | BINARY STYLE",
+        "05 | MODERN BOLD TEXT",
+        "06 | CONTRASTING SPLIT",
+        "07 | ANALOG DASHBOARD",
+        "08 | BUBBLE PASTEL",
+        "09 | AMBIENT GRADIENT",
+        "10 | NIXIE TUBE",
+        "11 | WORLD TIME MAP",
+        "12 | STANDBY SAGE",
+        "13 | FLOAT NUMERALS",
+        "14 | SQUIRCLE & BATTERY",
+        "15 | ANALOG SMART HOME",
+        "16 | BIG DATE CALENDAR"
+    )
+
+    val enabledClockFaces = MutableStateFlow<Set<Int>>(
+        prefs.getStringSet("enabledClockFaces", null)
+            ?.mapNotNull { it.toIntOrNull()?.takeIf { idx -> idx in 0..15 } }
+            ?.toSet()
+            ?.takeIf { it.isNotEmpty() }
+            ?: (0..15).toSet()
+    )
+
+    val duoWidgetTitles = listOf(
+        "Digital Clock & Weather",
+        "Alarms & Quick Toggle",
+        "Calendar & Agenda",
+        "Music Controller",
+        "Pomodoro & Stopwatch",
+        "Airport Split-Flap Board",
+        "Squircle 60-Tick Clock",
+        "StandBy Numbered Analog",
+        "Overlapping Float Clock",
+        "Sage Clock & Complications",
+        "World Time Zone Map",
+        "Google Battery & Charging (2x2)",
+        "Google Home Controls (2x2)",
+        "Big Date Hero (Tue Jul 4)",
+        "Monthly Calendar Grid",
+        "Now Playing Media Card",
+        "Incoming Call / Contact Card",
+        "Digital Minimal Clock",
+        "Analog Classic Clock",
+        "Binary Matrix Clock",
+        "Modern Bold Clock",
+        "Contrasting Split Clock",
+        "Analog Motor Dashboard",
+        "Pastel Bubbles Clock",
+        "Ambient Horizon Clock",
+        "High-Tech Nixie Tube Clock"
+    )
 
     // Persisted Duo widget left/right indices and Timer settings
-    val duoLeftWidgetIndex = MutableStateFlow(prefs.getInt("duoLeftWidgetIndex", 0).coerceIn(0, 4))
-    val duoRightWidgetIndex = MutableStateFlow(prefs.getInt("duoRightWidgetIndex", 2).coerceIn(0, 4))
+    val duoLeftWidgetIndex = MutableStateFlow(prefs.getInt("duoLeftWidgetIndex", 6).coerceIn(0, duoWidgetTitles.lastIndex))
+    val duoRightWidgetIndex = MutableStateFlow(prefs.getInt("duoRightWidgetIndex", 11).coerceIn(0, duoWidgetTitles.lastIndex))
     val timerModeIndex = MutableStateFlow(prefs.getInt("timerModeIndex", 0).coerceIn(0, 1))
     val pomodoroFocusMinutes = MutableStateFlow(prefs.getInt("pomodoroFocusMinutes", 25))
 
-    val selectedColorIndex = MutableStateFlow(prefs.getInt("selectedColorIndex", prefs.getInt("colorPage0", 0)))
-    val selectedFontIndex = MutableStateFlow(prefs.getInt("selectedFontIndex", prefs.getInt("fontPage0", 0)))
-    val showWeather = MutableStateFlow(prefs.getBoolean("showWeather", prefs.getBoolean("showWeatherPage0", false)))
-    val clockScale = MutableStateFlow(prefs.getFloat("clockScale", prefs.getFloat("scalePage0", 1.2f)))
+    // Location & TimeZone settings for Clock, World Map, Airport Split-Flap Terminal, and Duo Panes
+    val locationMode = MutableStateFlow(prefs.getString("locationMode", "auto") ?: "auto")
+    val customLocationName = MutableStateFlow(prefs.getString("customLocationName", "") ?: "")
+    val clockTimeZoneId = MutableStateFlow(prefs.getString("clockTimeZoneId", "AUTO") ?: "AUTO")
+    val duoLeftTimeZoneId = MutableStateFlow(prefs.getString("duoLeftTimeZoneId", "AUTO") ?: "AUTO")
+    val duoRightTimeZoneId = MutableStateFlow(prefs.getString("duoRightTimeZoneId", "AUTO") ?: "AUTO")
+    val duoLeftLocationName = MutableStateFlow(prefs.getString("duoLeftLocationName", "") ?: "")
+    val duoRightLocationName = MutableStateFlow(prefs.getString("duoRightLocationName", "") ?: "")
+    val gpsLocationName = MutableStateFlow<String?>(prefs.getString("gpsLocationName", null))
+    val gpsLatitude = MutableStateFlow<Float?>(if (prefs.contains("gpsLatitude")) prefs.getFloat("gpsLatitude", 0f) else null)
+    val gpsLongitude = MutableStateFlow<Float?>(if (prefs.contains("gpsLongitude")) prefs.getFloat("gpsLongitude", 0f) else null)
+
+    val selectableLocations = listOf(
+        "San Francisco (SFO)",
+        "New York (JFK)",
+        "Ohio (CMH)",
+        "Chicago (ORD)",
+        "London (LHR)",
+        "Paris (CDG)",
+        "Frankfurt (FRA)",
+        "Dubai (DXB)",
+        "New Delhi (DEL)",
+        "Mumbai (BOM)",
+        "Bengaluru (BLR)",
+        "Singapore (SIN)",
+        "Tokyo (HND)",
+        "Sydney (SYD)",
+        "Toronto (YYZ)"
+    )
+
+    val selectableTimeZones = listOf(
+        "AUTO" to "Auto (Location / System TimeZone)",
+        "America/Los_Angeles" to "Pacific Time • San Francisco (PST/PDT)",
+        "America/Denver" to "Mountain Time • Denver (MST/MDT)",
+        "America/Chicago" to "Central Time • Chicago (CST/CDT)",
+        "America/New_York" to "Eastern Time • New York / Ohio (EST/EDT)",
+        "America/Toronto" to "Eastern Time • Toronto (EST/EDT)",
+        "America/Sao_Paulo" to "Brasília Time • São Paulo (BRT)",
+        "UTC" to "Coordinated Universal Time (UTC)",
+        "Europe/London" to "United Kingdom • London (GMT/BST)",
+        "Europe/Paris" to "Central Europe • Paris / Berlin (CET)",
+        "Europe/Athens" to "Eastern Europe • Athens / Cairo (EET)",
+        "Asia/Dubai" to "Gulf Standard Time • Dubai (GST)",
+        "Asia/Kolkata" to "India Standard Time • Delhi / Mumbai (IST)",
+        "Asia/Bangkok" to "Indochina Time • Bangkok (ICT)",
+        "Asia/Singapore" to "Singapore / Hong Kong Time (SGT)",
+        "Asia/Tokyo" to "Japan Standard Time • Tokyo (JST)",
+        "Australia/Sydney" to "Australian Eastern Time • Sydney (AEST)",
+        "Pacific/Auckland" to "New Zealand Time • Auckland (NZST)"
+    )
+
+    // Google Account & Google Home connected devices (Connected through Google only)
+    val googleConnectedAccount = MutableStateFlow(
+        GoogleDeviceAndHomeMonitor.detectConnectedGoogleAccount(application)
+    )
+
+    val googleHomeDevices = MutableStateFlow(
+        listOf(
+            GoogleHomeDeviceItem(
+                id = "google_nest_thermostat",
+                name = "Nest Thermostat",
+                room = "Google Home • Upstairs",
+                deviceType = "thermostat",
+                isActive = prefs.getBoolean("gh_thermostat_active", true),
+                statusText = "${prefs.getInt("gh_thermostat_temp", 72)}° • Eco Cool",
+                temperatureF = prefs.getInt("gh_thermostat_temp", 72)
+            ),
+            GoogleHomeDeviceItem(
+                id = "google_nest_light_bedroom",
+                name = "Bedroom Light",
+                room = "Google Home • Bedroom",
+                deviceType = "light",
+                isActive = prefs.getBoolean("gh_bedroom_light", true),
+                statusText = if (prefs.getBoolean("gh_bedroom_light", true)) "On • 80% Warm" else "Off"
+            ),
+            GoogleHomeDeviceItem(
+                id = "google_nest_hub",
+                name = "Nest Hub Max",
+                room = "Google Home • Kitchen",
+                deviceType = "display",
+                isActive = prefs.getBoolean("gh_nest_hub", true),
+                statusText = if (prefs.getBoolean("gh_nest_hub", true)) "Ambient Display" else "Standby"
+            ),
+            GoogleHomeDeviceItem(
+                id = "google_tv_living",
+                name = "Google TV Streamer",
+                room = "Google Home • Living",
+                deviceType = "speaker",
+                isActive = prefs.getBoolean("gh_google_tv", false),
+                statusText = if (prefs.getBoolean("gh_google_tv", false)) "Casting Audio" else "Idle • Ready"
+            )
+        )
+    )
 
     // Per-page customized settings (Page 0: Clock, 1: Alarm, 2: Calendar, 3: Music, 4: Timer, 5: Duo)
     val colorPage0 = MutableStateFlow(prefs.getInt("colorPage0", prefs.getInt("selectedColorIndex", 0)))
@@ -159,21 +323,44 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setLastClockFaceIndex(index: Int) {
-        val safeIdx = index.coerceIn(0, 9)
+        val safeIdx = index.coerceIn(0, clockFaceTitles.lastIndex)
         if (lastClockFaceIndex.value != safeIdx) {
             lastClockFaceIndex.value = safeIdx
         }
         prefs.edit().putInt("lastClockFaceIndex", safeIdx).apply()
     }
 
+    fun setClockFaceEnabled(faceIndex: Int, enabled: Boolean) {
+        if (faceIndex !in clockFaceTitles.indices) return
+        val current = enabledClockFaces.value.toMutableSet()
+        if (enabled) {
+            current.add(faceIndex)
+        } else if (current.size > 1) {
+            current.remove(faceIndex)
+        } else {
+            // Keep at least one clock face active
+            return
+        }
+        enabledClockFaces.value = current
+        prefs.edit().putStringSet("enabledClockFaces", current.map { it.toString() }.toSet()).apply()
+        if (lastClockFaceIndex.value !in current) {
+            setLastClockFaceIndex(current.minOrNull() ?: 0)
+        }
+    }
+
+    fun toggleClockFace(faceIndex: Int) {
+        val isCurrentlyEnabled = faceIndex in enabledClockFaces.value
+        setClockFaceEnabled(faceIndex, !isCurrentlyEnabled)
+    }
+
     fun setDuoLeftWidgetIndex(index: Int) {
-        val safeIdx = index.coerceIn(0, 4)
+        val safeIdx = index.coerceIn(0, duoWidgetTitles.lastIndex)
         duoLeftWidgetIndex.value = safeIdx
         prefs.edit().putInt("duoLeftWidgetIndex", safeIdx).apply()
     }
 
     fun setDuoRightWidgetIndex(index: Int) {
-        val safeIdx = index.coerceIn(0, 4)
+        val safeIdx = index.coerceIn(0, duoWidgetTitles.lastIndex)
         duoRightWidgetIndex.value = safeIdx
         prefs.edit().putInt("duoRightWidgetIndex", safeIdx).apply()
     }
@@ -194,20 +381,177 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         prefs.edit().putBoolean("useClassicMediaTheme", enabled).apply()
     }
 
-    init {
-        viewModelScope.launch {
-            alarmWriteMutex.withLock {
-                try {
-                    val snapshot = db.alarmDao().getAllAlarmsSnapshot()
-                    val seen = mutableSetOf<Pair<Int, Int>>()
-                    for (alarm in snapshot) {
-                        val key = alarm.hour to alarm.minute
-                        if (!seen.add(key)) {
-                            db.alarmDao().delete(alarm)
-                        }
-                    }
-                } catch (_: Exception) {
+    fun setLocationMode(mode: String) {
+        val safeMode = if (mode == "custom") "custom" else "auto"
+        locationMode.value = safeMode
+        prefs.edit().putString("locationMode", safeMode).apply()
+    }
+
+    fun setCustomLocationName(location: String) {
+        val trimmed = location.trim()
+        customLocationName.value = trimmed
+        prefs.edit().putString("customLocationName", trimmed).apply()
+        if (trimmed.isNotEmpty()) {
+            setLocationMode("custom")
+        }
+    }
+
+    fun setClockTimeZoneId(tzId: String) {
+        val clean = tzId.trim().ifBlank { "AUTO" }
+        clockTimeZoneId.value = clean
+        prefs.edit().putString("clockTimeZoneId", clean).apply()
+    }
+
+    fun setDuoLeftTimeZoneId(tzId: String) {
+        val clean = tzId.trim().ifBlank { "AUTO" }
+        duoLeftTimeZoneId.value = clean
+        prefs.edit().putString("duoLeftTimeZoneId", clean).apply()
+    }
+
+    fun setDuoRightTimeZoneId(tzId: String) {
+        val clean = tzId.trim().ifBlank { "AUTO" }
+        duoRightTimeZoneId.value = clean
+        prefs.edit().putString("duoRightTimeZoneId", clean).apply()
+    }
+
+    fun setDuoLeftLocationName(location: String) {
+        val clean = location.trim()
+        duoLeftLocationName.value = clean
+        prefs.edit().putString("duoLeftLocationName", clean).apply()
+    }
+
+    fun setDuoRightLocationName(location: String) {
+        val clean = location.trim()
+        duoRightLocationName.value = clean
+        prefs.edit().putString("duoRightLocationName", clean).apply()
+    }
+
+    fun refreshDeviceLocation(context: Context = getApplication()): Boolean {
+        val detected = GoogleDeviceAndHomeMonitor.detectDeviceLocation(context)
+        if (detected != null) {
+            val (city, lat, lon) = detected
+            gpsLocationName.value = city
+            gpsLatitude.value = lat
+            gpsLongitude.value = lon
+            prefs.edit()
+                .putString("gpsLocationName", city)
+                .putFloat("gpsLatitude", lat)
+                .putFloat("gpsLongitude", lon)
+                .apply()
+            return true
+        }
+        return false
+    }
+
+    /**
+     * pane: 0 = Main Clock, 1 = Duo Left Pane, 2 = Duo Right Pane
+     */
+    fun resolvePaneLocationInfo(pane: Int = 0): UserTimeZoneRegionInfo {
+        val isCustomMain = locationMode.value == "custom" && customLocationName.value.isNotBlank()
+        val mainLoc = if (isCustomMain) customLocationName.value else null
+        val locOverride = when (pane) {
+            1 -> duoLeftLocationName.value.takeIf { it.isNotBlank() } ?: mainLoc
+            2 -> duoRightLocationName.value.takeIf { it.isNotBlank() } ?: mainLoc
+            else -> mainLoc
+        }
+        val tzOverride = when (pane) {
+            1 -> duoLeftTimeZoneId.value.takeIf { it != "AUTO" }
+                ?: if (duoLeftLocationName.value.isNotBlank()) null else clockTimeZoneId.value.takeIf { it != "AUTO" }
+            2 -> duoRightTimeZoneId.value.takeIf { it != "AUTO" }
+                ?: if (duoRightLocationName.value.isNotBlank()) null else clockTimeZoneId.value.takeIf { it != "AUTO" }
+            else -> clockTimeZoneId.value.takeIf { it != "AUTO" }
+        }
+        return GoogleDeviceAndHomeMonitor.resolveTimeZoneAndRegion(
+            customLocationOverride = locOverride,
+            customTimeZoneId = tzOverride,
+            gpsCityOverride = if (locOverride == null) gpsLocationName.value else null,
+            gpsLat = if (locOverride == null) gpsLatitude.value else null,
+            gpsLon = if (locOverride == null) gpsLongitude.value else null
+        )
+    }
+
+    fun resolveCurrentLocationInfo(): UserTimeZoneRegionInfo = resolvePaneLocationInfo(0)
+
+    fun setGoogleConnectedAccount(accountEmail: String) {
+        val clean = accountEmail.trim().ifBlank { "Google Home Linked" }
+        googleConnectedAccount.value = clean
+        prefs.edit().putString("google_connected_email", clean).apply()
+    }
+
+    fun toggleGoogleHomeDevice(deviceId: String) {
+        val updated = googleHomeDevices.value.map { item ->
+            if (item.id == deviceId) {
+                val nextActive = !item.isActive
+                val nextStatus = when (item.deviceType) {
+                    "thermostat" -> if (nextActive) "${item.temperatureF ?: 72}° • Eco Cool" else "Off • Google Nest"
+                    "light" -> if (nextActive) "On • 80% Warm" else "Off"
+                    "display" -> if (nextActive) "Ambient Display" else "Standby"
+                    else -> if (nextActive) "Casting Audio" else "Idle • Ready"
                 }
+                when (deviceId) {
+                    "google_nest_thermostat" -> prefs.edit().putBoolean("gh_thermostat_active", nextActive).apply()
+                    "google_nest_light_bedroom" -> prefs.edit().putBoolean("gh_bedroom_light", nextActive).apply()
+                    "google_nest_hub" -> prefs.edit().putBoolean("gh_nest_hub", nextActive).apply()
+                    "google_tv_living" -> prefs.edit().putBoolean("gh_google_tv", nextActive).apply()
+                }
+                item.copy(isActive = nextActive, statusText = nextStatus)
+            } else {
+                item
+            }
+        }
+        googleHomeDevices.value = updated
+    }
+
+    fun adjustGoogleNestTemp(deviceId: String, delta: Int) {
+        val updated = googleHomeDevices.value.map { item ->
+            if (item.id == deviceId && item.deviceType == "thermostat") {
+                val nextTemp = ((item.temperatureF ?: 72) + delta).coerceIn(60, 86)
+                prefs.edit().putInt("gh_thermostat_temp", nextTemp).apply()
+                item.copy(
+                    isActive = true,
+                    temperatureF = nextTemp,
+                    statusText = "$nextTemp° • Eco Cool"
+                )
+            } else {
+                item
+            }
+        }
+        googleHomeDevices.value = updated
+    }
+
+    fun onGoogleCastDeviceDiscovered(serviceName: String) {
+        val cleaned = serviceName.substringBefore("._googlecast").replace("-", " ").trim()
+        if (cleaned.isBlank()) return
+        val current = googleHomeDevices.value.toMutableList()
+        if (current.none { it.name.equals(cleaned, ignoreCase = true) }) {
+            current[current.lastIndex] = GoogleHomeDeviceItem(
+                id = "cast_${cleaned.lowercase(Locale.US)}",
+                name = cleaned.take(18),
+                room = "Google Cast • Local Wi-Fi",
+                deviceType = "speaker",
+                isActive = true,
+                statusText = "Connected • Google Cast"
+            )
+            googleHomeDevices.value = current
+        }
+    }
+
+    init {
+        refreshDeviceLocation(application)
+        synchronized(alarmWriteLock) {
+            try {
+                val snapshot = db.alarmDao().getAllAlarmsSnapshot()
+                val seen = mutableSetOf<Pair<Int, Int>>()
+                for (alarm in snapshot) {
+                    val key = alarm.hour to alarm.minute
+                    if (!seen.add(key)) {
+                        AlarmScheduler.cancelAlarm(getApplication(), alarm.id)
+                        db.alarmDao().delete(alarm)
+                    } else if (alarm.isEnabled) {
+                        AlarmScheduler.scheduleAlarm(getApplication(), alarm)
+                    }
+                }
+            } catch (_: Exception) {
             }
         }
         viewModelScope.launch {
@@ -225,6 +569,15 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
             while (isActive) {
                 delay(15_000L)
                 updateNextAlarm()
+            }
+        }
+        viewModelScope.launch {
+            while (isActive) {
+                delay(1_000L)
+                AlarmRingingController.checkAndTriggerDueAlarm(
+                    context = getApplication(),
+                    enabledAlarms = alarms.value
+                )
             }
         }
     }
@@ -439,43 +792,23 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     fun setColorIndexForPage(page: Int, index: Int) {
         val safeIdx = index.coerceIn(0, colors.lastIndex)
         getColorFlow(page).value = safeIdx
-        val editor = prefs.edit().putInt("colorPage$page", safeIdx)
-        if (page == 0) {
-            selectedColorIndex.value = safeIdx
-            editor.putInt("selectedColorIndex", safeIdx)
-        }
-        editor.apply()
+        prefs.edit().putInt("colorPage$page", safeIdx).apply()
     }
 
     fun setFontIndexForPage(page: Int, index: Int) {
         val safeIdx = index.coerceIn(0, fonts.lastIndex)
         getFontFlow(page).value = safeIdx
-        val editor = prefs.edit().putInt("fontPage$page", safeIdx)
-        if (page == 0) {
-            selectedFontIndex.value = safeIdx
-            editor.putInt("selectedFontIndex", safeIdx)
-        }
-        editor.apply()
+        prefs.edit().putInt("fontPage$page", safeIdx).apply()
     }
 
     fun setShowWeatherForPage(page: Int, show: Boolean) {
         getWeatherFlow(page).value = show
-        val editor = prefs.edit().putBoolean("showWeatherPage$page", show)
-        if (page == 0) {
-            showWeather.value = show
-            editor.putBoolean("showWeather", show)
-        }
-        editor.apply()
+        prefs.edit().putBoolean("showWeatherPage$page", show).apply()
     }
 
     fun setClockScaleForPage(page: Int, scale: Float) {
         getScaleFlow(page).value = scale
-        val editor = prefs.edit().putFloat("scalePage$page", scale)
-        if (page == 0) {
-            clockScale.value = scale
-            editor.putFloat("clockScale", scale)
-        }
-        editor.apply()
+        prefs.edit().putFloat("scalePage$page", scale).apply()
     }
 
     fun setAnimationsEnabledForPage(page: Int, enabled: Boolean) {
@@ -533,74 +866,121 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         FontFamily.Default to "Default"
     )
 
-    fun setColorIndex(index: Int) {
-        setColorIndexForPage(0, index)
-    }
-
-    fun setFontIndex(index: Int) {
-        setFontIndexForPage(0, index)
-    }
-
-    fun setShowWeather(show: Boolean) {
-        setShowWeatherForPage(0, show)
-    }
-
-    fun setClockScale(scale: Float) {
-        setClockScaleForPage(0, scale)
-    }
-
-    fun addAlarm(hour: Int, minute: Int, label: String, snooze: Int, toneUri: String = "alarm_beep") {
-        viewModelScope.launch {
-            alarmWriteMutex.withLock {
-                val existing = db.alarmDao().getAlarmByTime(hour, minute)
-                if (existing != null) {
-                    db.alarmDao().update(
-                        existing.copy(
-                            isEnabled = true,
-                            label = label,
-                            snoozeMinutes = snooze,
-                            toneUri = toneUri
-                        )
-                    )
-                    db.alarmDao().deleteDuplicatesForTime(hour, minute, existing.id)
-                } else {
-                    db.alarmDao().insert(
-                        Alarm(
-                            hour = hour,
-                            minute = minute,
-                            isEnabled = true,
-                            label = label,
-                            snoozeMinutes = snooze,
-                            toneUri = toneUri
-                        )
-                    )
-                }
+    fun upsertAlarmSync(
+        hour: Int,
+        minute: Int,
+        label: String,
+        snooze: Int,
+        toneUri: String = "default_alarm",
+        musicPackageName: String = "",
+        musicAppName: String = "Default Alarm Tone",
+        gradualVolume: Boolean = true,
+        gradualVolumeSeconds: Int = 30
+    ) {
+        synchronized(alarmWriteLock) {
+            val existing = db.alarmDao().getAlarmByTime(hour, minute)
+            if (existing != null) {
+                val updated = existing.copy(
+                    isEnabled = true,
+                    label = label,
+                    snoozeMinutes = snooze,
+                    toneUri = toneUri,
+                    musicPackageName = musicPackageName,
+                    musicAppName = musicAppName,
+                    gradualVolume = gradualVolume,
+                    gradualVolumeSeconds = gradualVolumeSeconds
+                )
+                db.alarmDao().update(updated)
+                db.alarmDao().deleteDuplicatesForTime(hour, minute, existing.id)
+                AlarmScheduler.scheduleAlarm(getApplication(), updated)
+            } else {
+                val newAlarm = Alarm(
+                    hour = hour,
+                    minute = minute,
+                    isEnabled = true,
+                    label = label,
+                    snoozeMinutes = snooze,
+                    toneUri = toneUri,
+                    musicPackageName = musicPackageName,
+                    musicAppName = musicAppName,
+                    gradualVolume = gradualVolume,
+                    gradualVolumeSeconds = gradualVolumeSeconds
+                )
+                db.alarmDao().insert(newAlarm)
+                val inserted = db.alarmDao().getAlarmByTime(hour, minute) ?: newAlarm
+                AlarmScheduler.scheduleAlarm(getApplication(), inserted)
             }
         }
     }
 
+    fun addAlarm(
+        hour: Int,
+        minute: Int,
+        label: String,
+        snooze: Int,
+        toneUri: String = "default_alarm",
+        musicPackageName: String = "",
+        musicAppName: String = "Default Alarm Tone",
+        gradualVolume: Boolean = true,
+        gradualVolumeSeconds: Int = 30
+    ) {
+        upsertAlarmSync(
+            hour = hour,
+            minute = minute,
+            label = label,
+            snooze = snooze,
+            toneUri = toneUri,
+            musicPackageName = musicPackageName,
+            musicAppName = musicAppName,
+            gradualVolume = gradualVolume,
+            gradualVolumeSeconds = gradualVolumeSeconds
+        )
+    }
+
     fun updateAlarm(alarm: Alarm) {
-        viewModelScope.launch {
-            alarmWriteMutex.withLock {
-                db.alarmDao().update(alarm)
+        synchronized(alarmWriteLock) {
+            db.alarmDao().update(alarm)
+            AlarmScheduler.scheduleAlarm(getApplication(), alarm)
+        }
+    }
+
+    fun toggleAlarmSync(alarm: Alarm) {
+        synchronized(alarmWriteLock) {
+            val updated = alarm.copy(isEnabled = !alarm.isEnabled)
+            db.alarmDao().update(updated)
+            if (updated.isEnabled) {
+                AlarmScheduler.scheduleAlarm(getApplication(), updated)
+            } else {
+                AlarmScheduler.cancelAlarm(getApplication(), updated.id)
             }
         }
     }
 
     fun toggleAlarm(alarm: Alarm) {
-        viewModelScope.launch {
-            alarmWriteMutex.withLock {
-                db.alarmDao().update(alarm.copy(isEnabled = !alarm.isEnabled))
-            }
+        toggleAlarmSync(alarm)
+    }
+
+    fun deleteAlarmSync(alarm: Alarm) {
+        synchronized(alarmWriteLock) {
+            AlarmScheduler.cancelAlarm(getApplication(), alarm.id)
+            db.alarmDao().deleteDuplicatesForTime(alarm.hour, alarm.minute, alarm.id)
+            db.alarmDao().delete(alarm)
         }
     }
 
     fun deleteAlarm(alarm: Alarm) {
-        viewModelScope.launch {
-            alarmWriteMutex.withLock {
-                db.alarmDao().deleteDuplicatesForTime(alarm.hour, alarm.minute, alarm.id)
-                db.alarmDao().delete(alarm)
-            }
-        }
+        deleteAlarmSync(alarm)
+    }
+
+    fun triggerTestAlarm(alarm: Alarm) {
+        AlarmRingingController.triggerAlarm(getApplication(), alarm)
+    }
+
+    fun snoozeActiveAlarm() {
+        AlarmRingingController.snoozeActiveAlarm(getApplication())
+    }
+
+    fun dismissActiveAlarm() {
+        AlarmRingingController.dismissAlarm(getApplication())
     }
 }

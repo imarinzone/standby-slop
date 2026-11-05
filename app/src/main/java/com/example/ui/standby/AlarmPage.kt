@@ -1,10 +1,14 @@
 package com.example.ui.standby
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,7 +22,10 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.AlarmAdd
 import androidx.compose.material.icons.outlined.AlarmOff
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.Snooze
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +68,8 @@ fun AlarmPage(
     val gradualDimWindowMins by viewModel.gradualAlarmDimWindowMinutes.collectAsState()
     val liveBrightness by viewModel.clockBrightnessFactor.collectAsState()
     val isPreAlarmDimming by viewModel.isPreAlarmDimmingActive.collectAsState()
+
+    val activeRingingAlarm by AlarmRingingController.activeRingingAlarm.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -240,7 +250,7 @@ fun AlarmPage(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Tap New Alarm to schedule a wake-up or standby reminder",
+                                        text = "Tap New Alarm to schedule a wake-up or music player alarm",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.Center
@@ -267,6 +277,10 @@ fun AlarmPage(
                                         haptics.confirm()
                                         viewModel.toggleAlarm(alarm)
                                     },
+                                    onTest = {
+                                        haptics.confirm()
+                                        viewModel.triggerTestAlarm(alarm)
+                                    },
                                     onDelete = {
                                         haptics.tick()
                                         viewModel.deleteAlarm(alarm)
@@ -289,15 +303,43 @@ fun AlarmPage(
                 haptics.tick()
                 showAddDialog = false
             },
-            onConfirm = { hour, minute, label, snooze ->
+            onConfirm = { hour, minute, label, snooze, toneUri, musicPkg, musicName, gradualVol, gradualSec ->
                 haptics.confirm()
-                viewModel.addAlarm(hour, minute, label, snooze)
+                viewModel.addAlarm(
+                    hour = hour,
+                    minute = minute,
+                    label = label,
+                    snooze = snooze,
+                    toneUri = toneUri,
+                    musicPackageName = musicPkg,
+                    musicAppName = musicName,
+                    gradualVolume = gradualVol,
+                    gradualVolumeSeconds = gradualSec
+                )
                 showAddDialog = false
+            }
+        )
+    }
+
+    if (activeRingingAlarm != null) {
+        ActiveAlarmRingingDialog(
+            alarm = activeRingingAlarm!!,
+            accentColor = accentColor,
+            customFont = customFont,
+            use24Hour = use24Hour,
+            onSnooze = {
+                haptics.confirm()
+                viewModel.snoozeActiveAlarm()
+            },
+            onDismiss = {
+                haptics.confirm()
+                viewModel.dismissActiveAlarm()
             }
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AlarmCard(
     alarm: Alarm,
@@ -306,6 +348,7 @@ fun AlarmCard(
     customFont: FontFamily,
     isCompact: Boolean = false,
     onToggle: () -> Unit,
+    onTest: () -> Unit = {},
     onDelete: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -381,30 +424,88 @@ fun AlarmCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = colorScheme.secondaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
+                Spacer(modifier = Modifier.height(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = colorScheme.secondaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Snooze,
-                            contentDescription = "Snooze interval",
-                            tint = colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "Snooze ${alarm.snoozeMinutes} min",
-                            color = colorScheme.onSecondaryContainer,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = customFont,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Snooze,
+                                contentDescription = "Snooze interval",
+                                tint = colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "Snooze ${alarm.snoozeMinutes} min",
+                                color = colorScheme.onSecondaryContainer,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = customFont,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = colorScheme.primaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (alarm.musicPackageName.isNotBlank()) Icons.Outlined.MusicNote else Icons.Default.Notifications,
+                                contentDescription = "Alarm Sound",
+                                tint = colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = alarm.musicAppName.ifBlank { "Default Alarm Tone" },
+                                color = colorScheme.onPrimaryContainer,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = customFont,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    if (alarm.gradualVolume) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = colorScheme.tertiaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.VolumeUp,
+                                    contentDescription = "Gradual Volume",
+                                    tint = colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = "Gradual ${alarm.gradualVolumeSeconds}s",
+                                    color = colorScheme.onTertiaryContainer,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = customFont,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -413,16 +514,32 @@ fun AlarmCard(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (isCompact) 4.dp else 10.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isCompact) 4.dp else 8.dp)
             ) {
+                IconButton(
+                    onClick = onTest,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("test_alarm_${alarm.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PlayCircleOutline,
+                        contentDescription = "Preview Alarm",
+                        tint = accentColor
+                    )
+                }
+
                 Switch(
                     checked = enabledState,
-                    onCheckedChange = { onToggle() }
+                    onCheckedChange = { onToggle() },
+                    modifier = Modifier.testTag("toggle_alarm_${alarm.id}")
                 )
 
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("delete_alarm_${alarm.id}")
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.DeleteOutline,
@@ -435,6 +552,164 @@ fun AlarmCard(
     }
 }
 
+@Composable
+fun ActiveAlarmRingingDialog(
+    alarm: Alarm,
+    accentColor: Color,
+    customFont: FontFamily,
+    use24Hour: Boolean,
+    onSnooze: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val volumePercent by AlarmRingingController.currentVolumePercent.collectAsState()
+    val playbackStatus by AlarmRingingController.playbackStatus.collectAsState()
+
+    val hourText = if (use24Hour) {
+        String.format("%02d", alarm.hour)
+    } else {
+        val displayHour = if (alarm.hour % 12 == 0) 12 else alarm.hour % 12
+        displayHour.toString()
+    }
+    val minuteText = String.format("%02d", alarm.minute)
+    val amPmText = if (use24Hour) "" else if (alarm.hour >= 12) " PM" else " AM"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("active_alarm_ringing_dialog"),
+        shape = RoundedCornerShape(28.dp),
+        containerColor = colorScheme.surfaceContainerHigh,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = accentColor.copy(alpha = 0.2f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AlarmOn,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .size(24.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = alarm.label.ifBlank { "Alarm" },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = colorScheme.onSurface,
+                        fontFamily = customFont,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "$hourText:$minuteText$amPmText",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = accentColor,
+                        fontFamily = customFont,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = colorScheme.surfaceContainer
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (alarm.musicPackageName.isNotBlank()) Icons.Default.MusicNote else Icons.Default.VolumeUp,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = playbackStatus.ifBlank { alarm.musicAppName.ifBlank { "Default Alarm Tone" } },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                if (alarm.gradualVolume) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Gradual Volume Ramp (${alarm.gradualVolumeSeconds}s)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$volumePercent%",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = accentColor,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.testTag("ringing_volume_percent_text")
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { (volumePercent / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(CircleShape),
+                            color = accentColor,
+                            trackColor = colorScheme.surfaceContainerHighest
+                        )
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            FilledTonalButton(
+                onClick = onSnooze,
+                modifier = Modifier.testTag("ringing_snooze_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Snooze,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Snooze (${alarm.snoozeMinutes}m)")
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("ringing_dismiss_button"),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accentColor,
+                    contentColor = if (accentColor == Color.White) Color.Black else Color.White
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AlarmOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Dismiss")
+            }
+        }
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomAddAlarmDialog(
@@ -442,8 +717,19 @@ fun CustomAddAlarmDialog(
     customFont: FontFamily,
     use24Hour: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (hour: Int, minute: Int, label: String, snooze: Int) -> Unit
+    onConfirm: (
+        hour: Int,
+        minute: Int,
+        label: String,
+        snooze: Int,
+        toneUri: String,
+        musicPackageName: String,
+        musicAppName: String,
+        gradualVolume: Boolean,
+        gradualVolumeSeconds: Int
+    ) -> Unit
 ) {
+    val context = LocalContext.current
     val haptics = rememberStandbyHaptics()
     val colorScheme = MaterialTheme.colorScheme
 
@@ -451,13 +737,39 @@ fun CustomAddAlarmDialog(
         if (use24Hour) (0..23).toList() else (1..12).toList()
     }
     val minuteValues = remember { (0..59).toList() }
+    val playerOptions = remember { AlarmRingingController.discoverMusicPlayerOptions(context) }
 
     var pickedHour by remember { mutableIntStateOf(7) }
     var pickedMinute by remember { mutableIntStateOf(0) }
     var isAm by remember { mutableStateOf(true) }
     var alarmLabel by remember { mutableStateOf("Wake Up") }
     var snoozeMinutes by remember { mutableIntStateOf(5) }
+    var selectedPlayerOption by remember { mutableStateOf(playerOptions.first()) }
+    var customAudioUri by remember { mutableStateOf<String?>(null) }
+    var gradualVolumeEnabled by remember { mutableStateOf(true) }
+    var gradualVolumeSeconds by remember { mutableIntStateOf(30) }
     var hasSubmitted by remember { mutableStateOf(false) }
+
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {
+            }
+            customAudioUri = uri.toString()
+            selectedPlayerOption = AlarmPlayerOption(
+                id = "custom_audio",
+                name = "Custom Audio Track",
+                packageName = "",
+                isMusicPlayer = false
+            )
+        }
+    }
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
@@ -469,8 +781,9 @@ fun CustomAddAlarmDialog(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center
         ) {
-            val useTwoColumns = maxWidth > 500.dp && maxHeight < 480.dp
-            val isVeryShort = maxHeight < 360.dp
+            val dialogMaxHeight = maxHeight
+            val useTwoColumns = maxWidth > 500.dp && dialogMaxHeight < 480.dp
+            val isVeryShort = dialogMaxHeight < 360.dp
             val wheelItemHeight = if (isVeryShort) 38.dp else 44.dp
 
             Surface(
@@ -478,7 +791,7 @@ fun CustomAddAlarmDialog(
                 color = colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp,
                 modifier = Modifier
-                    .widthIn(max = if (useTwoColumns) 640.dp else 440.dp)
+                    .widthIn(max = if (useTwoColumns) 680.dp else 460.dp)
                     .fillMaxWidth()
             ) {
                 Column(
@@ -516,11 +829,190 @@ fun CustomAddAlarmDialog(
                                             if (pickedHour == 12) 12 else pickedHour + 12
                                         }
                                     }
-                                    onConfirm(finalHour, pickedMinute, alarmLabel, snoozeMinutes)
+                                    val finalToneUri = customAudioUri ?: selectedPlayerOption.id
+                                    onConfirm(
+                                        finalHour,
+                                        pickedMinute,
+                                        alarmLabel,
+                                        snoozeMinutes,
+                                        finalToneUri,
+                                        selectedPlayerOption.packageName,
+                                        selectedPlayerOption.name,
+                                        gradualVolumeEnabled,
+                                        gradualVolumeSeconds
+                                    )
                                 },
                                 modifier = Modifier.testTag("save_alarm_button")
                             ) {
                                 Text("Save Alarm", fontFamily = customFont)
+                            }
+                        }
+                    }
+
+                    @Composable
+                    fun AlarmConfigurationControls() {
+                        OutlinedTextField(
+                            value = alarmLabel,
+                            onValueChange = { alarmLabel = it },
+                            label = { Text("Alarm Label", fontFamily = customFont) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("alarm_label_input")
+                        )
+
+                        // Music Player & Sound Source Selector
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "Alarm Sound / Music Player",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = colorScheme.onSurfaceVariant,
+                                fontFamily = customFont,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                playerOptions.forEach { option ->
+                                    val isSel = selectedPlayerOption.id == option.id && customAudioUri == null
+                                    FilterChip(
+                                        selected = isSel,
+                                        onClick = {
+                                            haptics.tick()
+                                            customAudioUri = null
+                                            selectedPlayerOption = option
+                                        },
+                                        label = {
+                                            Text(
+                                                text = option.name,
+                                                maxLines = 1
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = if (option.isMusicPlayer) Icons.Default.MusicNote else Icons.Default.Notifications,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        },
+                                        modifier = Modifier.testTag("alarm_player_chip_${option.id}")
+                                    )
+                                }
+
+                                FilterChip(
+                                    selected = customAudioUri != null,
+                                    onClick = {
+                                        haptics.tick()
+                                        audioPickerLauncher.launch("audio/*")
+                                    },
+                                    label = {
+                                        Text(
+                                            text = if (customAudioUri != null) "Custom Audio Selected" else "Pick Audio Track",
+                                            maxLines = 1
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.AudioFile,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    modifier = Modifier.testTag("pick_custom_audio_chip")
+                                )
+                            }
+                        }
+
+                        // Gradual Volume Increase Toggle & Ramp Duration
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = colorScheme.surfaceContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Text(
+                                            text = "Gradual Volume Increase",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = colorScheme.onSurface,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = customFont
+                                        )
+                                        Text(
+                                            text = "Start gently and ramp up volume smoothly",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Switch(
+                                        checked = gradualVolumeEnabled,
+                                        onCheckedChange = {
+                                            haptics.confirm()
+                                            gradualVolumeEnabled = it
+                                        },
+                                        modifier = Modifier.testTag("alarm_gradual_volume_switch")
+                                    )
+                                }
+
+                                if (gradualVolumeEnabled) {
+                                    val rampOptions = listOf(15, 30, 60, 120)
+                                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                        rampOptions.forEachIndexed { idx, secs ->
+                                            SegmentedButton(
+                                                selected = gradualVolumeSeconds == secs,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    gradualVolumeSeconds = secs
+                                                },
+                                                shape = SegmentedButtonDefaults.itemShape(
+                                                    index = idx,
+                                                    count = rampOptions.size
+                                                ),
+                                                modifier = Modifier.testTag("gradual_vol_sec_$secs")
+                                            ) {
+                                                Text("${secs}s", maxLines = 1)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "Snooze Interval",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = colorScheme.onSurfaceVariant,
+                                fontFamily = customFont,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                val snoozeOptions = listOf(5, 10, 15, 30)
+                                snoozeOptions.forEachIndexed { idx, mins ->
+                                    SegmentedButton(
+                                        selected = snoozeMinutes == mins,
+                                        onClick = {
+                                            haptics.tick()
+                                            snoozeMinutes = mins
+                                        },
+                                        shape = SegmentedButtonDefaults.itemShape(index = idx, count = snoozeOptions.size),
+                                        modifier = Modifier.testTag("snooze_option_$mins")
+                                    ) {
+                                        Text("${mins}m", maxLines = 1)
+                                    }
+                                }
                             }
                         }
                     }
@@ -531,7 +1023,6 @@ fun CustomAddAlarmDialog(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Left Column: Scrollable Haptic Wheel Time Dial
                             ScrollableTimeDialCard(
                                 hourValues = hourValues,
                                 minuteValues = minuteValues,
@@ -545,101 +1036,44 @@ fun CustomAddAlarmDialog(
                                 onHourChanged = { pickedHour = it },
                                 onMinuteChanged = { pickedMinute = it },
                                 onAmChanged = { isAm = it },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(0.95f)
                             )
 
-                            // Right Column: Label + Snooze
                             Column(
                                 modifier = Modifier
-                                    .weight(1.1f)
+                                    .weight(1.2f)
+                                    .heightIn(max = dialogMaxHeight * 0.72f)
                                     .verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                OutlinedTextField(
-                                    value = alarmLabel,
-                                    onValueChange = { alarmLabel = it },
-                                    label = { Text("Alarm Label", fontFamily = customFont) },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Text(
-                                        text = "Snooze Interval",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colorScheme.onSurfaceVariant,
-                                        fontFamily = customFont,
-                                        modifier = Modifier.padding(bottom = 6.dp)
-                                    )
-                                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                        val snoozeOptions = listOf(5, 10, 15, 30)
-                                        snoozeOptions.forEachIndexed { idx, mins ->
-                                            SegmentedButton(
-                                                selected = snoozeMinutes == mins,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    snoozeMinutes = mins
-                                                },
-                                                shape = SegmentedButtonDefaults.itemShape(index = idx, count = snoozeOptions.size)
-                                            ) {
-                                                Text("${mins}m", maxLines = 1)
-                                            }
-                                        }
-                                    }
-                                }
+                                AlarmConfigurationControls()
                             }
                         }
                     } else {
-                        // Single Column Fallback for Portrait / Tall Screens
-                        ScrollableTimeDialCard(
-                            hourValues = hourValues,
-                            minuteValues = minuteValues,
-                            pickedHour = pickedHour,
-                            pickedMinute = pickedMinute,
-                            isAm = isAm,
-                            use24Hour = use24Hour,
-                            customFont = customFont,
-                            accentColor = accentColor,
-                            itemHeight = wheelItemHeight,
-                            onHourChanged = { pickedHour = it },
-                            onMinuteChanged = { pickedMinute = it },
-                            onAmChanged = { isAm = it },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = alarmLabel,
-                            onValueChange = { alarmLabel = it },
-                            label = { Text("Alarm Label", fontFamily = customFont) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = "Snooze Interval",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = colorScheme.onSurfaceVariant,
-                                fontFamily = customFont,
-                                modifier = Modifier.padding(bottom = 8.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = dialogMaxHeight * 0.78f)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            ScrollableTimeDialCard(
+                                hourValues = hourValues,
+                                minuteValues = minuteValues,
+                                pickedHour = pickedHour,
+                                pickedMinute = pickedMinute,
+                                isAm = isAm,
+                                use24Hour = use24Hour,
+                                customFont = customFont,
+                                accentColor = accentColor,
+                                itemHeight = wheelItemHeight,
+                                onHourChanged = { pickedHour = it },
+                                onMinuteChanged = { pickedMinute = it },
+                                onAmChanged = { isAm = it },
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                val snoozeOptions = listOf(5, 10, 15, 30)
-                                snoozeOptions.forEachIndexed { idx, mins ->
-                                    SegmentedButton(
-                                        selected = snoozeMinutes == mins,
-                                        onClick = {
-                                            haptics.tick()
-                                            snoozeMinutes = mins
-                                        },
-                                        shape = SegmentedButtonDefaults.itemShape(index = idx, count = snoozeOptions.size)
-                                    ) {
-                                        Text("${mins}m")
-                                    }
-                                }
-                            }
+
+                            AlarmConfigurationControls()
                         }
                     }
                 }

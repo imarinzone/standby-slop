@@ -1,118 +1,75 @@
-# Material 3 Expressive Revamp & Tactile Haptic Integration
+# Codebase Cleanup & Comprehensive Unit/Robolectric Test Suite
 
-A complete visual and ergonomic redesign of all non-clock screens, HUD overlays, and the Studio Settings hub using native Android Jetpack Compose Material 3 (`MaterialTheme.colorScheme`, `Typography`, `Shapes`, `NavigationRail`, and tonal surfaces) with subtle tactile haptic feedback, while strictly preserving all 10 existing clock faces unchanged.
+A targeted cleanup of unused template files, redundant configurations, unused dependencies, and dead code snippets across the Standby Desk Clock & Productivity Hub, paired with a full local JVM unit and Robolectric UI test suite verifying core business logic, persistence, and interactive Compose screens.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> All 10 existing clock faces (Digital Minimal, Analog Classic, Retro Flip Card, Binary Matrix, Modern Bold, Contrasting Split, Analog Motor Dashboard, Pastel Bubbles, Ambient Horizon Gradient, and High-Tech Nixie Tube) will remain 100% untouched in both layout and rendering logic.
+> All functional features, clock faces, and custom UI themes remain 100% preserved. Only dead code with zero active call sites, unused template files, and unused library declarations will be removed.
 
-- **Confirmed Decision 1 — Adaptive Material 3 Theme Posture**: The app will use an Adaptive Material 3 color system following system light and dark mode (supporting Android 12+ dynamic wallpaper colors with a refined Material 3 tonal palette fallback) for all non-clock screens, overlays, dialogs, and Studio Settings.
-- **Confirmed Decision 2 — Landscape Studio Settings with M3 NavigationRail**: The Studio Settings and secondary screens will use a native Material 3 `NavigationRail` paired with elevated tonal surface cards (`ElevatedCard`, `Surface`, `FilterChip`, `SegmentedButton`, M3 `Slider` and `Switch`) optimized for landscape ergonomics.
-- **Confirmed Decision 3 — Subtle Tick Haptic Feedback**: Tactile feedback will focus on subtle tick and selection haptics across sliders, time pickers, pager clock-face switching, and navigation changes using Jetpack Compose `LocalHapticFeedback` and `View.performHapticFeedback`.
-
----
-
-## 1. Overview & Core Concept
-
-- **What It Does**: Transforms the Standby Desk Clock & Productivity Hub's utility pages (Alarm, Calendar, Music Player, Focus Timer/Stopwatch, Duo Split Widgets) and global chrome (HUD navigation bar, Overview directory, Screen Lock overlay, and Studio Customization Hub) into a cohesive, native Google Material 3 experience.
-- **Target Audience / Persona**: Users docking their Android device in landscape mode as a smart bedside or desk display who want expressive clock faces paired with clean, modern, native Android Material 3 utility screens and tactile responsiveness.
-- **Key Value**: Replaces bespoke hardcoded dark/neon borders and unstyled containers with genuine Material 3 tonal hierarchy, adaptive light/dark surfaces, accessible touch targets, and crisp haptic ticks when scrubbing sliders, picking alarm times, or switching clock faces.
+- **Confirmed Decision 1 — Cleanup Scope**: Remove boilerplate template test files (`ExampleUnitTest.kt`, `ExampleInstrumentedTest.kt` and the `androidTest` source tree), unused root configuration files (`firebase-applet-config.json`), unused Gradle dependencies in `app/build.gradle.kts`, and dead code snippets in `StandbyViewModel.kt`, `CalendarViewModel.kt`, and `MainActivity.kt`.
+- **Confirmed Decision 2 — Test Coverage Level**: Build a full local JVM unit and Robolectric Compose UI test suite (`gradle :app:testDebugUnitTest`) capable of running fast and deterministically without an external emulator.
+- **Confirmed Decision 3 — Prioritized Feature Suites**:
+  1. **Alarm CRUD, Deduplication & Scrollable Dial**: Room DAO & ViewModel deduplication for identical `hour:minute` alarms, alarm toggling/deletion, and Compose UI verification of the scrollable wheel picker dial (`alarm_hour_wheel`, `alarm_minute_wheel`) and alarm dialog interactions.
+  2. **Pre-Alarm Gradual Brightness Dimming**: Pure curve calculations (`computeBrightnessForDiffMillis`), active pre-alarm state transitions (`isPreAlarmDimmingActive`, `screenBrightness`), and HUD indicator (`pre_alarm_dim_chip`) visibility.
+  3. **Settings Persistence & Per-Page Customization**: `SharedPreferences` round-trip persistence across ViewModel instances for per-page colors (`colorPage0..4`), fonts (`fontPage0..4`), scales, text effects (glow, outline, gradient), time format toggles, and Studio Settings dialog interactions.
+  4. **Stopwatch Lap Timings & Pomodoro Timer**: Pomodoro session selection, custom duration adjustments, timer countdown controls, and Stopwatch lap recording, stopped lap summary badge (`stopwatch_lap_pill`), and Lap Timings modal dialog (`lap_timings_dialog`).
 
 ---
 
-## 2. User Experience & Visual Design
+## 1. Overview & Cleanup Inventory
 
-### Key User Flows
-1. **Standby HUD & Clock Face Switching**: Tapping the screen reveals a floating Material 3 pill-shaped top navigation bar (`Surface` with `tonalElevation` and M3 active indicator pills), a vertical Material 3 indicator dock for the 10 clock faces, and M3 `FilledTonalIconButton` / `FloatingActionButton` controls at the bottom right. Swiping between clock faces or pages triggers a subtle haptic tick.
-2. **Studio Customization Hub (M3 NavigationRail)**: Opening Settings launches a full-screen adaptive Material 3 surface featuring a left-docked `NavigationRail` for all 6 screen categories (Clock Face, Alarm, Calendar, Music Player, Timer Focus, Duo Widgets) and a two-column scrollable grid of Material 3 `ElevatedCard` and `OutlinedCard` sections on the right. Adjusting scale sliders, color swatches, or typography chips triggers crisp tick haptics.
-3. **Alarm Management**: Uses a Material 3 header with an `ExtendedFloatingActionButton` ("New Alarm"), M3 tonal `ElevatedCard` alarm items with native M3 `Switch` and `IconButton` actions, and a Material 3 `AlertDialog` with tactile spinner/picker haptics and `FilterChip` snooze intervals.
-4. **Calendar & Agenda Split View**: Uses a canonical Material 3 two-pane landscape layout—a high-contrast M3 `ElevatedCard` date hero on the left and an agenda pane on the right with M3 `SingleChoiceSegmentedButtonRow` (Daily / Weekly / Monthly) and tonal event cards.
-5. **Media Player**: Harmonizes the Material You Expressive Player and app launcher grid with Material 3 `ElevatedCard` containers, `FilledIconButton` transport controls, and tactile seekbar scrubbing haptics while keeping the swipe-up Classic Retro theme option intact.
-6. **Focus Timer & Stopwatch**: Refines the Pomodoro Focus Timer and Stopwatch with Material 3 tonal cards, M3 `FilledTonalButton` and `IconButton` controls, M3 `FilterChip` session selectors, and subtle haptic ticks on segment selection and lap splits.
-7. **Duo Split-Screen & Overview Directory**: Wraps Duo widgets and the pinch-to-zoom Overview Directory in clean Material 3 `Surface` and `ElevatedCard` containers with adaptive tonal elevation and haptic selection feedback.
+### Unwanted Files to Remove
+- **`app/src/androidTest/java/com/example/ExampleInstrumentedTest.kt` & `app/src/androidTest/`**: Template instrumented test directory (unsupported in headless CI/cloud container environments; replaced by Robolectric tests in `src/test`).
+- **`app/src/test/java/com/example/ExampleUnitTest.kt`**: Boilerplate `2 + 2 == 4` template test file.
+- **`firebase-applet-config.json`**: Unused web Firebase configuration stub (the app uses local Room SQLite + `SharedPreferences` persistence).
 
-### Visual Identity & Theme
-- **Aesthetic Direction**: Native Google Material 3 (Material You) Expressive & Adaptive—combining dynamic tonal surface elevation, generous rounded corners (`16.dp`–`28.dp`), and clean typographic hierarchy.
-- **Color Palette & Mood**:
-  - Dynamic color scheme (`dynamicLightColorScheme` / `dynamicDarkColorScheme` on Android 12+) with a curated Material 3 fallback palette (`primary`, `primaryContainer`, `secondaryContainer`, `surface`, `surfaceContainerLow`, `surfaceContainerHigh`, `onSurface`, `onSurfaceVariant`, `outlineVariant`).
-  - Per-page user-selected accent colors remain supported and blend harmoniously with Material 3 container tokens.
-- **Typography & Hierarchy**: Material 3 `Typography` scale (`displayLarge`, `headlineMedium`, `titleLarge`, `titleMedium`, `bodyMedium`, `labelLarge`) paired with user-customizable font families where applicable.
-- **Interactive Feedback & Motion**:
-  - Subtle haptic ticks (`HapticFeedbackConstants.CLOCK_TICK` / `SEGMENT_FREQUENT_TICK` / `TextHandleMove`) when scrolling through the 10 clock faces, dragging scale/seek sliders, incrementing alarm hour/minute pickers, and switching Studio Settings tabs.
-  - Spring-based animated transitions (`spring(stiffness = Spring.StiffnessMediumLow)`) for HUD overlays, active navigation pills, and card state changes.
+### Unused Dependencies in `app/build.gradle.kts` to Clean Up
+- Comment out unused library dependencies to reduce APK size and speed up Gradle builds:
+  - `implementation(platform(libs.firebase.bom))`
+  - `implementation(libs.androidx.datastore.preferences)`
+  - `implementation(libs.androidx.navigation.compose)`
+  - `implementation(libs.logging.interceptor)`
+  - `"ksp"(libs.moshi.kotlin.codegen)` (Moshi uses reflection `KotlinJsonAdapterFactory` rather than codegen annotations)
+  - Unused `androidTestImplementation(...)` entries.
 
----
-
-## 3. Key Product Decisions & Trade-Offs
-
-- **Decision 1: Strictly Isolate Clock Faces from Theme Overrides**
-  - *Chosen Approach*: Keep `ClockFaces.kt`, `ClockPage.kt`, and `NixieClockView.java` completely unmodified, while applying the Adaptive Material 3 theme to all surrounding HUD chrome, dialogs, and utility screens.
-  - *Why*: Directly honors the user's constraint ("Don't remove any clock face or change them") while giving the rest of the app a cohesive Material 3 overhaul.
-  - *Alternatives Considered*: Forcing M3 background tokens inside clock canvases, which would alter the bespoke artistic look of the 10 clock faces.
-- **Decision 2: Material 3 NavigationRail for Landscape Studio Settings**
-  - *Chosen Approach*: Replace the custom sidebar column in `StandbyCustomizationDialog` with a scrollable Material 3 `NavigationRail` and `NavigationRailItem`s paired with a responsive two-column M3 card layout.
-  - *Why*: Matches canonical Android Material 3 landscape guidelines and ensures all 6 screen tabs and their customization cards are immediately accessible and scannable.
-  - *Alternatives Considered*: Top tabs, which consume precious vertical height in landscape orientation.
-- **Decision 3: Centralized Haptic Feedback Helper**
-  - *Chosen Approach*: Create a lightweight Compose haptic utility wrapping `LocalView.current.performHapticFeedback(...)` and `LocalHapticFeedback.current` with dedicated semantic methods (`performTick()`, `performStep()`, `performConfirm()`).
-  - *Why*: Guarantees consistent, subtle tactile feedback across pager page changes, slider steps, and time pickers without noisy over-vibration.
+### Dead Code Snippets to Remove
+- **`StandbyViewModel.kt`**: Remove deprecated single-page state flows (`selectedColorIndex`, `selectedFontIndex`, `showWeather`, `clockScale`) and their legacy wrapper setters (`setColorIndex`, `setFontIndex`, `setShowWeather`, `setClockScale`) that were superseded by per-page customization flows (`colorPage0..4`, `fontPage0..4`, `showWeatherPage0..4`, `scalePage0..4`) and have zero external references.
+- **`CalendarViewModel.kt`**: Remove the unused `companion object { private fun getRelativeTimeOffset(...) }` leftover helper and unused local variable `val now = Calendar.getInstance()` inside `calculateCategory`.
+- **`MainActivity.kt`**: Remove unused imports (`WindowCompat`, `WindowInsetsCompat`, `WindowInsetsControllerCompat`, `PowerConnectionReceiver`), duplicate uncaught exception handler registration (already initialized in `StandbyApplication.kt`), and no-op lifecycle log overrides (`onStart`, `onStop`, `onDestroy`).
 
 ---
 
-## 4. Technical Architecture & Data Strategy *(Technical Reference)*
-
-### Architecture & Component Diagram
+## 2. Test Suite Architecture & Coverage Plan
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                     Adaptive Material 3 Theme (Theme.kt)                     │
-│       Dynamic Light/Dark ColorScheme • M3 Shapes • M3 Typography             │
-└──────────────────────────────────────┬───────────────────────────────────────┘
-                                       │
-                                       ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                       StandbyScreen (Root Coordinator)                       │
-│  ┌─────────────────────────┐  ┌──────────────────────────┐  ┌──────────────┐ │
-│  │  M3 Floating Top Bar &  │  │  Haptic Pager Observer   │  │ M3 Lock &    │ │
-│  │  Bottom Tonal Controls  │  │  (Clock & Page Ticks)    │  │ Overview UI  │ │
-│  └─────────────────────────┘  └─────────────┬────────────┘  └──────────────┘ │
-└─────────────────────────────────────────────┼────────────────────────────────┘
-                                              │
-        ┌──────────────┬──────────────┬───────┴──────┬──────────────┬──────────┐
-        ▼              ▼              ▼              ▼              ▼          ▼
-┌──────────────┐ ┌───────────┐ ┌─────────────┐ ┌───────────┐ ┌───────────┐ ┌────────┐
-│  ClockPage   │ │ AlarmPage │ │CalendarPage │ │ MediaPage │ │ TimerPage │ │DuoPage │
-│ (10 Faces -  │ │ M3 Cards, │ │ M3 Split    │ │ M3 Player │ │ M3 Focus  │ │M3 Dual │
-│  Untouched)  │ │ M3 Switch,│ │ Cards &     │ │ Cards &   │ │ Cards &   │ │Vertical│
-│              │ │ M3 Dialog │ │ Segmented   │ │ Seekbar   │ │ Stopwatch │ │Pagers  │
-│              │ │ + Haptics │ │ Buttons     │ │ + Haptics │ │ + Haptics │ │+Haptics│
-└──────────────┘ └───────────┘ └─────────────┘ └───────────┘ └───────────┘ └────────┘
-                                              │
-                                              ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                 Studio Settings Hub (StandbyCustomizationDialog)             │
-│  ┌─────────────────────────┐  ┌────────────────────────────────────────────┐ │
-│  │   M3 NavigationRail     │  │  ElevatedCard & OutlinedCard Settings Grid │ │
-│  │  (All 6 Screen Tabs)    │  │  • Color Swatches, Font Chips, Scale       │ │
-│  │  + Selection Tick       │  │    Sliders (with Haptic Ticks), M3 Switches│ │
-│  └─────────────────────────┘  └────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────────────┘
+app/src/test/java/com/example/
+├── AlarmAndBrightnessTest.kt       # Alarm DAO deduplication, CRUD, Pre-Alarm dimming curve & HUD
+├── SettingsPersistenceTest.kt      # SharedPreferences persistence & per-page ViewModel states
+└── TimerAndStopwatchUiTest.kt      # Pomodoro timer controls, Stopwatch laps, pill & modal dialog
 ```
 
-### Data Model & State
-- **`StandbyViewModel` & `CalendarViewModel`**: Retains all existing `StateFlow` and `SharedPreferences` / Room persistence (`AlarmDao`) for per-page colors, fonts, scales, weather toggles, text glow/outline/gradient overrides, time format (`use24HourFormat`, `showAmPm`, `showSeconds`), and calendar filter states.
-- **Haptic State Observation**: `LaunchedEffect(verticalPagerState.currentPage)` and `LaunchedEffect(horizontalPagerState.currentPage)` trigger a subtle tick haptic whenever the user swipes to a new clock face or utility screen after initial composition.
+### Suite 1: `AlarmAndBrightnessTest.kt`
+- **Alarm Deduplication & CRUD (Room + ViewModel)**:
+  - Adding an alarm at `07:30` inserts a record into Room; adding another alarm at `07:30` with a new label/snooze updates the existing `07:30` alarm in-place rather than creating a duplicate entry.
+  - Toggling `toggleAlarm(alarm)` flips `isEnabled` and recalculates `updateNextAlarm`.
+  - Calling `deleteAlarm(alarm)` removes the entry and clears upcoming alarm state when no enabled alarms remain.
+- **Pre-Alarm Gradual Brightness Dimming**:
+  - Verifies `computeBrightnessForDiffMillis` across all boundary conditions: negative diff (`1.0f`), outside 30-minute window (`1.0f`), start of 30-minute window (`1.0f`), midpoint 15 minutes before alarm (`0.575f`), and imminent alarm `0ms` (`0.15f`).
+  - Verifies `updateNextAlarm` sets `isPreAlarmDimmingActive = true` and lowers `screenBrightness` when an enabled alarm is within 30 minutes, and resets to `1.0f` when disabled.
+- **Alarm Page UI & Scrollable Wheel Dial (Robolectric Compose)**:
+  - Renders `AlarmPage`, opens the New Alarm dialog via `add_alarm_fab`, verifies the scrollable hour/minute wheels (`alarm_hour_wheel`, `alarm_minute_wheel`), snooze chips, and confirms saving an alarm adds a single card to the list.
 
-### Interactive Component & State Mapping
-- **Clock Face & Page Pagers**: Swiping `verticalPagerState` (10 clock faces) or `horizontalPagerState` (6 pages) or tapping indicator dots triggers `haptics.performTick()` and smoothly animates to the target page.
-- **Studio Settings Hub**:
-  - Selecting any of the 6 `NavigationRailItem` tabs updates `activeTab` and fires a tick haptic.
-  - Dragging the Scale `Slider` fires stepped tick haptics as the scale value changes by `0.05f` increments.
-  - Tapping Color Swatches, Font `FilterChip`s, Gradient chips, or toggling M3 `Switch`es updates `StandbyViewModel` state and fires a subtle tick.
-- **Alarm Screen & Picker Dialog**:
-  - Incrementing/decrementing Hour and Minute spinners or selecting Snooze `FilterChip`s in the M3 `AlertDialog` fires a subtle picker tick haptic.
-  - Toggling an alarm `Switch` or creating/deleting an alarm updates Room persistence via `StandbyViewModel`.
-- **Calendar, Media, Timer & Duo Screens**:
-  - Switching Daily/Weekly/Monthly views via Material 3 `SingleChoiceSegmentedButtonRow` updates `CalendarViewModel` and fires a tick haptic.
-  - Scrubbing the Media seekbar, switching Pomodoro focus segments, or swiping Duo vertical widget pagers triggers subtle haptic ticks.
+### Suite 2: `SettingsPersistenceTest.kt`
+- **Per-Page Customization & Round-Trip Persistence**:
+  - Tests `setPageColor`, `setPageFont`, `setPageScale`, `setPageWeather`, `setTextGlow`, `setTextOutline`, `setTextGradient`, `setUse24HourFormat`, `setShowAmPm`, `setShowSeconds`, `setPomodoroFocusMinutes`, and `setTimerModeIndex`.
+  - Instantiates a second `StandbyViewModel` against the same `Application` context to verify all customized values are accurately restored from `SharedPreferences`.
+- **Full-Screen Launch & Pre-Alarm Dimming Indicator UI**:
+  - Verifies `StandbyScreen` launches cleanly without any intrusive "full screen" toast/banner and displays the `pre_alarm_dim_chip` badge when an alarm is scheduled within the 30-minute dimming window.
+
+### Suite 3: `TimerAndStopwatchUiTest.kt`
+- **Pomodoro Focus Timer UI & Custom Duration**:
+  - Renders `TimerPage` in Focus Timer mode, switches between Focus (`25m`), Short Break (`5m`), and Long Break (`15m`), adjusts focus duration via `+5m` / `-5m` buttons (`focus_plus_5`, `focus_minus_5`), and toggles start/pause and reset.
+- **Stopwatch Lap Recording, Stopped Lap Pill & Modal Dialog**:
+  - Switches `TimerPage` to Stopwatch mode (`stopwatch_mode_tab`), starts the stopwatch (`stopwatch_start_pause_btn`), records multiple laps (`stopwatch_lap_btn`), and stops the stopwatch.
+  - Verifies that once stopped with recorded laps, the interactive `stopwatch_lap_pill` ("VIEW LAPS") appears, and clicking it opens the `lap_timings_dialog` displaying individual lap splits and cumulative times.

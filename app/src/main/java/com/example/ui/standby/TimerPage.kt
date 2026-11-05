@@ -107,6 +107,7 @@ fun TimerPage(
                                         pagerState.animateScrollToPage(i)
                                     }
                                 }
+                                .testTag("timer_mode_dot_$i")
                         )
                     }
                 }
@@ -311,7 +312,9 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         haptics.tick()
                                         showConfigDialog = true
                                     },
-                                    modifier = Modifier.size(iconBtnSize)
+                                    modifier = Modifier
+                                        .size(iconBtnSize)
+                                        .testTag("pomodoro_config_btn")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Tune,
@@ -325,6 +328,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         haptics.confirm()
                                         isRunning = !isRunning
                                     },
+                                    modifier = Modifier.testTag("pomodoro_start_pause_btn"),
                                     shape = RoundedCornerShape(18.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = accentColor,
@@ -355,7 +359,9 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         isRunning = false
                                         secondsLeft = initialSeconds
                                     },
-                                    modifier = Modifier.size(iconBtnSize)
+                                    modifier = Modifier
+                                        .size(iconBtnSize)
+                                        .testTag("pomodoro_reset_btn")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
@@ -534,7 +540,9 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                 width = 1.dp,
                                 color = if (isSel) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.4f)
                             ),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("pomodoro_preset_$mins")
                         ) {
                             Row(
                                 modifier = Modifier
@@ -808,7 +816,9 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                 lastRecordedTime = 0L
                                 showLapDialog = false
                             },
-                            modifier = Modifier.size(sideBtnSize),
+                            modifier = Modifier
+                                .size(sideBtnSize)
+                                .testTag("stopwatch_reset_btn"),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
                                 containerColor = colorScheme.errorContainer,
                                 contentColor = colorScheme.onErrorContainer
@@ -826,7 +836,9 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                 haptics.confirm()
                                 isRunning = !isRunning
                             },
-                            modifier = Modifier.size(width = mainBtnWidth, height = mainBtnHeight),
+                            modifier = Modifier
+                                .size(width = mainBtnWidth, height = mainBtnHeight)
+                                .testTag("stopwatch_start_pause_btn"),
                             shape = RoundedCornerShape(22.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = accentColor,
@@ -853,7 +865,9 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                 }
                             },
                             enabled = isRunning || laps.isNotEmpty() || timeMillis > 0L,
-                            modifier = Modifier.size(sideBtnSize)
+                            modifier = Modifier
+                                .size(sideBtnSize)
+                                .testTag("stopwatch_lap_btn")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Flag,
@@ -883,6 +897,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
 
         AlertDialog(
             onDismissRequest = { showLapDialog = false },
+            modifier = Modifier.testTag("lap_timings_dialog"),
             shape = RoundedCornerShape(28.dp),
             containerColor = colorScheme.surfaceContainerHigh,
             title = {

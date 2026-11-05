@@ -5,7 +5,8 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.view.KeyEvent
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -28,12 +29,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import kotlin.math.roundToInt
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -49,6 +47,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -62,11 +61,18 @@ fun DuoPage(
     val haptics = rememberStandbyHaptics()
     val colorScheme = MaterialTheme.colorScheme
 
-    val initialLeft = remember { viewModel.duoLeftWidgetIndex.value }
-    val initialRight = remember { viewModel.duoRightWidgetIndex.value }
+    val selectedLeft by viewModel.duoLeftWidgetIndex.collectAsState()
+    val selectedRight by viewModel.duoRightWidgetIndex.collectAsState()
+    val totalDuoWidgets = viewModel.duoWidgetTitles.size
 
-    val leftPagerState = rememberPagerState(initialPage = initialLeft, pageCount = { 5 })
-    val rightPagerState = rememberPagerState(initialPage = initialRight, pageCount = { 5 })
+    val leftPagerState = rememberPagerState(
+        initialPage = selectedLeft.coerceIn(0, totalDuoWidgets - 1),
+        pageCount = { totalDuoWidgets }
+    )
+    val rightPagerState = rememberPagerState(
+        initialPage = selectedRight.coerceIn(0, totalDuoWidgets - 1),
+        pageCount = { totalDuoWidgets }
+    )
 
     var hasInitLeft by remember { mutableStateOf(false) }
     LaunchedEffect(leftPagerState.currentPage) {
@@ -75,6 +81,13 @@ fun DuoPage(
         } else {
             haptics.tick()
             viewModel.setDuoLeftWidgetIndex(leftPagerState.currentPage)
+        }
+    }
+
+    LaunchedEffect(selectedLeft) {
+        val target = selectedLeft.coerceIn(0, totalDuoWidgets - 1)
+        if (leftPagerState.currentPage != target) {
+            leftPagerState.scrollToPage(target)
         }
     }
 
@@ -88,11 +101,37 @@ fun DuoPage(
         }
     }
 
+    LaunchedEffect(selectedRight) {
+        val target = selectedRight.coerceIn(0, totalDuoWidgets - 1)
+        if (rightPagerState.currentPage != target) {
+            rightPagerState.scrollToPage(target)
+        }
+    }
+
     val bgUri by viewModel.getBgUriFlow(5).collectAsState()
+    val locMode by viewModel.locationMode.collectAsState()
+    val customLoc by viewModel.customLocationName.collectAsState()
+    val clockTz by viewModel.clockTimeZoneId.collectAsState()
+    val leftTz by viewModel.duoLeftTimeZoneId.collectAsState()
+    val rightTz by viewModel.duoRightTimeZoneId.collectAsState()
+    val leftLoc by viewModel.duoLeftLocationName.collectAsState()
+    val rightLoc by viewModel.duoRightLocationName.collectAsState()
+    val gpsLoc by viewModel.gpsLocationName.collectAsState()
+    val gpsLat by viewModel.gpsLatitude.collectAsState()
+    val gpsLon by viewModel.gpsLongitude.collectAsState()
+
+    val leftRegionInfo = remember(locMode, customLoc, clockTz, leftTz, leftLoc, gpsLoc, gpsLat, gpsLon) {
+        viewModel.resolvePaneLocationInfo(1)
+    }
+    val rightRegionInfo = remember(locMode, customLoc, clockTz, rightTz, rightLoc, gpsLoc, gpsLat, gpsLon) {
+        viewModel.resolvePaneLocationInfo(2)
+    }
+
+    var activeTimezonePickerPane by remember { mutableIntStateOf(0) } // 0 = hidden, 1 = left, 2 = right
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = colorScheme.surface
+        color = Color.Black
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (bgUri != null) {
@@ -102,193 +141,442 @@ fun DuoPage(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-                Box(Modifier.fillMaxSize().background(colorScheme.surface.copy(alpha = 0.72f)))
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.65f)))
             }
 
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val isCompactHeight = maxHeight < 380.dp
-                val isCompactWidth = maxWidth < 620.dp
-                val outerHPad = if (isCompactWidth) 14.dp else 20.dp
-                val outerVPad = if (isCompactHeight) 10.dp else 16.dp
-                val paneGap = if (isCompactWidth) 12.dp else 16.dp
-
-                Row(
+            // Full-Screen Edge-to-Edge Split Row so every screen in Duo takes up the whole screen
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                // LEFT FULL-SCREEN HALF PANEL
+                Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = outerHPad, vertical = outerVPad),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(paneGap)
+                        .weight(1f)
+                        .fillMaxHeight()
                 ) {
-                    // LEFT HALF PANEL
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    ) {
-                        VerticalPager(
-                            state = leftPagerState,
-                            modifier = Modifier.fillMaxSize()
-                        ) { page ->
-                            WidgetContainer(pageIndex = page, isLeftPane = true) {
-                                RenderDuoWidget(
-                                    pageIndex = page,
-                                    viewModel = viewModel,
-                                    calendarViewModel = calendarViewModel,
-                                    weatherViewModel = weatherViewModel
-                                )
-                            }
-                        }
-
-                        // Left Pager M3 Vertical Indicator
-                        Surface(
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 8.dp),
-                            shape = CircleShape,
-                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                for (i in 0 until 5) {
-                                    val isSelected = i == leftPagerState.currentPage
-                                    Box(
-                                        modifier = Modifier
-                                            .size(width = 6.dp, height = if (isSelected) 13.dp else 6.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isSelected) colorScheme.primary
-                                                else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                            )
-                                            .clickable {
-                                                haptics.tick()
-                                                viewModel.setDuoLeftWidgetIndex(i)
-                                                coroutineScope.launch {
-                                                    leftPagerState.animateScrollToPage(i)
-                                                }
-                                            }
-                                    )
-                                }
-                            }
+                    VerticalPager(
+                        state = leftPagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        WidgetContainer(pageIndex = page) {
+                            RenderDuoWidget(
+                                pageIndex = page,
+                                paneIndex = 1,
+                                viewModel = viewModel,
+                                calendarViewModel = calendarViewModel,
+                                weatherViewModel = weatherViewModel
+                            )
                         }
                     }
 
-                    // RIGHT HALF PANEL
-                    Box(
+                    // Left Pane TimeZone & Location Quick-Switch Chip
+                    Surface(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                            .align(Alignment.TopStart)
+                            .padding(start = 10.dp, top = 8.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                haptics.tick()
+                                activeTimezonePickerPane = 1
+                            },
+                        shape = CircleShape,
+                        color = Color(0xFF14161C).copy(alpha = 0.78f)
                     ) {
-                        VerticalPager(
-                            state = rightPagerState,
-                            modifier = Modifier.fillMaxSize()
-                        ) { page ->
-                            WidgetContainer(pageIndex = page, isLeftPane = false) {
-                                RenderDuoWidget(
-                                    pageIndex = page,
-                                    viewModel = viewModel,
-                                    calendarViewModel = calendarViewModel,
-                                    weatherViewModel = weatherViewModel
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = "Left Pane TimeZone",
+                                tint = Color(0xFFFF9F0A),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "${leftRegionInfo.airportCode} • ${leftRegionInfo.standardTimeShort}",
+                                color = Color.White.copy(alpha = 0.88f),
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    // Left Pager Compact Vertical Indicator
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 4.dp),
+                        shape = CircleShape,
+                        color = colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            for (i in 0 until totalDuoWidgets) {
+                                val isSelected = i == leftPagerState.currentPage
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 4.dp, height = if (isSelected) 8.dp else 3.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) colorScheme.primary
+                                            else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                        )
+                                        .clickable {
+                                            haptics.tick()
+                                            viewModel.setDuoLeftWidgetIndex(i)
+                                            coroutineScope.launch {
+                                                leftPagerState.animateScrollToPage(i)
+                                            }
+                                        }
                                 )
                             }
                         }
+                    }
+                }
 
-                        // Right Pager M3 Vertical Indicator
-                        Surface(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 8.dp),
-                            shape = CircleShape,
-                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
+                // RIGHT FULL-SCREEN HALF PANEL
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    VerticalPager(
+                        state = rightPagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        WidgetContainer(pageIndex = page) {
+                            RenderDuoWidget(
+                                pageIndex = page,
+                                paneIndex = 2,
+                                viewModel = viewModel,
+                                calendarViewModel = calendarViewModel,
+                                weatherViewModel = weatherViewModel
+                            )
+                        }
+                    }
+
+                    // Right Pane TimeZone & Location Quick-Switch Chip
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = 10.dp, top = 8.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                haptics.tick()
+                                activeTimezonePickerPane = 2
+                            },
+                        shape = CircleShape,
+                        color = Color(0xFF14161C).copy(alpha = 0.78f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                for (i in 0 until 5) {
-                                    val isSelected = i == rightPagerState.currentPage
-                                    Box(
-                                        modifier = Modifier
-                                            .size(width = 6.dp, height = if (isSelected) 13.dp else 6.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isSelected) colorScheme.primary
-                                                else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                            )
-                                            .clickable {
-                                                haptics.tick()
-                                                viewModel.setDuoRightWidgetIndex(i)
-                                                coroutineScope.launch {
-                                                    rightPagerState.animateScrollToPage(i)
-                                                }
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = "Right Pane TimeZone",
+                                tint = Color(0xFF81C995),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "${rightRegionInfo.airportCode} • ${rightRegionInfo.standardTimeShort}",
+                                color = Color.White.copy(alpha = 0.88f),
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    // Right Pager Compact Vertical Indicator
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 4.dp),
+                        shape = CircleShape,
+                        color = colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            for (i in 0 until totalDuoWidgets) {
+                                val isSelected = i == rightPagerState.currentPage
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 4.dp, height = if (isSelected) 8.dp else 3.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) colorScheme.primary
+                                            else colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                        )
+                                        .clickable {
+                                            haptics.tick()
+                                            viewModel.setDuoRightWidgetIndex(i)
+                                            coroutineScope.launch {
+                                                rightPagerState.animateScrollToPage(i)
                                             }
-                                    )
-                                }
+                                        }
+                                )
                             }
                         }
                     }
                 }
             }
+
+            if (activeTimezonePickerPane != 0) {
+                DuoPaneTimeZonePickerDialog(
+                    paneIndex = activeTimezonePickerPane,
+                    viewModel = viewModel,
+                    onDismiss = { activeTimezonePickerPane = 0 }
+                )
+            }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DuoPaneTimeZonePickerDialog(
+    paneIndex: Int,
+    viewModel: StandbyViewModel,
+    onDismiss: () -> Unit
+) {
+    val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
+    val isLeft = paneIndex == 1
+    val activeTz by (if (isLeft) viewModel.duoLeftTimeZoneId else viewModel.duoRightTimeZoneId).collectAsState()
+    val activeLoc by (if (isLeft) viewModel.duoLeftLocationName else viewModel.duoRightLocationName).collectAsState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = if (isLeft) "Left Duo Pane Time Zone & Location" else "Right Duo Pane Time Zone & Location",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Select a Time Zone or City for the ${if (isLeft) "Left" else "Right"} Duo screen:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    viewModel.selectableTimeZones.forEach { (tzId, label) ->
+                        val isSelected = activeTz.equals(tzId, ignoreCase = true) && activeLoc.isBlank()
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                haptics.tick()
+                                if (isLeft) {
+                                    viewModel.setDuoLeftLocationName("")
+                                    viewModel.setDuoLeftTimeZoneId(tzId)
+                                } else {
+                                    viewModel.setDuoRightLocationName("")
+                                    viewModel.setDuoRightTimeZoneId(tzId)
+                                }
+                                onDismiss()
+                            },
+                            label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+                Text(
+                    text = "Or Select Airport Terminal / City Region:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colorScheme.primary
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    viewModel.selectableLocations.forEach { preset ->
+                        val isSelected = activeLoc.equals(preset, ignoreCase = true)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                haptics.tick()
+                                if (isLeft) {
+                                    viewModel.setDuoLeftLocationName(preset)
+                                } else {
+                                    viewModel.setDuoRightLocationName(preset)
+                                }
+                                onDismiss()
+                            },
+                            label = { Text(preset, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done")
+            }
+        }
+    )
 }
 
 @Composable
 fun WidgetContainer(
     pageIndex: Int,
-    isLeftPane: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = MaterialTheme.colorScheme
-    ElevatedCard(
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = colorScheme.surfaceContainerLow
-        ),
-        modifier = Modifier.fillMaxSize()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    start = if (isLeftPane) 26.dp else 12.dp,
-                    end = if (isLeftPane) 12.dp else 26.dp,
-                    top = 12.dp,
-                    bottom = 12.dp
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            content()
-        }
+        content()
     }
 }
 
 @Composable
 fun RenderDuoWidget(
     pageIndex: Int,
+    paneIndex: Int = 1,
     viewModel: StandbyViewModel,
     calendarViewModel: CalendarViewModel,
     weatherViewModel: WeatherViewModel
 ) {
-    when (pageIndex) {
-        0 -> DuoClockWidget(viewModel, weatherViewModel)
+    var currentTime by remember { mutableStateOf(Calendar.getInstance()) }
+    val selectedColorIdx by viewModel.colorPage5.collectAsState()
+    val selectedFontIdx by viewModel.fontPage5.collectAsState()
+    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color(0xFF81C995)
+    val customFont = viewModel.fonts.getOrNull(selectedFontIdx)?.first ?: FontFamily.Default
+    val use24Hour by viewModel.use24HourFormat.collectAsState()
+    val showAmPm by viewModel.showAmPm.collectAsState()
+    val showSeconds by viewModel.showSeconds.collectAsState()
+    val animsEnabled by viewModel.animPage5.collectAsState()
+    val glowVal by viewModel.textGlowPage5.collectAsState()
+    val outlineVal by viewModel.textOutlineOnlyPage5.collectAsState()
+    val weather by weatherViewModel.weather.collectAsState()
+    val nextAlarm by viewModel.nextSystemAlarm.collectAsState()
+
+    val locMode by viewModel.locationMode.collectAsState()
+    val customLoc by viewModel.customLocationName.collectAsState()
+    val clockTz by viewModel.clockTimeZoneId.collectAsState()
+    val leftTz by viewModel.duoLeftTimeZoneId.collectAsState()
+    val rightTz by viewModel.duoRightTimeZoneId.collectAsState()
+    val leftLoc by viewModel.duoLeftLocationName.collectAsState()
+    val rightLoc by viewModel.duoRightLocationName.collectAsState()
+    val gpsLoc by viewModel.gpsLocationName.collectAsState()
+    val gpsLat by viewModel.gpsLatitude.collectAsState()
+    val gpsLon by viewModel.gpsLongitude.collectAsState()
+
+    val paneRegionInfo = remember(
+        paneIndex, locMode, customLoc, clockTz,
+        leftTz, rightTz, leftLoc, rightLoc,
+        gpsLoc, gpsLat, gpsLon
+    ) {
+        viewModel.resolvePaneLocationInfo(paneIndex)
+    }
+
+    val zonedTime = remember(currentTime, paneRegionInfo.timeZoneId) {
+        GoogleDeviceAndHomeMonitor.calendarForTimeZone(currentTime, paneRegionInfo.timeZoneId)
+    }
+
+    LaunchedEffect(pageIndex) {
+        while (true) {
+            delay(1000)
+            currentTime = Calendar.getInstance()
+        }
+    }
+
+    val total = viewModel.duoWidgetTitles.size.coerceAtLeast(1)
+    when (pageIndex.mod(total)) {
+        0 -> DuoClockWidget(viewModel, weatherViewModel, paneIndex = paneIndex, externalCalendar = zonedTime, regionInfo = paneRegionInfo)
         1 -> DuoAlarmWidget(viewModel)
         2 -> DuoCalendarWidget(calendarViewModel, viewModel)
         3 -> DuoMusicWidget(viewModel)
         4 -> DuoTimerWidget(viewModel)
+        5 -> RetroFlip(
+            calendar = zonedTime,
+            color = accentColor,
+            fontFamily = customFont,
+            scale = 1.0f,
+            use24Hour = use24Hour,
+            showAmPm = showAmPm,
+            showSeconds = showSeconds,
+            isDuoCompact = true,
+            standbyViewModel = viewModel,
+            paneIndex = paneIndex
+        )
+        6 -> SquircleTickClockWidget(zonedTime, accentColor, scale = 1.0f, use24Hour = use24Hour)
+        7 -> StandbyNumberedAnalogWidget(zonedTime, accentColor, scale = 1.0f)
+        8 -> OverlappingFloatClockFace(zonedTime, accentColor, scale = 1.0f, use24Hour = use24Hour, isDuoCompact = true)
+        9 -> StandbySageComplicationClockFace(
+            calendar = zonedTime,
+            accentColor = accentColor,
+            customFont = customFont,
+            scale = 1.0f,
+            use24Hour = use24Hour,
+            weatherTempCelsius = weather?.temperature_2m,
+            nextAlarmLabel = nextAlarm,
+            isDuoCompact = true
+        )
+        10 -> WorldTimeZoneMapClockFace(
+            calendar = zonedTime,
+            accentColor = accentColor,
+            customFont = customFont,
+            scale = 1.0f,
+            use24Hour = use24Hour,
+            nextAlarmLabel = nextAlarm,
+            isDuoCompact = true,
+            standbyViewModel = viewModel,
+            paneIndex = paneIndex
+        )
+        11 -> BatteryChargingRingsWidget()
+        12 -> SmartHomeControlGridWidget(standbyViewModel = viewModel)
+        13 -> BigDateHeroWidget(zonedTime, accentColor)
+        14 -> StandbyRedCalendarGridWidget(zonedTime, accentColor)
+        15 -> StandbyNowPlayingCardWidget(viewModel)
+        16 -> StandbyIncomingCallCardWidget()
+        17 -> DigitalMinimal(zonedTime, accentColor, customFont, 0.85f, animsEnabled, use24Hour, showAmPm, showSeconds, glowVal, outlineVal, null)
+        18 -> AnalogClassic(zonedTime, accentColor, 0.90f, animsEnabled, true)
+        19 -> BinaryStyle(zonedTime, accentColor, customFont, 0.80f, use24Hour, showAmPm, showSeconds)
+        20 -> ModernBoldTextClock(zonedTime, accentColor, customFont, 0.80f, use24Hour, showAmPm, showSeconds)
+        21 -> ContrastingSplitClock(zonedTime, accentColor, customFont, 0.80f, use24Hour, showAmPm, showSeconds)
+        22 -> AnalogDashboard(zonedTime, accentColor, customFont, 0.85f, animsEnabled, true)
+        23 -> BubblePastelClock(zonedTime, accentColor, customFont, 0.80f, use24Hour, showAmPm, showSeconds)
+        24 -> AmbientGradientClock(zonedTime, accentColor, customFont, 0.80f, use24Hour, showAmPm, showSeconds)
+        25 -> NixieTubeClock(zonedTime, accentColor, customFont, 0.80f, use24Hour, showAmPm, showSeconds)
     }
 }
 
 @Composable
 fun DuoClockWidget(
     viewModel: StandbyViewModel,
-    weatherViewModel: WeatherViewModel
+    weatherViewModel: WeatherViewModel,
+    paneIndex: Int = 1,
+    externalCalendar: Calendar? = null,
+    regionInfo: UserTimeZoneRegionInfo? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    var currentTime by remember { mutableStateOf(Calendar.getInstance()) }
+    var internalTime by remember { mutableStateOf(Calendar.getInstance()) }
+    val resolvedRegion = regionInfo ?: viewModel.resolvePaneLocationInfo(paneIndex)
+    val currentTime = externalCalendar ?: GoogleDeviceAndHomeMonitor.calendarForTimeZone(internalTime, resolvedRegion.timeZoneId)
+    val activeTz = currentTime.timeZone ?: TimeZone.getDefault()
+
     val weather by weatherViewModel.weather.collectAsState()
     val showWeatherVal by viewModel.showWeatherPage0.collectAsState()
     val selectedColorIdx by viewModel.colorPage5.collectAsState()
@@ -307,7 +595,7 @@ fun DuoClockWidget(
         viewModel.updateNextAlarm()
         while (true) {
             val now = Calendar.getInstance()
-            currentTime = now
+            internalTime = now
             if (now.get(Calendar.SECOND) % 15 == 0) {
                 viewModel.updateNextAlarm(now)
             }
@@ -315,32 +603,55 @@ fun DuoClockWidget(
         }
     }
 
-    val timeFormat = remember(use24Hour) {
-        SimpleDateFormat(if (use24Hour) "HH:mm" else "hh:mm", Locale.getDefault())
+    val timeFormat = remember(use24Hour, activeTz.id) {
+        SimpleDateFormat(if (use24Hour) "HH:mm" else "hh:mm", Locale.getDefault()).apply {
+            timeZone = activeTz
+        }
     }
-    val secFormat = remember { SimpleDateFormat("ss", Locale.getDefault()) }
-    val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+    val secFormat = remember(activeTz.id) {
+        SimpleDateFormat("ss", Locale.getDefault()).apply {
+            timeZone = activeTz
+        }
+    }
+    val dateFormat = remember(activeTz.id) {
+        SimpleDateFormat("EEE, MMM d", Locale.getDefault()).apply {
+            timeZone = activeTz
+        }
+    }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = animatedBrightness },
+            .background(Color.Black)
+            .graphicsLayer { alpha = animatedBrightness }
+            .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
-        val mainFontSize = (minOf(maxWidth.value * 0.22f, maxHeight.value * 0.28f)).coerceIn(34f, 54f).sp
-        val secFontSize = (mainFontSize.value * 0.37f).sp
+        val mainFontSize = (minOf(maxWidth.value * 0.28f, maxHeight.value * 0.36f)).coerceIn(42f, 96f).sp
+        val secFontSize = (mainFontSize.value * 0.38f).sp
 
         Column(
+            modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            Text(
+                text = "${resolvedRegion.regionName.uppercase(Locale.getDefault())} • ${resolvedRegion.standardTimeShort} (${resolvedRegion.utcOffsetLabel})",
+                color = accentColor,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.1.sp,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = timeFormat.format(currentTime.time),
-                    color = colorScheme.onSurface,
+                    color = Color.White,
                     fontSize = mainFontSize,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Monospace,
@@ -356,11 +667,11 @@ fun DuoClockWidget(
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     softWrap = false,
-                    modifier = Modifier.padding(bottom = 6.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Surface(
                 shape = CircleShape,
@@ -369,31 +680,31 @@ fun DuoClockWidget(
                 Text(
                     text = dateFormat.format(currentTime.time).uppercase(Locale.getDefault()),
                     color = colorScheme.onSecondaryContainer,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.1.sp,
+                    letterSpacing = 1.2.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                 )
             }
 
             if (showWeatherVal && weather != null) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Cloud,
                         contentDescription = null,
                         tint = accentColor,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Text(
                         text = "${weather?.temperature_2m}°C • ${getWeatherCodeDesc(weather?.weather_code ?: 0)}",
-                        color = colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -440,12 +751,14 @@ fun DuoAlarmWidget(viewModel: StandbyViewModel) {
     val hasAlarm = nextSystemAlarm != null && nextSystemAlarm != "No Alarm"
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
-        val isCompact = maxHeight < 220.dp
-        val iconCircleSize = if (isCompact) 44.dp else 56.dp
-        val iconSize = if (isCompact) 22.dp else 28.dp
+        val iconCircleSize = (minOf(maxWidth, maxHeight) * 0.30f).coerceIn(52.dp, 88.dp)
+        val iconSize = iconCircleSize * 0.50f
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -455,31 +768,31 @@ fun DuoAlarmWidget(viewModel: StandbyViewModel) {
             Surface(
                 modifier = Modifier.size(iconCircleSize),
                 shape = CircleShape,
-                color = if (hasAlarm) colorScheme.primaryContainer else colorScheme.surfaceContainerHigh
+                color = if (hasAlarm) accentColor.copy(alpha = 0.22f) else colorScheme.surfaceContainerHigh
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Alarm,
                         contentDescription = null,
-                        tint = if (hasAlarm) colorScheme.onPrimaryContainer else colorScheme.onSurfaceVariant,
+                        tint = if (hasAlarm) accentColor else colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(iconSize)
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Text(
                 text = "UPCOMING ALARM",
-                color = colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
+                letterSpacing = 1.2.sp,
                 maxLines = 1
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = nextSystemAlarm ?: "No Active Alarm",
-                color = if (hasAlarm) colorScheme.onSurface else colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
@@ -539,7 +852,8 @@ fun DuoCalendarWidget(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .background(Color.Black)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         val currentCal = remember { Calendar.getInstance() }
@@ -631,23 +945,24 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp)
+                .background(Color.Black)
+                .padding(16.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Notifications,
                 contentDescription = null,
                 tint = colorScheme.primary,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(32.dp)
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Media Sync Permission",
-                color = colorScheme.onSurface,
-                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             FilledTonalButton(
                 onClick = {
                     haptics.confirm()
@@ -661,11 +976,11 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(20.dp))
+                .background(Color.Black)
         ) {
             val isCompact = maxHeight < 210.dp || maxWidth < 210.dp
-            val sideBtnSize = if (isCompact) 38.dp else 44.dp
-            val mainBtnSize = if (isCompact) 48.dp else 56.dp
+            val sideBtnSize = if (isCompact) 44.dp else 54.dp
+            val mainBtnSize = if (isCompact) 56.dp else 68.dp
 
             if (albumArt != null) {
                 Image(
@@ -680,32 +995,27 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                     Modifier
                         .fillMaxSize()
                         .background(
-                            Brush.radialGradient(listOf(accentColor.copy(alpha = 0.2f), Color.Transparent))
+                            Brush.radialGradient(listOf(accentColor.copy(alpha = 0.25f), Color.Black))
                         )
                 )
             }
 
-            val fgColor = if (albumArt != null) Color.White else colorScheme.onSurface
-            val subColor = if (albumArt != null) Color.White.copy(alpha = 0.75f) else colorScheme.onSurfaceVariant
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(if (isCompact) 10.dp else 16.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.SpaceEvenly,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = trackTitle ?: "No Track Playing",
-                        color = fgColor,
-                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -713,8 +1023,8 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                     )
                     Text(
                         text = artistName ?: "System Media",
-                        color = subColor,
-                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.75f),
+                        style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
@@ -723,7 +1033,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                 }
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilledTonalIconButton(
@@ -736,7 +1046,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                         Icon(
                             Icons.Default.SkipPrevious,
                             contentDescription = "Previous",
-                            modifier = Modifier.size(if (isCompact) 18.dp else 22.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
@@ -749,7 +1059,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                             )
                         },
                         modifier = Modifier.size(mainBtnSize),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = accentColor,
                             contentColor = if (accentColor == Color.White) Color.Black else Color.White
@@ -758,7 +1068,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                         Icon(
                             imageVector = if (isCurrentlyPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Play/Pause",
-                            modifier = Modifier.size(if (isCompact) 24.dp else 28.dp)
+                            modifier = Modifier.size(30.dp)
                         )
                     }
 
@@ -772,7 +1082,7 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
                         Icon(
                             Icons.Default.SkipNext,
                             contentDescription = "Next",
-                            modifier = Modifier.size(if (isCompact) 18.dp else 22.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
@@ -784,7 +1094,6 @@ fun DuoMusicWidget(standbyViewModel: StandbyViewModel) {
 @Composable
 fun DuoTimerWidget(viewModel: StandbyViewModel) {
     val haptics = rememberStandbyHaptics()
-    val colorScheme = MaterialTheme.colorScheme
     val selectedColorIdx by viewModel.colorPage4.collectAsState()
     val accentColor = viewModel.colors[selectedColorIdx].first
     val focusMinutes by viewModel.pomodoroFocusMinutes.collectAsState()
@@ -808,15 +1117,17 @@ fun DuoTimerWidget(viewModel: StandbyViewModel) {
     val formatted = String.format("%02d:%02d", min, sec)
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
-        val isCompact = maxHeight < 210.dp
-        val dialSize = (minOf(maxWidth, maxHeight) * 0.48f).coerceIn(72.dp, 98.dp)
+        val dialSize = (minOf(maxWidth, maxHeight) * 0.62f).coerceIn(92.dp, 190.dp)
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier.fillMaxSize()
         ) {
             Box(
@@ -825,37 +1136,34 @@ fun DuoTimerWidget(viewModel: StandbyViewModel) {
             ) {
                 val totalSecs = (focusMinutes * 60).coerceAtLeast(1)
                 val ratio = secondsLeft.toFloat() / totalSecs.toFloat()
-                val trackColor = colorScheme.surfaceContainerHighest
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawCircle(
-                        color = trackColor,
+                        color = Color(0xFF232528),
                         radius = size.minDimension / 2f,
-                        style = Stroke(width = 4.dp.toPx())
+                        style = Stroke(width = 6.dp.toPx())
                     )
                     drawArc(
                         color = accentColor,
                         startAngle = -90f,
                         sweepAngle = 360f * ratio,
                         useCenter = false,
-                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                        style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
                     )
                 }
 
                 Text(
                     text = formatted,
-                    color = colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = (dialSize.value * 0.24f).coerceIn(22f, 44f).sp,
+                    fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     softWrap = false
                 )
             }
 
-            Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
-
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 FilledTonalButton(
@@ -863,7 +1171,7 @@ fun DuoTimerWidget(viewModel: StandbyViewModel) {
                         haptics.confirm()
                         isRunning = !isRunning
                     },
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = if (isRunning) "Pause" else "Start",
@@ -879,12 +1187,12 @@ fun DuoTimerWidget(viewModel: StandbyViewModel) {
                         isRunning = false
                         secondsLeft = focusMinutes * 60
                     },
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Reset",
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }

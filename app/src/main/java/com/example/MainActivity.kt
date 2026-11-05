@@ -10,10 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.example.receivers.PowerConnectionReceiver
 import com.example.ui.standby.StandbyScreen
 import com.example.ui.theme.MyApplicationTheme
 
@@ -22,41 +18,27 @@ class MainActivity : ComponentActivity() {
 
     private val powerStateReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
-            android.util.Log.d(TAG, "powerStateReceiver: received intent with action: ${intent.action}")
             if (intent.action == android.content.Intent.ACTION_POWER_DISCONNECTED) {
-                // Keep the standby clock display running for continuous desk-clock mode
                 android.util.Log.d(TAG, "Power disconnected: keeping Standby screen active.")
             }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Intercept all uncaught exceptions to log exactly what's breaking
-        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            android.util.Log.e(TAG, "CRITICAL: Uncaught exception in thread '${thread.name}':", throwable)
-            defaultHandler?.uncaughtException(thread, throwable)
-        }
-
-        android.util.Log.d(TAG, "onCreate: Initializing Standby MainActivity")
         super.onCreate(savedInstanceState)
-        
+
         try {
-            // Force Landscape screen orientation
             requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            android.util.Log.d(TAG, "onCreate: Screen orientation set to sensor landscape")
         } catch (e: Exception) {
             android.util.Log.e(TAG, "onCreate: Failed to set screen orientation", e)
         }
 
         try {
-            // Keep screen on while Standby is active to act as a continuous desk clock
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            android.util.Log.d(TAG, "onCreate: FLAG_KEEP_SCREEN_ON added successfully")
         } catch (e: Exception) {
             android.util.Log.e(TAG, "onCreate: Failed to set keep screen on flag", e)
         }
-        
+
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
@@ -70,14 +52,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        android.util.Log.d(TAG, "onStart: Standby screen starting up")
-    }
-
     override fun onResume() {
         super.onResume()
-        android.util.Log.d(TAG, "onResume: Standby screen active and visible")
         try {
             val filter = IntentFilter().apply {
                 addAction(Intent.ACTION_POWER_CONNECTED)
@@ -89,29 +65,16 @@ class MainActivity : ComponentActivity() {
                 filter,
                 androidx.core.content.ContextCompat.RECEIVER_EXPORTED
             )
-            android.util.Log.d(TAG, "onResume: powerStateReceiver registered successfully")
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "onResume: Failed to register powerStateReceiver due to permission/platform constraint", e)
+            android.util.Log.e(TAG, "onResume: Failed to register powerStateReceiver", e)
         }
     }
 
     override fun onPause() {
         super.onPause()
-        android.util.Log.d(TAG, "onPause: Standby screen going to background/paused")
         try {
             unregisterReceiver(powerStateReceiver)
-        } catch (e: Exception) {
-            // ignore
+        } catch (_: Exception) {
         }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        android.util.Log.d(TAG, "onStop: Standby screen stopped")
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        android.util.Log.d(TAG, "onDestroy: Standby screen destroyed")
     }
 }

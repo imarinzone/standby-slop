@@ -69,17 +69,27 @@ fun StandbyScreen(
     val coroutineScope = rememberCoroutineScope()
     val haptics = rememberStandbyHaptics()
 
-    val initialClockFace = remember { viewModel.lastClockFaceIndex.value }
+    val enabledClockFaces by viewModel.enabledClockFaces.collectAsState()
+    val activeClockFaceIndices = remember(enabledClockFaces) {
+        enabledClockFaces.sorted().ifEmpty { listOf(0) }
+    }
+    val initialClockFace = remember {
+        val savedTheme = viewModel.lastClockFaceIndex.value
+        val pos = activeClockFaceIndices.indexOf(savedTheme)
+        if (pos >= 0) pos else 0
+    }
     val horizontalPagerState = rememberPagerState(pageCount = { 6 })
     val verticalPagerState = rememberPagerState(
         initialPage = initialClockFace,
-        pageCount = { 10 }
+        pageCount = { activeClockFaceIndices.size }
     )
 
     var isHudVisible by remember { mutableStateOf(true) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var isOverviewMode by remember { mutableStateOf(false) }
     var isScreenLocked by remember { mutableStateOf(false) }
+    val activeRingingAlarm by AlarmRingingController.activeRingingAlarm.collectAsState()
+    val activeAlarmVolumePct by AlarmRingingController.currentVolumePercent.collectAsState()
 
     // Subtle haptic tick on horizontal screen switch (skip initial composition)
     var hasInitializedHorizontal by remember { mutableStateOf(false) }
@@ -93,12 +103,13 @@ fun StandbyScreen(
 
     // Subtle haptic tick & persistence on vertical clock face switch (skip initial composition)
     var hasInitializedVertical by remember { mutableStateOf(false) }
-    LaunchedEffect(verticalPagerState.currentPage) {
+    LaunchedEffect(verticalPagerState.currentPage, activeClockFaceIndices) {
         if (!hasInitializedVertical) {
             hasInitializedVertical = true
         } else {
             haptics.tick()
-            viewModel.setLastClockFaceIndex(verticalPagerState.currentPage)
+            val themeIdx = activeClockFaceIndices.getOrElse(verticalPagerState.currentPage) { 0 }
+            viewModel.setLastClockFaceIndex(themeIdx)
         }
     }
 
@@ -194,8 +205,9 @@ fun StandbyScreen(
                             state = verticalPagerState,
                             userScrollEnabled = !isScreenLocked,
                             modifier = Modifier.fillMaxSize()
-                        ) { clockFaceIndex ->
-                            ClockPage(themeIndex = clockFaceIndex)
+                        ) { pageIdx ->
+                            val themeIdx = activeClockFaceIndices.getOrElse(pageIdx) { 0 }
+                            ClockPage(themeIndex = themeIdx)
                         }
                     }
                     1 -> AlarmPage(viewModel = viewModel)
@@ -238,14 +250,15 @@ fun StandbyScreen(
                         .padding(end = 12.dp)
                 ) {
                     VerticalThemeIndicator(
-                        currentIndex = verticalPagerState.currentPage,
-                        pageCount = 10,
-                        onDotClicked = { selectedIdx ->
+                        currentIndex = verticalPagerState.currentPage.coerceIn(0, (activeClockFaceIndices.size - 1).coerceAtLeast(0)),
+                        pageCount = activeClockFaceIndices.size,
+                        onDotClicked = { selectedPagerIdx ->
                             haptics.tick()
-                            viewModel.setLastClockFaceIndex(selectedIdx)
+                            val themeIdx = activeClockFaceIndices.getOrElse(selectedPagerIdx) { 0 }
+                            viewModel.setLastClockFaceIndex(themeIdx)
                             isHudVisible = true
                             coroutineScope.launch {
-                                verticalPagerState.animateScrollToPage(selectedIdx)
+                                verticalPagerState.animateScrollToPage(selectedPagerIdx)
                             }
                         }
                     )
@@ -355,7 +368,7 @@ fun StandbyScreen(
             AppOverviewLayout(
                 viewModel = viewModel,
                 activePage = horizontalPagerState.currentPage,
-                activeClockFace = verticalPagerState.currentPage,
+                activeClockFace = activeClockFaceIndices.getOrElse(verticalPagerState.currentPage) { 0 },
                 onNavigateToPage = { targetPage ->
                     haptics.tick()
                     isOverviewMode = false
@@ -366,12 +379,16 @@ fun StandbyScreen(
                 },
                 onSelectClockFace = { themeIdx ->
                     haptics.tick()
+                    if (!activeClockFaceIndices.contains(themeIdx)) {
+                        viewModel.setClockFaceEnabled(themeIdx, true)
+                    }
                     viewModel.setLastClockFaceIndex(themeIdx)
                     isOverviewMode = false
                     isHudVisible = true
                     coroutineScope.launch {
                         horizontalPagerState.scrollToPage(0)
-                        verticalPagerState.scrollToPage(themeIdx)
+                        val targetPagerIdx = viewModel.enabledClockFaces.value.sorted().indexOf(themeIdx).coerceAtLeast(0)
+                        verticalPagerState.scrollToPage(targetPagerIdx)
                     }
                 },
                 onDismiss = {
@@ -379,6 +396,27 @@ fun StandbyScreen(
                     isOverviewMode = false
                 }
             )
+        }
+
+        // Global Active Alarm Ringing Dialog (displays even when viewing Clock or Duo screens)
+        activeRingingAlarm?.let { ringingAlarm ->
+            if (horizontalPagerState.currentPage != 1 || isOverviewMode || showSettingsDialog) {
+                val use24HourGlobal by viewModel.use24HourFormat.collectAsState()
+                ActiveAlarmRingingDialog(
+                    alarm = ringingAlarm,
+                    accentColor = colorScheme.primary,
+                    customFont = FontFamily.Default,
+                    use24Hour = use24HourGlobal,
+                    onSnooze = {
+                        haptics.tick()
+                        AlarmRingingController.snoozeActiveAlarm(context)
+                    },
+                    onDismiss = {
+                        haptics.confirm()
+                        AlarmRingingController.dismissAlarm()
+                    }
+                )
+            }
         }
 
         // Material 3 Screen Lock Overlay with stepped haptic unlock slider
@@ -1025,6 +1063,466 @@ fun StandbyCustomizationDialog(
                                                 }
                                             } else null
                                         )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2b. Enable / Disable Clock Faces by Ticking (Clock Tab 0)
+                        if (activeTab == 0) {
+                            val enabledClockSet by viewModel.enabledClockFaces.collectAsState()
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("clock_faces_toggle_card"),
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = colorScheme.surfaceContainerLow
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Active Clock Faces",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Tick to enable or disable clock faces in your StandBy carousel (${enabledClockSet.size}/${viewModel.clockFaceTitles.size} active)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        TextButton(
+                                            onClick = {
+                                                haptics.tick()
+                                                viewModel.clockFaceTitles.indices.forEach { idx ->
+                                                    viewModel.setClockFaceEnabled(idx, true)
+                                                }
+                                            },
+                                            modifier = Modifier.testTag("enable_all_clock_faces_button")
+                                        ) {
+                                            Text("Enable All")
+                                        }
+                                    }
+
+                                    viewModel.clockFaceTitles.forEachIndexed { idx, title ->
+                                        val subtitle = viewModel.clockFaceSubtitles.getOrElse(idx) { "CLOCK FACE" }
+                                        val isEnabled = enabledClockSet.contains(idx)
+                                        val canUncheck = !isEnabled || enabledClockSet.size > 1
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isEnabled) colorScheme.surfaceContainerHigh else colorScheme.surfaceContainer,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable(enabled = canUncheck) {
+                                                    haptics.tick()
+                                                    viewModel.toggleClockFace(idx)
+                                                }
+                                                .testTag("clock_face_toggle_row_$idx")
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Checkbox(
+                                                        checked = isEnabled,
+                                                        onCheckedChange = { checked ->
+                                                            if (checked || enabledClockSet.size > 1) {
+                                                                haptics.tick()
+                                                                viewModel.setClockFaceEnabled(idx, checked)
+                                                            }
+                                                        },
+                                                        enabled = canUncheck,
+                                                        modifier = Modifier.testTag("clock_face_checkbox_$idx")
+                                                    )
+                                                    Column {
+                                                        Text(
+                                                            text = title,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = if (isEnabled) colorScheme.onSurface else colorScheme.onSurfaceVariant
+                                                        )
+                                                        Text(
+                                                            text = subtitle,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                                if (idx >= 10) {
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = colorScheme.primaryContainer
+                                                    ) {
+                                                        Text(
+                                                            text = "StandBy",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2c. Duo Split Screen Widget Selector & Per-Pane TimeZone (Duo Tab 5)
+                        if (activeTab == 5) {
+                            val leftWidgetIdx by viewModel.duoLeftWidgetIndex.collectAsState()
+                            val rightWidgetIdx by viewModel.duoRightWidgetIndex.collectAsState()
+                            val leftTzId by viewModel.duoLeftTimeZoneId.collectAsState()
+                            val rightTzId by viewModel.duoRightTimeZoneId.collectAsState()
+                            val leftLocName by viewModel.duoLeftLocationName.collectAsState()
+                            val rightLocName by viewModel.duoRightLocationName.collectAsState()
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("duo_widgets_selector_card"),
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = colorScheme.surfaceContainerLow
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(
+                                        text = "Duo Split Screens & StandBy Widgets",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Choose any screen or StandBy clock face and independent Time Zone for the Left and Right Duo panes",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+
+                                    Text(
+                                        text = "Left Pane Screen",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = colorScheme.primary
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        viewModel.duoWidgetTitles.forEachIndexed { idx, title ->
+                                            FilterChip(
+                                                selected = leftWidgetIdx == idx,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    viewModel.setDuoLeftWidgetIndex(idx)
+                                                },
+                                                label = { Text(title, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.testTag("duo_left_chip_$idx")
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Left Pane Time Zone / Location",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        viewModel.selectableTimeZones.forEachIndexed { idx, (tzId, label) ->
+                                            val isSelected = leftTzId.equals(tzId, ignoreCase = true) && leftLocName.isBlank()
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    viewModel.setDuoLeftLocationName("")
+                                                    viewModel.setDuoLeftTimeZoneId(tzId)
+                                                },
+                                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.testTag("duo_left_tz_chip_$idx")
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Right Pane Screen",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = colorScheme.primary
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        viewModel.duoWidgetTitles.forEachIndexed { idx, title ->
+                                            FilterChip(
+                                                selected = rightWidgetIdx == idx,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    viewModel.setDuoRightWidgetIndex(idx)
+                                                },
+                                                label = { Text(title, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.testTag("duo_right_chip_$idx")
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Right Pane Time Zone / Location",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        viewModel.selectableTimeZones.forEachIndexed { idx, (tzId, label) ->
+                                            val isSelected = rightTzId.equals(tzId, ignoreCase = true) && rightLocName.isBlank()
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    viewModel.setDuoRightLocationName("")
+                                                    viewModel.setDuoRightTimeZoneId(tzId)
+                                                },
+                                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.testTag("duo_right_tz_chip_$idx")
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2d. Airport Terminal, World Map Location & Time Zone Selector (Clock Tab 0 or Duo Tab 5)
+                        if (activeTab == 0 || activeTab == 5) {
+                            val settingsContext = LocalContext.current
+                            val locMode by viewModel.locationMode.collectAsState()
+                            val customLoc by viewModel.customLocationName.collectAsState()
+                            val clockTzId by viewModel.clockTimeZoneId.collectAsState()
+                            val gpsLoc by viewModel.gpsLocationName.collectAsState()
+                            val googleAccount by viewModel.googleConnectedAccount.collectAsState()
+                            val resolvedInfo = remember(locMode, customLoc, clockTzId, gpsLoc) {
+                                viewModel.resolveCurrentLocationInfo()
+                            }
+                            val locPermLauncher = rememberLauncherForActivityResult(
+                                ActivityResultContracts.RequestMultiplePermissions()
+                            ) { perms ->
+                                val granted = perms[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                                    perms[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
+                                if (granted) {
+                                    viewModel.setLocationMode("auto")
+                                    viewModel.setClockTimeZoneId("AUTO")
+                                    viewModel.refreshDeviceLocation(settingsContext)
+                                }
+                            }
+
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("terminal_location_settings_card"),
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = colorScheme.surfaceContainerLow
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Airport Terminal, World Map & Time Zone",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Active: ${resolvedInfo.airportCityName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort} (${resolvedInfo.utcOffsetLabel})",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = colorScheme.primary
+                                            )
+                                        }
+                                        FilledTonalButton(
+                                            onClick = {
+                                                haptics.tick()
+                                                viewModel.setLocationMode("auto")
+                                                viewModel.setClockTimeZoneId("AUTO")
+                                                val ok = viewModel.refreshDeviceLocation(settingsContext)
+                                                if (!ok) {
+                                                    locPermLauncher.launch(
+                                                        arrayOf(
+                                                            android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                                                            android.Manifest.permission.ACCESS_FINE_LOCATION
+                                                        )
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.testTag("detect_gps_location_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MyLocation,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Use GPS / Auto")
+                                        }
+                                    }
+
+                                    OutlinedTextField(
+                                        value = customLoc,
+                                        onValueChange = { newText ->
+                                            viewModel.setCustomLocationName(newText)
+                                        },
+                                        label = { Text("Custom Terminal / City Name (e.g. San Francisco (SFO))") },
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            if (customLoc.isNotEmpty()) {
+                                                IconButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        viewModel.setCustomLocationName("")
+                                                        viewModel.setLocationMode("auto")
+                                                    }
+                                                ) {
+                                                    Icon(Icons.Default.Clear, contentDescription = "Reset to Auto")
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("custom_location_input")
+                                    )
+
+                                    Text(
+                                        text = "Select Time Zone",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = colorScheme.primary
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        viewModel.selectableTimeZones.forEachIndexed { idx, (tzId, label) ->
+                                            val isSelected = clockTzId.equals(tzId, ignoreCase = true)
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    viewModel.setClockTimeZoneId(tzId)
+                                                },
+                                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.testTag("clock_timezone_preset_$idx")
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Select Terminal / Region Preset",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        FilterChip(
+                                            selected = locMode == "auto" && clockTzId == "AUTO",
+                                            onClick = {
+                                                haptics.tick()
+                                                viewModel.setLocationMode("auto")
+                                                viewModel.setClockTimeZoneId("AUTO")
+                                                viewModel.refreshDeviceLocation(settingsContext)
+                                            },
+                                            label = { Text("Auto (${TimeZone.getDefault().id.substringAfterLast("/").replace("_", " ")})") },
+                                            modifier = Modifier.testTag("location_preset_auto")
+                                        )
+                                        viewModel.selectableLocations.forEachIndexed { idx, preset ->
+                                            val isSelected = locMode == "custom" && customLoc.equals(preset, ignoreCase = true)
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = {
+                                                    haptics.tick()
+                                                    viewModel.setCustomLocationName(preset)
+                                                },
+                                                label = { Text(preset, style = MaterialTheme.typography.labelSmall) },
+                                                modifier = Modifier.testTag("location_preset_$idx")
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 2e. Google Home & Connected Devices Card
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("google_home_settings_card"),
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = colorScheme.surfaceContainerLow
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Google Home & Fast Pair Devices",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Connected through Google only ($googleAccount)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        FilledTonalButton(
+                                            onClick = {
+                                                haptics.tick()
+                                                val detected = GoogleDeviceAndHomeMonitor.detectConnectedGoogleAccount(settingsContext)
+                                                viewModel.setGoogleConnectedAccount(detected)
+                                                GoogleDeviceAndHomeMonitor.openGoogleHomeApp(settingsContext)
+                                            },
+                                            modifier = Modifier.testTag("sync_google_home_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Home,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Google Home")
+                                        }
                                     }
                                 }
                             }
@@ -1692,18 +2190,13 @@ fun AppOverviewLayout(
                 }
             }
 
-            val clockThemes = listOf(
-                "Minimal Digital Clock" to "01 | DIGITAL MINIMAL",
-                "Classic Analog Clock" to "02 | ANALOG CLASSIC",
-                "Retro Flip Card Clock" to "03 | RETRO FLIP CARD",
-                "Binary Dots Matrix" to "04 | BINARY STYLE",
-                "Modern Bold Typography" to "05 | MODERN BOLD TEXT",
-                "Contrasting Split Color" to "06 | CONTRASTING SPLIT",
-                "Analog Motor Dashboard" to "07 | ANALOG DASHBOARD",
-                "Pastel Bubbles Clock" to "08 | BUBBLE PASTEL",
-                "Ambient Horizon Gradient" to "09 | AMBIENT GRADIENT",
-                "High-Tech Nixie Tube" to "10 | NIXIE TUBE"
-            )
+            val enabledClockSet by viewModel.enabledClockFaces.collectAsState()
+            val clockThemes = remember(enabledClockSet) {
+                viewModel.clockFaceTitles.mapIndexedNotNull { idx, title ->
+                    val subtitle = viewModel.clockFaceSubtitles.getOrElse(idx) { title }
+                    if (enabledClockSet.contains(idx)) Triple(idx, title, subtitle) else null
+                }
+            }
 
             val utilityPages = listOf(
                 1 to ("System Alarm" to "ALARM DISPATCH"),
@@ -1720,7 +2213,7 @@ fun AppOverviewLayout(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                // Column 1: 10 Clock Faces
+                // Column 1: Enabled Clock Faces
                 item {
                     ElevatedCard(
                         modifier = Modifier
@@ -1743,7 +2236,7 @@ fun AppOverviewLayout(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "10 interactive styles",
+                                text = "${clockThemes.size} interactive styles",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 10.dp)
@@ -1756,7 +2249,7 @@ fun AppOverviewLayout(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 contentPadding = PaddingValues(bottom = 8.dp)
                             ) {
-                                itemsIndexed(clockThemes) { clockThemeIdx, (_, label) ->
+                                itemsIndexed(clockThemes) { _, (clockThemeIdx, _, label) ->
                                     val isActive = (activePage == 0 && activeClockFace == clockThemeIdx)
 
                                     OutlinedCard(

@@ -19,10 +19,20 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
+import com.example.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -81,6 +91,17 @@ fun ClockFaceRenderer(
     val customColor = standbyViewModel.colors[selectedColorIdx].first
     val customFont = standbyViewModel.fonts[selectedFontIdx].first
 
+    val locMode by standbyViewModel.locationMode.collectAsState()
+    val customLoc by standbyViewModel.customLocationName.collectAsState()
+    val clockTzId by standbyViewModel.clockTimeZoneId.collectAsState()
+    val gpsLoc by standbyViewModel.gpsLocationName.collectAsState()
+    val mainRegionInfo = remember(locMode, customLoc, clockTzId, gpsLoc) {
+        standbyViewModel.resolvePaneLocationInfo(0)
+    }
+    val zonedCurrentTime = remember(currentTime, mainRegionInfo.timeZoneId) {
+        GoogleDeviceAndHomeMonitor.calendarForTimeZone(currentTime, mainRegionInfo.timeZoneId)
+    }
+
     LaunchedEffect(Unit) {
         standbyViewModel.updateNextAlarm()
         while (true) {
@@ -134,17 +155,23 @@ fun ClockFaceRenderer(
             val viewportScale = minOf(widthFactor, heightFactor)
             val effectiveScale = (clockScaleValue * viewportScale).coerceIn(0.42f, 1.65f)
 
-            when (themeIndex % 10) {
-                0 -> DigitalMinimal(currentTime, customColor, customFont, effectiveScale, animsEnabled, use24Hour, showAmPm, showSeconds, glowVal, outlineVal, gradientColors)
-                1 -> AnalogClassic(currentTime, customColor, effectiveScale, animsEnabled, true)
-                2 -> RetroFlip(currentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
-                3 -> BinaryStyle(currentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
-                4 -> ModernBoldTextClock(currentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
-                5 -> ContrastingSplitClock(currentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
-                6 -> AnalogDashboard(currentTime, customColor, customFont, effectiveScale, animsEnabled, true)
-                7 -> BubblePastelClock(currentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
-                8 -> AmbientGradientClock(currentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
-                9 -> NixieTubeClock(currentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
+            when (themeIndex.mod(16)) {
+                0 -> DigitalMinimal(zonedCurrentTime, customColor, customFont, effectiveScale, animsEnabled, use24Hour, showAmPm, showSeconds, glowVal, outlineVal, gradientColors)
+                1 -> AnalogClassic(zonedCurrentTime, customColor, effectiveScale, animsEnabled, true)
+                2 -> RetroFlip(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds, isDuoCompact = false, standbyViewModel = standbyViewModel, paneIndex = 0)
+                3 -> BinaryStyle(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
+                4 -> ModernBoldTextClock(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
+                5 -> ContrastingSplitClock(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
+                6 -> AnalogDashboard(zonedCurrentTime, customColor, customFont, effectiveScale, animsEnabled, true)
+                7 -> BubblePastelClock(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
+                8 -> AmbientGradientClock(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
+                9 -> NixieTubeClock(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, showAmPm, showSeconds)
+                10 -> WorldTimeZoneMapClockFace(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, nextSystemAlarm, isDuoCompact = false, standbyViewModel = standbyViewModel, paneIndex = 0)
+                11 -> StandbySageComplicationClockFace(zonedCurrentTime, customColor, customFont, effectiveScale, use24Hour, weather?.temperature_2m, nextSystemAlarm)
+                12 -> OverlappingFloatClockFace(zonedCurrentTime, customColor, effectiveScale, use24Hour)
+                13 -> SquircleTickAndBatteryClockFace(zonedCurrentTime, customColor, effectiveScale, use24Hour)
+                14 -> AnalogSmartHomeClockFace(zonedCurrentTime, customColor, effectiveScale, standbyViewModel = standbyViewModel)
+                15 -> BigDateCalendarSplitClockFace(zonedCurrentTime, customColor)
             }
         }
         
@@ -220,9 +247,11 @@ fun DigitalMinimal(
     outline: Boolean = false,
     gradientColors: List<Color>? = null
 ) {
-    val format = remember(use24Hour, showAmPm, showSeconds) {
+    val format = remember(use24Hour, showAmPm, showSeconds, calendar.timeZone) {
         val pattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
-        SimpleDateFormat(pattern, Locale.getDefault())
+        SimpleDateFormat(pattern, Locale.getDefault()).apply {
+            timeZone = calendar.timeZone ?: TimeZone.getDefault()
+        }
     }
     val formattedText = format.format(calendar.time)
 
@@ -420,144 +449,881 @@ fun FuturisticTech(calendar: Calendar, color: Color, fontFamily: FontFamily) {
     )
 }
 
+private val AirportFlapFontFamily = FontFamily(
+    Font(R.font.oswald, FontWeight.Bold)
+)
+
+private val AirportTelemetryFontFamily = FontFamily(
+    Font(R.font.share_tech_mono, FontWeight.Normal)
+)
+
+private data class AirportFlightEntry(
+    val flight: String,
+    val destination: String,
+    val gate: String,
+    val status: String,
+    val statusColor: Color
+)
+
+private val AirportSampleFlights = listOf(
+    AirportFlightEntry("LH 401", "FRANKFURT", "B14", "BOARDING", Color(0xFF81C995)),
+    AirportFlightEntry("JL 005", "TOKYO HND", "A08", "ON TIME ", Color(0xFFFFD54F)),
+    AirportFlightEntry("AF 022", "PARIS CDG", "C22", "GATE OPEN", Color(0xFF81C995)),
+    AirportFlightEntry("BA 117", "LONDON LHR", "D05", "ON TIME ", Color(0xFFFFD54F)),
+    AirportFlightEntry("SQ 025", "SINGAPORE", "E19", "FINAL CALL", Color(0xFFFF8A65))
+)
+
 @Composable
 fun RetroFlip(
-    calendar: Calendar, 
-    color: Color, 
-    fontFamily: FontFamily, 
+    calendar: Calendar,
+    color: Color,
+    fontFamily: FontFamily,
     scale: Float = 1.0f,
     use24Hour: Boolean = false,
     showAmPm: Boolean = true,
-    showSeconds: Boolean = true
+    showSeconds: Boolean = true,
+    isDuoCompact: Boolean = false,
+    standbyViewModel: StandbyViewModel? = null,
+    paneIndex: Int = 0
 ) {
-    val hourText = SimpleDateFormat(if (use24Hour) "HH" else "hh", Locale.getDefault()).format(calendar.time)
-    val minuteText = SimpleDateFormat("mm", Locale.getDefault()).format(calendar.time)
-    val secondText = SimpleDateFormat("ss", Locale.getDefault()).format(calendar.time)
-    val amPmText = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val vm: StandbyViewModel = standbyViewModel ?: viewModel()
+    val locationMode by vm.locationMode.collectAsState()
+    val customLocation by vm.customLocationName.collectAsState()
+    val clockTzId by vm.clockTimeZoneId.collectAsState()
+    val duoLeftTzId by vm.duoLeftTimeZoneId.collectAsState()
+    val duoRightTzId by vm.duoRightTimeZoneId.collectAsState()
+    val duoLeftLoc by vm.duoLeftLocationName.collectAsState()
+    val duoRightLoc by vm.duoRightLocationName.collectAsState()
+    val gpsLocation by vm.gpsLocationName.collectAsState()
+    val gpsLat by vm.gpsLatitude.collectAsState()
+    val gpsLon by vm.gpsLongitude.collectAsState()
+
+    val regionInfo = remember(
+        paneIndex, locationMode, customLocation, clockTzId,
+        duoLeftTzId, duoRightTzId, duoLeftLoc, duoRightLoc,
+        gpsLocation, gpsLat, gpsLon, calendar.timeZone
+    ) {
+        vm.resolvePaneLocationInfo(paneIndex)
+    }
+
+    val activeTimeZone = remember(regionInfo.timeZoneId) {
+        TimeZone.getTimeZone(regionInfo.timeZoneId)
+    }
+
+    val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+            permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
+        if (granted) {
+            vm.refreshDeviceLocation(context)
+        }
+    }
+
+    val hourText = SimpleDateFormat(if (use24Hour) "HH" else "hh", Locale.getDefault()).apply { timeZone = activeTimeZone }.format(calendar.time)
+    val minuteText = SimpleDateFormat("mm", Locale.getDefault()).apply { timeZone = activeTimeZone }.format(calendar.time)
+    val secondText = SimpleDateFormat("ss", Locale.getDefault()).apply { timeZone = activeTimeZone }.format(calendar.time)
+    val amPmText = SimpleDateFormat("a", Locale.getDefault()).apply { timeZone = activeTimeZone }.format(calendar.time).uppercase(Locale.getDefault())
+    val dayOfWeekText = SimpleDateFormat("EEE", Locale.getDefault()).apply { timeZone = activeTimeZone }.format(calendar.time).uppercase(Locale.getDefault()).take(3)
+    val dayOfMonthText = SimpleDateFormat("dd", Locale.getDefault()).apply { timeZone = activeTimeZone }.format(calendar.time)
+    val monthText = SimpleDateFormat("MMM", Locale.getDefault()).apply { timeZone = activeTimeZone }.format(calendar.time).uppercase(Locale.getDefault()).take(3)
+
+    // Classic Solari airport split-flap ivory/white or user's custom accent color
+    val flapTextColor = if (color == Color.White) Color(0xFFF5F3EB) else color
+    val airportAmber = Color(0xFFFFC83D)
+
+    var flightIndex by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        vm.refreshDeviceLocation(context)
+        while (true) {
+            delay(7500)
+            flightIndex = (flightIndex + 1) % AirportSampleFlights.size
+        }
+    }
+    val activeFlight = AirportSampleFlights[flightIndex]
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF07080A))
+            .padding(
+                horizontal = if (isDuoCompact) 4.dp else 12.dp,
+                vertical = if (isDuoCompact) 4.dp else 10.dp
+            )
+            .testTag("airport_flipboard_clock"),
         contentAlignment = Alignment.Center
     ) {
-        val baseTotalWidth = if (showSeconds) 390f else 390f
-        val baseTotalHeight = if (showSeconds) 150f else 195f
+        val availW = maxWidth.value
+        val availH = maxHeight.value
+        val showFlightTicker = availH >= 130f && availW >= 180f
+        val showTerminalHeader = availH >= 120f
+
+        val baseBoardWidth = if (showSeconds && !isDuoCompact) 520f else 360f
+        val baseBoardHeight = if (showFlightTicker) 275f else 190f
+
         val fitScale = minOf(
-            scale,
-            maxWidth.value / baseTotalWidth,
-            maxHeight.value / baseTotalHeight
-        ).coerceAtLeast(0.4f)
+            scale.coerceIn(0.65f, 1.35f),
+            availW / baseBoardWidth,
+            availH / baseBoardHeight
+        ).coerceIn(0.38f, 1.35f)
 
-        val boxWidth = (if (showSeconds) 120 * fitScale else 165 * fitScale).dp
-        val boxHeight = (if (showSeconds) 140 * fitScale else 185 * fitScale).dp
-        val fontSize = (if (showSeconds) 80 * fitScale else 110 * fitScale).sp
-        val cornerRadius = (if (showSeconds) 12 * fitScale else 16 * fitScale).dp
-        val spacing = (if (showSeconds) 12 * fitScale else 20 * fitScale).dp
+        val cellWidth = (if (showSeconds && !isDuoCompact) 66f else 82f) * fitScale
+        val cellHeight = (if (showSeconds && !isDuoCompact) 108f else 130f) * fitScale
+        val digitFontSize = (cellHeight * 0.68f).sp
+        val cellCorner = (7f * fitScale).dp
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(spacing),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Hour flap section
-            FlipFlapCard(
-                text = hourText,
-                color = color,
-                fontSize = fontSize,
-                fontFamily = fontFamily,
-                boxWidth = boxWidth,
-                boxHeight = boxHeight,
-                cornerRadius = cornerRadius
-            )
-
-            // Minute flap section
-            FlipFlapCard(
-                text = minuteText,
-                color = color,
-                fontSize = fontSize,
-                fontFamily = fontFamily,
-                boxWidth = boxWidth,
-                boxHeight = boxHeight,
-                cornerRadius = cornerRadius
-            )
-
-            // Seconds flap section
-            if (showSeconds) {
-                FlipFlapCard(
-                    text = secondText,
-                    color = color.copy(alpha = 0.8f),
-                    fontSize = fontSize * 0.85f,
-                    fontFamily = fontFamily,
-                    boxWidth = boxWidth * 0.85f,
-                    boxHeight = boxHeight * 0.85f,
-                    cornerRadius = cornerRadius * 0.85f
+        // Outer Brushed Anodized Aluminum Airport Solari Frame
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF14161B), Color(0xFF0C0D11), Color(0xFF12141A))
+                    )
                 )
+                .border(1.5.dp, Color(0xFF2B2E38), RoundedCornerShape(16.dp))
+                .padding(
+                    horizontal = (12f * fitScale).coerceAtLeast(6f).dp,
+                    vertical = (10f * fitScale).coerceAtLeast(6f).dp
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // 1. TOP AIRPORT TERMINAL HEADER BAR (Solari Udine Style)
+            if (showTerminalHeader) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF090A0D))
+                        .border(1.dp, Color(0xFF22252E), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(airportAmber)
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "✈ ${regionInfo.airportCode}",
+                                color = Color(0xFF0B0C0E),
+                                fontSize = (11f * fitScale).coerceIn(9f, 13f).sp,
+                                fontFamily = AirportTelemetryFontFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = if (isDuoCompact) regionInfo.airportCityName else "${regionInfo.airportCityName} TERMINAL • ${regionInfo.standardTimeShort}",
+                            color = airportAmber.copy(alpha = 0.92f),
+                            fontSize = (11f * fitScale).coerceIn(8.5f, 13f).sp,
+                            fontFamily = AirportTelemetryFontFamily,
+                            letterSpacing = 1.2.sp,
+                            maxLines = 1
+                        )
+                    }
+
+                    // Mini Split-Flap Calendar Date Modules (EEE | DD | MMM)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        AirportMiniWordFlap(
+                            text = dayOfWeekText,
+                            textColor = airportAmber,
+                            fontScale = fitScale
+                        )
+                        AirportMiniWordFlap(
+                            text = dayOfMonthText,
+                            textColor = flapTextColor,
+                            fontScale = fitScale
+                        )
+                        if (!isDuoCompact) {
+                            AirportMiniWordFlap(
+                                text = monthText,
+                                textColor = flapTextColor,
+                                fontScale = fitScale
+                            )
+                        }
+                    }
+                }
             }
 
-            if (!use24Hour && showAmPm) {
-                Text(
-                    text = amPmText,
-                    color = color.copy(alpha = 0.6f),
-                    fontSize = (24 * fitScale).sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = fontFamily,
-                    maxLines = 1,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
+            // 2. MAIN MECHANICAL SPLIT-FLAP CLOCK DRUM BAY
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF060709))
+                    .border(1.dp, Color(0xFF1F222B), RoundedCornerShape(12.dp))
+                    .padding(
+                        horizontal = (10f * fitScale).coerceAtLeast(4f).dp,
+                        vertical = (8f * fitScale).coerceAtLeast(4f).dp
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy((4f * fitScale).dp)
+                ) {
+                    // Column Sub-headers (HOURS / MINUTES / SECONDS)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (showSeconds && !isDuoCompact) {
+                                "HOURS               MINUTES              SECONDS"
+                            } else {
+                                "HOURS                     MINUTES"
+                            },
+                            color = Color(0xFF7A8090),
+                            fontSize = (9.5f * fitScale).coerceIn(7.5f, 11f).sp,
+                            fontFamily = AirportTelemetryFontFamily,
+                            letterSpacing = 1.6.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy((6f * fitScale).coerceAtLeast(3f).dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // HOURS: 2 individual mechanical split-flap drums
+                        AirportSplitFlapCell(
+                            char = hourText.getOrElse(0) { '0' },
+                            textColor = flapTextColor,
+                            fontSize = digitFontSize,
+                            cellWidth = cellWidth.dp,
+                            cellHeight = cellHeight.dp,
+                            cornerRadius = cellCorner,
+                            cascadeDelayMs = 0
+                        )
+                        AirportSplitFlapCell(
+                            char = hourText.getOrElse(1) { '0' },
+                            textColor = flapTextColor,
+                            fontSize = digitFontSize,
+                            cellWidth = cellWidth.dp,
+                            cellHeight = cellHeight.dp,
+                            cornerRadius = cellCorner,
+                            cascadeDelayMs = 35
+                        )
+
+                        // Mechanical Riveted Colon Pillar
+                        AirportMechanicalColon(
+                            height = cellHeight.dp,
+                            color = airportAmber,
+                            scale = fitScale
+                        )
+
+                        // MINUTES: 2 individual mechanical split-flap drums
+                        AirportSplitFlapCell(
+                            char = minuteText.getOrElse(0) { '0' },
+                            textColor = flapTextColor,
+                            fontSize = digitFontSize,
+                            cellWidth = cellWidth.dp,
+                            cellHeight = cellHeight.dp,
+                            cornerRadius = cellCorner,
+                            cascadeDelayMs = 70
+                        )
+                        AirportSplitFlapCell(
+                            char = minuteText.getOrElse(1) { '0' },
+                            textColor = flapTextColor,
+                            fontSize = digitFontSize,
+                            cellWidth = cellWidth.dp,
+                            cellHeight = cellHeight.dp,
+                            cornerRadius = cellCorner,
+                            cascadeDelayMs = 105
+                        )
+
+                        // SECONDS: 2 slightly smaller mechanical split-flap drums
+                        if (showSeconds && !isDuoCompact) {
+                            AirportMechanicalColon(
+                                height = (cellHeight * 0.84f).dp,
+                                color = airportAmber.copy(alpha = 0.7f),
+                                scale = fitScale * 0.85f
+                            )
+                            AirportSplitFlapCell(
+                                char = secondText.getOrElse(0) { '0' },
+                                textColor = airportAmber,
+                                fontSize = digitFontSize * 0.82f,
+                                cellWidth = (cellWidth * 0.82f).dp,
+                                cellHeight = (cellHeight * 0.84f).dp,
+                                cornerRadius = cellCorner * 0.85f,
+                                cascadeDelayMs = 0,
+                                isFastSecondDrum = true
+                            )
+                            AirportSplitFlapCell(
+                                char = secondText.getOrElse(1) { '0' },
+                                textColor = airportAmber,
+                                fontSize = digitFontSize * 0.82f,
+                                cellWidth = (cellWidth * 0.82f).dp,
+                                cellHeight = (cellHeight * 0.84f).dp,
+                                cornerRadius = cellCorner * 0.85f,
+                                cascadeDelayMs = 20,
+                                isFastSecondDrum = true
+                            )
+                        }
+
+                        // AM / PM Mechanical Split-Flap Cartridge
+                        if (!use24Hour && showAmPm) {
+                            Spacer(modifier = Modifier.width((2f * fitScale).dp))
+                            AirportMeridianFlapCard(
+                                meridian = amPmText,
+                                textColor = airportAmber,
+                                boxWidth = (cellWidth * 0.72f).dp,
+                                boxHeight = (cellHeight * 0.56f).dp,
+                                fontSize = (digitFontSize.value * 0.34f).sp,
+                                cornerRadius = cellCorner * 0.75f
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. BOTTOM AIRPORT TERMINAL LOCATION SPLIT-FLAP ROW (Shows User's Location Name from GPS or Settings)
+            if (showFlightTicker) {
+                val charSlots = if (isDuoCompact) 8 else 11
+                val locationChars = regionInfo.airportCityName.padEnd(charSlots, ' ').take(charSlots)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF08090C))
+                        .border(1.dp, Color(0xFF22252E), RoundedCornerShape(8.dp))
+                        .clickable {
+                            flightIndex = (flightIndex + 1) % AirportSampleFlights.size
+                            if (locationMode == "auto" && gpsLocation == null) {
+                                try {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                                            android.Manifest.permission.ACCESS_FINE_LOCATION
+                                        )
+                                    )
+                                } catch (_: Exception) {
+                                }
+                            } else {
+                                vm.refreshDeviceLocation(context)
+                            }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .testTag("airport_flipboard_flight_row"),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Location / Airport Code Flap
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "LOC",
+                            color = Color(0xFF6E7382),
+                            fontSize = (9.5f * fitScale).coerceIn(8f, 11f).sp,
+                            fontFamily = AirportTelemetryFontFamily
+                        )
+                        AirportMiniWordFlap(
+                            text = regionInfo.airportCode,
+                            textColor = airportAmber,
+                            fontScale = fitScale
+                        )
+                    }
+
+                    // User's Location Name Individual Character Split-Flap Array
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        locationChars.forEachIndexed { idx, ch ->
+                            AirportMiniCharFlap(
+                                char = ch,
+                                textColor = flapTextColor,
+                                scale = fitScale,
+                                cascadeDelayMs = idx * 24
+                            )
+                        }
+                    }
+
+                    // TimeZone / Status Flap
+                    if (!isDuoCompact) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "ZONE",
+                                color = Color(0xFF6E7382),
+                                fontSize = (9.5f * fitScale).coerceIn(8f, 11f).sp,
+                                fontFamily = AirportTelemetryFontFamily
+                            )
+                            AirportMiniWordFlap(
+                                text = regionInfo.standardTimeShort,
+                                textColor = flapTextColor,
+                                fontScale = fitScale
+                            )
+                            AirportMiniWordFlap(
+                                text = activeFlight.status.trim(),
+                                textColor = activeFlight.statusColor,
+                                fontScale = fitScale
+                            )
+                        }
+                    } else {
+                        AirportMiniWordFlap(
+                            text = regionInfo.standardTimeShort,
+                            textColor = activeFlight.statusColor,
+                            fontScale = fitScale
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun FlipFlapCard(
-    text: String,
+private fun AirportMechanicalColon(
+    height: Dp,
     color: Color,
-    fontSize: androidx.compose.ui.unit.TextUnit,
-    fontFamily: FontFamily,
-    boxWidth: androidx.compose.ui.unit.Dp,
-    boxHeight: androidx.compose.ui.unit.Dp,
-    cornerRadius: androidx.compose.ui.unit.Dp
+    scale: Float
 ) {
+    val dotSize = (8f * scale).coerceAtLeast(4f).dp
+    Column(
+        modifier = Modifier
+            .height(height)
+            .padding(horizontal = (2f * scale).dp),
+        verticalArrangement = Arrangement.SpaceEvenly,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(dotSize)
+                .clip(RoundedCornerShape(2.dp))
+                .background(color)
+                .border(0.75.dp, Color.Black.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
+        )
+        Box(
+            modifier = Modifier
+                .size(dotSize)
+                .clip(RoundedCornerShape(2.dp))
+                .background(color)
+                .border(0.75.dp, Color.Black.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
+        )
+    }
+}
+
+/**
+ * Single-character mechanical Solari Split-Flap Drum module with true 3D top-to-bottom
+ * folding flap animation (`rotationX`), recessed aluminum housing, horizontal split gap,
+ * and metallic side hinge axle pins.
+ */
+@Composable
+fun AirportSplitFlapCell(
+    char: Char,
+    textColor: Color,
+    fontSize: TextUnit,
+    cellWidth: Dp,
+    cellHeight: Dp,
+    cornerRadius: Dp,
+    cascadeDelayMs: Int = 0,
+    isFastSecondDrum: Boolean = false
+) {
+    var displayedChar by remember { mutableStateOf(char) }
+    var previousChar by remember { mutableStateOf(char) }
+    val flipRotation = remember { Animatable(180f) }
+
+    LaunchedEffect(char) {
+        if (char != displayedChar) {
+            if (cascadeDelayMs > 0) {
+                delay(cascadeDelayMs.toLong())
+            }
+            // For non-seconds drums, perform a brief intermediate mechanical drum step like a physical Solari wheel
+            if (!isFastSecondDrum && char.isDigit() && displayedChar.isDigit()) {
+                val intermediate = (((displayedChar.digitToInt() + 9) % 10)).digitToChar()
+                if (intermediate != char && intermediate != displayedChar) {
+                    previousChar = displayedChar
+                    displayedChar = intermediate
+                    flipRotation.snapTo(0f)
+                    flipRotation.animateTo(
+                        targetValue = 180f,
+                        animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing)
+                    )
+                }
+            }
+            previousChar = displayedChar
+            displayedChar = char
+            flipRotation.snapTo(0f)
+            flipRotation.animateTo(
+                targetValue = 180f,
+                animationSpec = tween(
+                    durationMillis = if (isFastSecondDrum) 280 else 360,
+                    easing = LinearOutSlowInEasing
+                )
+            )
+        }
+    }
+
+    val currentAngle = flipRotation.value
+    val isFlipping = currentAngle < 179.5f
+
+    Box(
+        modifier = Modifier
+            .size(width = cellWidth, height = cellHeight)
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(Color(0xFF040507))
+            .border(1.2.dp, Color(0xFF2A2E39), RoundedCornerShape(cornerRadius))
+            .padding(2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // 1. Base Static Split-Flap Halves:
+        // Top half shows the new (target) character; Bottom half shows previousChar while angle < 90°, then displayedChar
+        val bottomStaticChar = if (isFlipping && currentAngle < 90f) previousChar else displayedChar
+
+        // Static Top Half
+        AirportFlapHalfSurface(
+            char = displayedChar,
+            isTopHalf = true,
+            textColor = textColor,
+            fontSize = fontSize,
+            cornerRadius = cornerRadius,
+            shadowAlpha = if (isFlipping && currentAngle < 90f) ((90f - currentAngle) / 90f) * 0.35f else 0f
+        )
+
+        // Static Bottom Half
+        AirportFlapHalfSurface(
+            char = bottomStaticChar,
+            isTopHalf = false,
+            textColor = textColor,
+            fontSize = fontSize,
+            cornerRadius = cornerRadius,
+            shadowAlpha = if (isFlipping && currentAngle < 90f) {
+                (currentAngle / 90f) * 0.55f
+            } else if (isFlipping) {
+                ((180f - currentAngle) / 90f) * 0.35f
+            } else 0f
+        )
+
+        // 2. 3D Swinging Mechanical Flap Leaf
+        if (isFlipping) {
+            if (currentAngle < 90f) {
+                // Falling Upper Flap (previousChar top half rotating from 0° down to -90°)
+                AirportFlapHalfSurface(
+                    char = previousChar,
+                    isTopHalf = true,
+                    textColor = textColor,
+                    fontSize = fontSize,
+                    cornerRadius = cornerRadius,
+                    shadowAlpha = (currentAngle / 90f) * 0.45f,
+                    modifier = Modifier.graphicsLayer {
+                        rotationX = -currentAngle
+                        transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        cameraDistance = 14f * density
+                    }
+                )
+            } else {
+                // Unfolding Lower Flap (displayedChar bottom half rotating from +90° down to 0°)
+                AirportFlapHalfSurface(
+                    char = displayedChar,
+                    isTopHalf = false,
+                    textColor = textColor,
+                    fontSize = fontSize,
+                    cornerRadius = cornerRadius,
+                    shadowAlpha = ((180f - currentAngle) / 90f) * 0.40f,
+                    modifier = Modifier.graphicsLayer {
+                        rotationX = 180f - currentAngle
+                        transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        cameraDistance = 14f * density
+                    }
+                )
+            }
+        }
+
+        // 3. Mechanical Center Split Gap & Left/Right Metallic Hinge Axles
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val midY = size.height / 2f
+            val gapH = 3.dp.toPx()
+
+            // Horizontal split shadow trench
+            drawRect(
+                color = Color(0xFF030305),
+                topLeft = Offset(0f, midY - gapH / 2f),
+                size = Size(size.width, gapH)
+            )
+            // Subtle top flap bottom-edge highlight & bottom flap top-edge bevel
+            drawLine(
+                color = Color.White.copy(alpha = 0.08f),
+                start = Offset(0f, midY + gapH / 2f + 0.8f),
+                end = Offset(size.width, midY + gapH / 2f + 0.8f),
+                strokeWidth = 1f
+            )
+
+            // Left & Right Mechanical Hinge Axle Pins
+            val pinW = 4.5.dp.toPx()
+            val pinH = 9.dp.toPx()
+            // Left hinge notch
+            drawRoundRect(
+                color = Color(0xFF4B505E),
+                topLeft = Offset(0f, midY - pinH / 2f),
+                size = Size(pinW, pinH),
+                cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+            )
+            drawLine(
+                color = Color(0xFF9AA0B0),
+                start = Offset(1.dp.toPx(), midY - pinH / 3f),
+                end = Offset(1.dp.toPx(), midY + pinH / 3f),
+                strokeWidth = 1.dp.toPx()
+            )
+            // Right hinge notch
+            drawRoundRect(
+                color = Color(0xFF4B505E),
+                topLeft = Offset(size.width - pinW, midY - pinH / 2f),
+                size = Size(pinW, pinH),
+                cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+            )
+            drawLine(
+                color = Color(0xFF9AA0B0),
+                start = Offset(size.width - 1.5.dp.toPx(), midY - pinH / 3f),
+                end = Offset(size.width - 1.5.dp.toPx(), midY + pinH / 3f),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
+    }
+}
+
+@Composable
+private fun AirportFlapHalfSurface(
+    char: Char,
+    isTopHalf: Boolean,
+    textColor: Color,
+    fontSize: TextUnit,
+    cornerRadius: Dp,
+    shadowAlpha: Float = 0f,
+    modifier: Modifier = Modifier
+) {
+    val bgBrush = if (isTopHalf) {
+        Brush.verticalGradient(
+            0.0f to Color(0xFF23262E),
+            0.5f to Color(0xFF191C22),
+            0.5f to Color.Transparent,
+            1.0f to Color.Transparent
+        )
+    } else {
+        Brush.verticalGradient(
+            0.0f to Color.Transparent,
+            0.5f to Color.Transparent,
+            0.5f to Color(0xFF14171C),
+            1.0f to Color(0xFF1D2027)
+        )
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(bgBrush)
+            .drawWithCache {
+                onDrawWithContent {
+                    clipRect(
+                        left = 0f,
+                        top = if (isTopHalf) 0f else size.height / 2f,
+                        right = size.width,
+                        bottom = if (isTopHalf) size.height / 2f else size.height
+                    ) {
+                        this@onDrawWithContent.drawContent()
+                        if (shadowAlpha > 0.01f) {
+                            drawRect(Color.Black.copy(alpha = shadowAlpha.coerceIn(0f, 0.85f)))
+                        }
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = char.toString(),
+            color = textColor,
+            fontSize = fontSize,
+            fontFamily = AirportFlapFontFamily,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun AirportMeridianFlapCard(
+    meridian: String,
+    textColor: Color,
+    boxWidth: Dp,
+    boxHeight: Dp,
+    fontSize: TextUnit,
+    cornerRadius: Dp
+) {
+    var displayed by remember { mutableStateOf(meridian) }
+    var previous by remember { mutableStateOf(meridian) }
+    val flipAngle = remember { Animatable(180f) }
+
+    LaunchedEffect(meridian) {
+        if (meridian != displayed) {
+            previous = displayed
+            displayed = meridian
+            flipAngle.snapTo(0f)
+            flipAngle.animateTo(180f, tween(340, easing = LinearOutSlowInEasing))
+        }
+    }
+
     Box(
         modifier = Modifier
             .size(width = boxWidth, height = boxHeight)
-            .background(Color(0xFF121214), shape = RoundedCornerShape(cornerRadius))
-            .border(1.dp, Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(cornerRadius)),
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF20232B), Color(0xFF15171D))
+                )
+            )
+            .border(1.dp, Color(0xFF2E323E), RoundedCornerShape(cornerRadius)),
         contentAlignment = Alignment.Center
     ) {
+        Text(
+            text = if (flipAngle.value < 90f) previous else displayed,
+            color = textColor,
+            fontSize = fontSize,
+            fontFamily = AirportFlapFontFamily,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+            textAlign = TextAlign.Center
+        )
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val midY = size.height / 2f
             drawLine(
-                color = Color.Black,
-                start = Offset(0f, size.height / 2),
-                end = Offset(size.width, size.height / 2),
-                strokeWidth = 4f
+                color = Color(0xFF040507),
+                start = Offset(0f, midY),
+                end = Offset(size.width, midY),
+                strokeWidth = 2.dp.toPx()
             )
         }
-        
-        AnimatedContent(
-            targetState = text,
-            transitionSpec = {
-                (slideInVertically(
-                    initialOffsetY = { height -> -height },
-                    animationSpec = tween(durationMillis = 500, easing = LinearOutSlowInEasing)
-                ) + fadeIn(animationSpec = tween(250))
-                ).togetherWith(
-                    slideOutVertically(
-                        targetOffsetY = { height -> height },
-                        animationSpec = tween(durationMillis = 500, easing = LinearOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(250))
-                ).using(SizeTransform(clip = true))
+    }
+}
+
+@Composable
+private fun AirportMiniCharFlap(
+    char: Char,
+    textColor: Color,
+    scale: Float,
+    cascadeDelayMs: Int
+) {
+    var displayedChar by remember { mutableStateOf(char) }
+    val rotX = remember { Animatable(0f) }
+
+    LaunchedEffect(char) {
+        if (char != displayedChar) {
+            delay(cascadeDelayMs.toLong())
+            rotX.snapTo(-85f)
+            displayedChar = char
+            rotX.animateTo(0f, tween(210, easing = LinearOutSlowInEasing))
+        }
+    }
+
+    val w = (15f * scale).coerceIn(11f, 20f).dp
+    val h = (23f * scale).coerceIn(17f, 30f).dp
+
+    Box(
+        modifier = Modifier
+            .size(width = w, height = h)
+            .clip(RoundedCornerShape(3.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF20232B), Color(0xFF14161B))
+                )
+            )
+            .border(0.75.dp, Color(0xFF2B2F3B), RoundedCornerShape(3.dp))
+            .graphicsLayer {
+                rotationX = rotX.value
+                cameraDistance = 12f * density
             },
-            label = "FlipTransition"
-        ) { targetText ->
-            Text(
-                text = targetText,
-                color = color,
-                fontSize = fontSize,
-                fontFamily = fontFamily,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                softWrap = false,
-                textAlign = TextAlign.Center
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = displayedChar.toString(),
+            color = textColor,
+            fontSize = (13.5f * scale).coerceIn(10f, 17f).sp,
+            fontFamily = AirportFlapFontFamily,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawLine(
+                color = Color(0xFF040507),
+                start = Offset(0f, size.height / 2f),
+                end = Offset(size.width, size.height / 2f),
+                strokeWidth = 1.5f
+            )
+        }
+    }
+}
+
+@Composable
+private fun AirportMiniWordFlap(
+    text: String,
+    textColor: Color,
+    fontScale: Float
+) {
+    var displayed by remember { mutableStateOf(text) }
+    val rotX = remember { Animatable(0f) }
+
+    LaunchedEffect(text) {
+        if (text != displayed) {
+            rotX.snapTo(-80f)
+            displayed = text
+            rotX.animateTo(0f, tween(240, easing = LinearOutSlowInEasing))
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF20232B), Color(0xFF14161B))
+                )
+            )
+            .border(0.8.dp, Color(0xFF2C303C), RoundedCornerShape(4.dp))
+            .graphicsLayer {
+                rotationX = rotX.value
+                cameraDistance = 12f * density
+            }
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = displayed,
+            color = textColor,
+            fontSize = (11.5f * fontScale).coerceIn(9f, 14f).sp,
+            fontFamily = AirportTelemetryFontFamily,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.8.sp,
+            maxLines = 1
+        )
+        Canvas(modifier = Modifier.matchParentSize()) {
+            drawLine(
+                color = Color.Black.copy(alpha = 0.65f),
+                start = Offset(0f, size.height / 2f),
+                end = Offset(size.width, size.height / 2f),
+                strokeWidth = 1.2f
             )
         }
     }
@@ -686,8 +1452,9 @@ fun BinaryStyle(
                 .background(Color.Black.copy(alpha = 0.3f))
         )
         
+        val tz = calendar.timeZone ?: TimeZone.getDefault()
         val formatPattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
-        val format = SimpleDateFormat(formatPattern, Locale.getDefault())
+        val format = SimpleDateFormat(formatPattern, Locale.getDefault()).apply { timeZone = tz }
         val text = format.format(calendar.time).map { char ->
             when {
                 char == ':' -> ":"
@@ -732,7 +1499,8 @@ fun ModernBoldTextClock(
     showAmPm: Boolean = true,
     showSeconds: Boolean = true
 ) {
-    val dayOfWeek = SimpleDateFormat("EEEE", Locale.getDefault()).format(calendar.time)
+    val tz = calendar.timeZone ?: TimeZone.getDefault()
+    val dayOfWeek = SimpleDateFormat("EEEE", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
     val hourOfDay = calendar.get(Calendar.HOUR_OF_DAY)
     val periodName = when (hourOfDay) {
         in 5..11 -> "Morning"
@@ -741,9 +1509,9 @@ fun ModernBoldTextClock(
         else -> "Night"
     }
     val timePattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "")
-    val timeStr = SimpleDateFormat(timePattern, Locale.getDefault()).format(calendar.time)
-    val amPmStr = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
-    val dateStr = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(calendar.time)
+    val timeStr = SimpleDateFormat(timePattern, Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
+    val amPmStr = SimpleDateFormat("a", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
+    val dateStr = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
 
     BoxWithConstraints(
         modifier = Modifier
@@ -830,11 +1598,12 @@ fun LargeSidebarClock(
     showAmPm: Boolean = true,
     showSeconds: Boolean = true
 ) {
+    val tz = calendar.timeZone ?: TimeZone.getDefault()
     val timePattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "")
-    val timeFormat = SimpleDateFormat(timePattern, Locale.getDefault())
-    val amPmFormat = SimpleDateFormat(" a", Locale.getDefault())
-    val dayOfWeekAbbr = SimpleDateFormat("EEE", Locale.getDefault()).format(calendar.time).uppercase()
-    val dayOfMonth = SimpleDateFormat("d", Locale.getDefault()).format(calendar.time)
+    val timeFormat = SimpleDateFormat(timePattern, Locale.getDefault()).apply { timeZone = tz }
+    val amPmFormat = SimpleDateFormat(" a", Locale.getDefault()).apply { timeZone = tz }
+    val dayOfWeekAbbr = SimpleDateFormat("EEE", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time).uppercase()
+    val dayOfMonth = SimpleDateFormat("d", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
     
     val alarmText = nextSystemAlarm ?: "No Alarm"
 
@@ -944,8 +1713,9 @@ fun ContrastingSplitClock(
     showAmPm: Boolean = true,
     showSeconds: Boolean = true
 ) {
+    val tz = calendar.timeZone ?: TimeZone.getDefault()
     val pattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
-    val format = SimpleDateFormat(pattern, Locale.getDefault())
+    val format = SimpleDateFormat(pattern, Locale.getDefault()).apply { timeZone = tz }
     val timeText = format.format(calendar.time)
     val baseFontSize = if (showSeconds || (!use24Hour && showAmPm)) 110 * scale else 150 * scale
 
@@ -1001,11 +1771,12 @@ fun ContrastingSplitClock(
 
 @Composable
 fun AnalogDashboard(calendar: Calendar, color: Color, fontFamily: FontFamily, scale: Float = 1.0f, animationsEnabled: Boolean = true, showSeconds: Boolean = true) {
+    val tz = calendar.timeZone ?: TimeZone.getDefault()
     val hour = calendar.get(Calendar.HOUR)
     val minute = calendar.get(Calendar.MINUTE)
     val second = calendar.get(Calendar.SECOND)
-    val dayOfWeek = SimpleDateFormat("EEE", Locale.getDefault()).format(calendar.time).uppercase()
-    val dayOfMonth = SimpleDateFormat("d", Locale.getDefault()).format(calendar.time)
+    val dayOfWeek = SimpleDateFormat("EEE", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time).uppercase()
+    val dayOfMonth = SimpleDateFormat("d", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
 
     BoxWithConstraints(
         modifier = Modifier
@@ -1216,10 +1987,11 @@ fun BubblePastelClock(
     showAmPm: Boolean = true,
     showSeconds: Boolean = true
 ) {
-    val hh = SimpleDateFormat(if (use24Hour) "HH" else "h", Locale.getDefault()).format(calendar.time)
-    val mm = SimpleDateFormat("mm", Locale.getDefault()).format(calendar.time)
-    val ss = SimpleDateFormat("ss", Locale.getDefault()).format(calendar.time)
-    val amPmText = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
+    val tz = calendar.timeZone ?: TimeZone.getDefault()
+    val hh = SimpleDateFormat(if (use24Hour) "HH" else "h", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
+    val mm = SimpleDateFormat("mm", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
+    val ss = SimpleDateFormat("ss", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
+    val amPmText = SimpleDateFormat("a", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
     
     val hourDigits = hh.map { it.toString() }
     val minuteDigits = mm.map { it.toString() }
@@ -1335,8 +2107,9 @@ fun AmbientGradientClock(
     showAmPm: Boolean = true,
     showSeconds: Boolean = true
 ) {
+    val tz = calendar.timeZone ?: TimeZone.getDefault()
     val pattern = (if (use24Hour) "H" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
-    val format = SimpleDateFormat(pattern, Locale.getDefault())
+    val format = SimpleDateFormat(pattern, Locale.getDefault()).apply { timeZone = tz }
     val formattedText = format.format(calendar.time)
     val gradientBrush = androidx.compose.ui.graphics.Brush.linearGradient(
         colors = listOf(
@@ -1385,8 +2158,9 @@ fun NixieTubeClock(
     showAmPm: Boolean = true,
     showSeconds: Boolean = true
 ) {
+    val tz = calendar.timeZone ?: TimeZone.getDefault()
     val pattern = (if (use24Hour) "HH" else "hh") + ":mm" + (if (showSeconds) ":ss" else "") 
-    val timeStr = SimpleDateFormat(pattern, Locale.getDefault()).format(calendar.time)
+    val timeStr = SimpleDateFormat(pattern, Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
     
     val displayColor = if (color == Color.White) Color(0xFFFFB300) else color
     
@@ -1425,7 +2199,7 @@ fun NixieTubeClock(
             )
             
             if (!use24Hour && showAmPm) {
-                val amPmText = SimpleDateFormat("a", Locale.getDefault()).format(calendar.time)
+                val amPmText = SimpleDateFormat("a", Locale.getDefault()).apply { timeZone = tz }.format(calendar.time)
                 Text(
                     text = amPmText.uppercase(),
                     color = color.copy(alpha = 0.5f),

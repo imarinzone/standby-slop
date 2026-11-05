@@ -211,8 +211,6 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun calculateCategory(dtStart: Long): String {
-        val now = Calendar.getInstance()
-        
         val startOfToday = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -237,18 +235,6 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             eventCal.timeInMillis in startOfToday.timeInMillis..endOfToday.timeInMillis -> "Daily"
             eventCal.timeInMillis in (endOfToday.timeInMillis + 1)..endOfWeek.timeInMillis -> "Weekly"
             else -> "Monthly"
-        }
-    }
-
-    companion object {
-        private fun getRelativeTimeOffset(daysOffset: Int, hour: Int, minute: Int): Long {
-            return Calendar.getInstance().apply {
-                add(Calendar.DAY_OF_YEAR, daysOffset)
-                set(Calendar.HOUR_OF_DAY, hour)
-                set(Calendar.MINUTE, minute)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
         }
     }
 }
