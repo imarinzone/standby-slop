@@ -574,9 +574,10 @@ fun StandbyScreen(
                                                 onDrag = { change, dragAmountOffset ->
                                                     change.consume()
                                                     coroutineScope.launch {
-                                                        val nextVal = (dragAmount.value + dragAmountOffset.x).coerceIn(0f, maxDragOffsetPx)
+                                                        val safeMaxDrag = maxDragOffsetPx.coerceAtLeast(0f)
+                                                        val nextVal = (dragAmount.value + dragAmountOffset.x).coerceIn(0f, safeMaxDrag)
                                                         dragAmount.snapTo(nextVal)
-                                                        val bucket = ((nextVal / maxDragOffsetPx) * 8f).toInt()
+                                                        val bucket = if (safeMaxDrag > 0f) ((nextVal / safeMaxDrag) * 8f).toInt() else 0
                                                         if (bucket != lastHapticBucket) {
                                                             lastHapticBucket = bucket
                                                             haptics.step()

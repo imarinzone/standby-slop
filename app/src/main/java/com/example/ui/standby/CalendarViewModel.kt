@@ -1,8 +1,11 @@
 package com.example.ui.standby
 
+import android.Manifest
 import android.app.Application
 import android.content.Context
+import android.content.pm.PackageManager
 import android.provider.CalendarContract
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +49,9 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     val selectedCalendarIds = MutableStateFlow<Set<Long>>(emptySet())
 
     fun loadCalendarSources(context: Context) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
         viewModelScope.launch {
             try {
                 val sources = withContext(Dispatchers.IO) {
@@ -139,6 +145,9 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     )
 
     fun loadLocalEvents(context: Context) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
         android.util.Log.d("CalendarViewModel", "loadLocalEvents: starts query for local calendar events")
         viewModelScope.launch {
             try {

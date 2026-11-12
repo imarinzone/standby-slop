@@ -736,15 +736,16 @@ private fun DuoAspectScaledScreen(
             .clipToBounds(),
         contentAlignment = Alignment.Center
     ) {
-        val virtualW = 680.dp
-        val virtualH = 420.dp
-        val scaleX = (maxWidth.value / virtualW.value).coerceIn(0.42f, 1.0f)
-        val scaleY = (maxHeight.value / virtualH.value).coerceIn(0.42f, 1.0f)
-        val uniformScale = minOf(scaleX, scaleY)
+        // Compute virtual viewport proportionally: dynamically adapt scale without artificial 1.0f clamp
+        val baseVirtualW = 680.dp
+        val baseVirtualH = 420.dp
+        val scaleX = maxWidth.value / baseVirtualW.value
+        val scaleY = maxHeight.value / baseVirtualH.value
+        val uniformScale = minOf(scaleX, scaleY).coerceIn(0.35f, 2.40f)
 
         Box(
             modifier = Modifier
-                .requiredSize(virtualW, virtualH)
+                .requiredSize(baseVirtualW, baseVirtualH)
                 .graphicsLayer {
                     this.scaleX = uniformScale
                     this.scaleY = uniformScale

@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan for removing unwanted template tests, unused configurations, unused Gradle dependencies, and dead code snippets, paired with a comprehensive unit and Robolectric UI test suite covering Alarm CRUD & scrollable dial, Pre-Alarm gradual brightness dimming, Settings persistence & customization flows, and Stopwatch lap timings & Pomodoro timer.",
-  "updatedAt":  "2026-10-24T01:34:48.744359585Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}

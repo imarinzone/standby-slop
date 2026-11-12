@@ -7,10 +7,12 @@ import android.provider.Settings
 import android.view.KeyEvent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
 import com.example.ui.standby.*
@@ -418,5 +420,83 @@ class ExampleRobolectricTest {
         )
         val flat = Settings.Secure.getString(application.contentResolver, "enabled_notification_listeners")
         assertTrue(flat.contains(pkgName))
+    }
+
+    @Test
+    fun `analog classic small container and calendar permission guard do not crash`() {
+        val calVm = CalendarViewModel(application)
+        // Without READ_CALENDAR permission granted, both queries should return safely without SecurityException
+        calVm.loadCalendarSources(application)
+        calVm.loadLocalEvents(application)
+        assertTrue(calVm.calendarSources.value.isEmpty())
+        assertTrue(calVm.deviceEvents.value.isEmpty())
+
+        // Render AnalogClassic inside a <120dp compact preview box (reproducing 106.67dp Duo picker card bounds)
+        val now = Calendar.getInstance()
+        composeTestRule.setContent {
+            Box(modifier = androidx.compose.ui.Modifier.size(width = 100.dp, height = 80.dp)) {
+                AnalogClassic(
+                    calendar = now,
+                    color = Color.White,
+                    scale = 0.90f,
+                    animationsEnabled = true,
+                    showSeconds = true
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+    }
+
+    @Test
+    fun `world map solar parabola steps every 1 hour with exact day night and no top utc text`() {
+        val utcTz = java.util.TimeZone.getTimeZone("UTC")
+        val cal12_00 = Calendar.getInstance(utcTz).apply {
+            set(2026, Calendar.NOVEMBER, 12, 12, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val cal12_47 = Calendar.getInstance(utcTz).apply {
+            set(2026, Calendar.NOVEMBER, 12, 12, 47, 55)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val cal13_00 = Calendar.getInstance(utcTz).apply {
+            set(2026, Calendar.NOVEMBER, 12, 13, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        val state12a = computeWorldMapSolarState(cal12_00, utcTz)
+        val state12b = computeWorldMapSolarState(cal12_47, utcTz)
+        val state13 = computeWorldMapSolarState(cal13_00, utcTz)
+
+        // Remains steady within the same 1-hour window (12:00..12:59)
+        assertEquals(0f, state12a.subsolarLonDeg, 0.001f)
+        assertEquals(state12a.subsolarLonDeg, state12b.subsolarLonDeg, 0.001f)
+
+        // Shifts 15° westward on the next 1-hour mark (13:00 UTC -> -15°)
+        assertEquals(-15f, state13.subsolarLonDeg, 0.001f)
+
+        // Exact day vs night at 12:00 UTC: London/Greenwich (0°, 51.5°N) & Equator (0°, 0°) are Day; Date Line (180°, 0°) is Night
+        assertTrue(state12a.isDaylight(0f, 51.5f))
+        assertTrue(state12a.isDaylight(0f, 0f))
+        assertFalse(state12a.isDaylight(180f, 0f))
+        // Sunrise (-90°) and Sunset (+90°) cross the Equator (0° lat)
+        assertEquals(0f, state12a.terminatorLatitudeDeg(-90f), 0.01f)
+        assertEquals(0f, state12a.terminatorLatitudeDeg(90f), 0.01f)
+
+        // Verify top UTC/hr small text is removed from the World Map UI
+        val vm = StandbyViewModel(application)
+        vm.setClockTimeZoneId("America/New_York")
+        composeTestRule.setContent {
+            WorldTimeZoneMapClockFace(
+                calendar = cal12_00,
+                accentColor = Color(0xFFFF9800),
+                customFont = FontFamily.Default,
+                standbyViewModel = vm,
+                paneIndex = 0
+            )
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("world_map_clock_face").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0000+", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("UTC", substring = true).assertDoesNotExist()
     }
 }

@@ -21,11 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -40,11 +42,13 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.tan
 
 /**
  * 1. High-Precision Equirectangular World Map Dot Matrix (96 cols x 44 rows)
@@ -98,6 +102,63 @@ private val WORLD_MAP_ASCII = listOf(
     "................................................................................................"
 )
 
+internal data class WorldMapSolarState(
+    val discreteLocalHour: Int,
+    val subsolarLonDeg: Float,
+    val declinationDeg: Float
+) {
+    private val declRad = Math.toRadians(declinationDeg.toDouble())
+    private val sinDecl = sin(declRad)
+    private val cosDecl = cos(declRad)
+    private val tanDecl = tan(declRad)
+
+    /**
+     * Exact latitude (in degrees, -90..+90) of the Day/Night solar terminator at [lonDeg].
+     */
+    fun terminatorLatitudeDeg(lonDeg: Float): Float {
+        val deltaLonRad = Math.toRadians((lonDeg - subsolarLonDeg).toDouble())
+        val latRad = atan(-cos(deltaLonRad) / tanDecl)
+        return Math.toDegrees(latRad).toFloat()
+    }
+
+    /**
+     * Sine of solar altitude at ([lonDeg], [latDeg]): >= 0f means Daylight, < 0f means Night.
+     */
+    fun solarSinAltitude(lonDeg: Float, latDeg: Float): Float {
+        val latRad = Math.toRadians(latDeg.toDouble())
+        val deltaLonRad = Math.toRadians((lonDeg - subsolarLonDeg).toDouble())
+        return (sin(latRad) * sinDecl + cos(latRad) * cosDecl * cos(deltaLonRad)).toFloat()
+    }
+
+    fun isDaylight(lonDeg: Float, latDeg: Float): Boolean = solarSinAltitude(lonDeg, latDeg) >= 0f
+}
+
+/**
+ * Computes the solar day/night state stepped strictly every 1 hour (15° longitude per hour).
+ * Within any single hour (e.g. 14:00..14:59), the terminator parabola remains fixed at that hour's
+ * exact solar position and advances by 15° westward on each new hour.
+ */
+internal fun computeWorldMapSolarState(zonedCal: Calendar, activeTimeZone: TimeZone): WorldMapSolarState {
+    val discreteLocalHour = zonedCal.get(Calendar.HOUR_OF_DAY) // 0..23, steps every 1 hr
+    val liveOffsetHours = activeTimeZone.getOffset(zonedCal.timeInMillis) / 3_600_000f
+    val utcHourStepped = discreteLocalHour.toFloat() - liveOffsetHours
+
+    // At 12:00 UTC the Sun is overhead at 0° (Greenwich); shifts 15° West (-15°) every +1 hour
+    val rawSubsolarLon = (12f - utcHourStepped) * 15f
+    val subsolarLonDeg = (((rawSubsolarLon + 180f) % 360f + 360f) % 360f) - 180f
+
+    // Seasonal solar declination with a gentle minimum tilt near equinoxes so the terminator always forms a clear parabola
+    val dayOfYear = zonedCal.get(Calendar.DAY_OF_YEAR)
+    val rawDeclDeg = (-23.44 * cos(2.0 * PI * (dayOfYear + 10) / 365.25)).toFloat()
+    val declinationDeg = if (rawDeclDeg >= 0f) rawDeclDeg.coerceAtLeast(12f) else rawDeclDeg.coerceAtMost(-12f)
+
+    return WorldMapSolarState(
+        discreteLocalHour = discreteLocalHour,
+        subsolarLonDeg = subsolarLonDeg,
+        declinationDeg = declinationDeg
+    )
+}
+
 @Composable
 fun WorldTimeZoneMapClockFace(
     calendar: Calendar,
@@ -146,30 +207,30 @@ fun WorldTimeZoneMapClockFace(
         }
     }
 
-    // Local hours elapsed since 0000 (00:00 midnight is the starting point 0.0f)
-    val hourOfDay = zonedCal.get(Calendar.HOUR_OF_DAY)
-    val minute = zonedCal.get(Calendar.MINUTE)
-    val second = zonedCal.get(Calendar.SECOND)
-    val hoursFrom0000 = hourOfDay + (minute / 60f) + (second / 3600f)
-    val progressFrom0000 = (hoursFrom0000 / 24f).coerceIn(0f, 1f)
+    // Recomputes solar terminator strictly once per hour (keyed on HOUR_OF_DAY + DAY_OF_YEAR + timeZone)
+    val discreteHourKey = zonedCal.get(Calendar.HOUR_OF_DAY)
+    val dayOfYearKey = zonedCal.get(Calendar.DAY_OF_YEAR)
+    val solarState = remember(discreteHourKey, dayOfYearKey, activeTimeZone.id) {
+        computeWorldMapSolarState(zonedCal, activeTimeZone)
+    }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Color(0xFF030509))
             .padding(horizontal = if (isDuoCompact) 8.dp else 14.dp, vertical = if (isDuoCompact) 6.dp else 10.dp)
             .testTag("world_map_clock_face")
     ) {
         val mapAccent = if (accentColor == Color.White) Color(0xFFFF9F0A) else accentColor
+        val minDim = minOf(maxWidth.value, maxHeight.value)
         val clockSize = if (isDuoCompact) {
-            (minOf(maxWidth.value, maxHeight.value) * 0.25f).coerceIn(32f, 64f).sp
+            (minDim * 0.28f * scale).coerceIn(24f, 120f).sp
         } else {
-            (minOf(maxWidth.value, maxHeight.value) * 0.24f * scale).coerceIn(48f, 108f).sp
+            (minDim * 0.26f * scale).coerceIn(36f, 220f).sp
         }
-        val labelSize = if (isDuoCompact) 11.sp else 16.sp
-        val subLabelSize = if (isDuoCompact) 9.sp else 12.sp
+        val labelSize = (clockSize.value * 0.18f).coerceIn(9f, 28f).sp
 
-        // 1. Full-Screen Dot-Matrix World Map + Timezone-Overlapping Parabola (0000 Starting Point)
+        // Full-Screen Equirectangular World Map + 1-Hour Stepped Exact Day/Night Solar Terminator Parabola
         Canvas(
             modifier = Modifier.fillMaxSize()
         ) {
@@ -177,198 +238,228 @@ fun WorldTimeZoneMapClockFace(
             val cols = WORLD_MAP_ASCII[0].length
             val mapWidth = size.width
             val mapHeight = size.height
+            if (mapWidth <= 1f || mapHeight <= 1f) return@Canvas
+
             val stepX = mapWidth / cols.toFloat()
             val stepY = mapHeight / rows.toFloat()
             val dotRadius = (min(stepX, stepY) * 0.36f).coerceIn(1.3f, 4.4f)
 
-            fun lonToNormX(lon: Float): Float = ((lon + 180f) / 360f).coerceIn(0.03f, 0.97f)
-            fun latToNormY(lat: Float): Float = ((82f - lat) / 142f).coerceIn(0.05f, 0.94f)
+            // Unified equirectangular projection matching WORLD_MAP_ASCII (-180°..+180° lon, +82°N..-60°S lat)
+            fun lonToNormX(lon: Float): Float = ((lon + 180f) / 360f).coerceIn(0f, 1f)
+            fun normXToLon(normX: Float): Float = -180f + normX * 360f
+            fun latToNormY(lat: Float): Float = (82f - lat) / 142f
+            fun normYToLat(normY: Float): Float = 82f - normY * 142f
 
-            // Active timezone normalized X coordinate (anchored to timezone longitude / offset)
+            fun terminatorY(normalizedX: Float): Float {
+                val lonDeg = normXToLon(normalizedX)
+                val termLatDeg = solarState.terminatorLatitudeDeg(lonDeg)
+                return latToNormY(termLatDeg) * mapHeight
+            }
+
+            // Active timezone normalized X coordinate (anchored to 15°/hr meridian or city longitude)
             val tzCenterLon = (regionInfo.utcOffsetHours * 15f).coerceIn(-180f, 180f)
             val tzNormX = lonToNormX(
                 if (abs(regionInfo.longitude - tzCenterLon) < 28f) regionInfo.longitude else tzCenterLon
             )
-            val tzBandHalfWidth = 1f / 24f
+            val tzBandHalfWidth = 1f / 48f // 15° total width (±7.5° = 1 hour timezone band)
 
-            // Parabola / Solar Terminator anchored to 0000 (00:00) starting point and overlapping tzNormX
-            val parabolaShiftNormX = tzNormX + (progressFrom0000 - 0.5f)
+            clipRect(0f, 0f, mapWidth, mapHeight) {
+                val samples = 360
+                // When declination < 0 (Northern autumn/winter), North (+82°N, y=0) is Polar Night -> Night is ABOVE terminatorY.
+                // When declination > 0 (Northern spring/summer), South (-60°S, y=mapHeight) is Polar Night -> Night is BELOW terminatorY.
+                val nightIsAboveCurve = solarState.declinationDeg < 0f
 
-            // Pure sinusoidal solar terminator wave, perfectly smooth (C-infinity) and continuous across map boundaries without cusps
-            fun terminatorY(normalizedX: Float): Float {
-                val angleRad = (normalizedX - parabolaShiftNormX) * 2f * PI.toFloat()
-                val wave = cos(angleRad)
-                return (mapHeight * 0.50f) - wave * (mapHeight * 0.33f)
-            }
-
-            // Subtle Active Time Zone Meridian Band highlight
-            val bandLeftPx = ((tzNormX - tzBandHalfWidth).coerceIn(0f, 1f)) * mapWidth
-            val bandRightPx = ((tzNormX + tzBandHalfWidth).coerceIn(0f, 1f)) * mapWidth
-            drawRect(
-                color = mapAccent.copy(alpha = 0.07f),
-                topLeft = Offset(bandLeftPx, 0f),
-                size = Size((bandRightPx - bandLeftPx).coerceAtLeast(4f), mapHeight)
-            )
-
-            // Night-side shaded fill under the smooth terminator curve for day/night contrast
-            val nightShadePath = Path().apply {
-                moveTo(0f, mapHeight)
-                val samples = 240
-                for (i in 0..samples) {
-                    val t = i.toFloat() / samples.toFloat()
-                    lineTo(t * mapWidth, terminatorY(t).coerceIn(2f, mapHeight - 2f))
+                // 1. Subtle Sunlit Atmosphere Wash on the Daylight Hemisphere
+                val dayRegionPath = Path().apply {
+                    val dayEdgeY = if (nightIsAboveCurve) mapHeight + 16f else -16f
+                    moveTo(0f, dayEdgeY)
+                    for (i in 0..samples) {
+                        val t = i.toFloat() / samples.toFloat()
+                        lineTo(t * mapWidth, terminatorY(t))
+                    }
+                    lineTo(mapWidth, dayEdgeY)
+                    close()
                 }
-                lineTo(mapWidth, mapHeight)
-                close()
-            }
-            drawPath(
-                path = nightShadePath,
-                color = Color(0xFF0A0E17).copy(alpha = 0.42f)
-            )
+                val sunCenterPx = Offset(
+                    x = lonToNormX(solarState.subsolarLonDeg) * mapWidth,
+                    y = (latToNormY(solarState.declinationDeg) * mapHeight).coerceIn(0f, mapHeight)
+                )
+                drawPath(
+                    path = dayRegionPath,
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF283754).copy(alpha = 0.42f),
+                            Color(0xFF131C2E).copy(alpha = 0.24f),
+                            Color(0xFF0A101B).copy(alpha = 0.12f)
+                        ),
+                        center = sunCenterPx,
+                        radius = maxOf(mapWidth, mapHeight) * 0.72f
+                    )
+                )
 
-            // Render Dot-Matrix World Map
-            for (r in 0 until rows) {
-                val line = WORLD_MAP_ASCII[r]
-                val cy = (r + 0.5f) * stepY
-                for (c in 0 until cols) {
-                    val cx = (c + 0.5f) * stepX
-                    val normX = (c + 0.5f) / cols.toFloat()
-                    val curveY = terminatorY(normX)
-                    val isDaylight = cy < curveY
-                    val inActiveTzBand = abs(normX - tzNormX) <= tzBandHalfWidth * 1.15f
+                // 2. Deep Midnight Shadow Fill on the Night Hemisphere
+                val nightShadePath = Path().apply {
+                    val nightEdgeY = if (nightIsAboveCurve) -16f else mapHeight + 16f
+                    moveTo(0f, nightEdgeY)
+                    for (i in 0..samples) {
+                        val t = i.toFloat() / samples.toFloat()
+                        lineTo(t * mapWidth, terminatorY(t))
+                    }
+                    lineTo(mapWidth, nightEdgeY)
+                    close()
+                }
+                drawPath(
+                    path = nightShadePath,
+                    color = Color(0xFF010205).copy(alpha = 0.76f)
+                )
 
-                    if (line[c] == '#') {
-                        val dotColor = when {
-                            inActiveTzBand && isDaylight -> Color(0xFFFFE082)
-                            inActiveTzBand && !isDaylight -> mapAccent.copy(alpha = 0.78f)
-                            isDaylight -> Color.White.copy(alpha = 0.95f)
-                            else -> Color(0xFF3E4656).copy(alpha = 0.72f)
+                // 3. Subtle 1-Hour (15° Longitude) Time Zone Meridian Grid Lines
+                for (hrIdx in 1 until 24) {
+                    val mx = (hrIdx / 24f) * mapWidth
+                    drawLine(
+                        color = Color.White.copy(alpha = if (hrIdx % 6 == 0) 0.06f else 0.025f),
+                        start = Offset(mx, 0f),
+                        end = Offset(mx, mapHeight),
+                        strokeWidth = 1f
+                    )
+                }
+
+                // Subtle Active 1-Hour Time Zone Meridian Band highlight
+                val bandLeftPx = ((tzNormX - tzBandHalfWidth).coerceIn(0f, 1f)) * mapWidth
+                val bandRightPx = ((tzNormX + tzBandHalfWidth).coerceIn(0f, 1f)) * mapWidth
+                drawRect(
+                    color = mapAccent.copy(alpha = 0.07f),
+                    topLeft = Offset(bandLeftPx, 0f),
+                    size = Size((bandRightPx - bandLeftPx).coerceAtLeast(4f), mapHeight)
+                )
+
+                // 4. Render Dot-Matrix World Map with Exact Day vs Night Illumination
+                for (r in 0 until rows) {
+                    val line = WORLD_MAP_ASCII[r]
+                    val normY = (r + 0.5f) / rows.toFloat()
+                    val cy = normY * mapHeight
+                    val latDeg = normYToLat(normY)
+
+                    for (c in 0 until cols) {
+                        val normX = (c + 0.5f) / cols.toFloat()
+                        val cx = normX * mapWidth
+                        val lonDeg = normXToLon(normX)
+                        val isDaylight = solarState.isDaylight(lonDeg, latDeg)
+                        val inActiveTzBand = abs(normX - tzNormX) <= tzBandHalfWidth * 1.15f
+
+                        if (line[c] == '#') {
+                            val dotColor = when {
+                                inActiveTzBand && isDaylight -> Color(0xFFFFE082)
+                                inActiveTzBand && !isDaylight -> mapAccent.copy(alpha = 0.80f)
+                                isDaylight -> Color(0xFFF8FAFC).copy(alpha = 0.96f)
+                                else -> Color(0xFF263042).copy(alpha = 0.62f)
+                            }
+                            drawCircle(
+                                color = dotColor,
+                                radius = if (inActiveTzBand) dotRadius * 1.08f else dotRadius,
+                                center = Offset(cx, cy)
+                            )
+                        } else if ((r + c) % 2 == 0) {
+                            drawCircle(
+                                color = if (isDaylight) Color(0xFF222D40).copy(alpha = 0.52f) else Color(0xFF0A0D14).copy(alpha = 0.28f),
+                                radius = dotRadius * 0.32f,
+                                center = Offset(cx, cy)
+                            )
                         }
-                        drawCircle(
-                            color = dotColor,
-                            radius = if (inActiveTzBand) dotRadius * 1.08f else dotRadius,
-                            center = Offset(cx, cy)
-                        )
-                    } else if ((r + c) % 2 == 0) {
-                        drawCircle(
-                            color = if (isDaylight) Color(0xFF171C26).copy(alpha = 0.55f) else Color(0xFF0E1118).copy(alpha = 0.40f),
-                            radius = dotRadius * 0.34f,
-                            center = Offset(cx, cy)
-                        )
                     }
                 }
-            }
 
-            // Draw Silk-Smooth Day/Night Terminator Curve with glow and high subpixel resolution
-            val curvePath = Path()
-            val curveSamples = 240
-            for (i in 0..curveSamples) {
-                val t = i.toFloat() / curveSamples.toFloat()
-                val x = t * mapWidth
-                val y = terminatorY(t).coerceIn(4f, mapHeight - 4f)
-                if (i == 0) curvePath.moveTo(x, y) else curvePath.lineTo(x, y)
-            }
-            // Ambient outer glow
-            drawPath(
-                path = curvePath,
-                color = mapAccent.copy(alpha = 0.22f),
-                style = Stroke(width = (5.5f * scale).coerceIn(3.5f, 9f), cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
-            // Mid glow
-            drawPath(
-                path = curvePath,
-                color = mapAccent.copy(alpha = 0.55f),
-                style = Stroke(width = (2.8f * scale).coerceIn(1.8f, 4.5f), cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
-            // Sharp core
-            drawPath(
-                path = curvePath,
-                color = Color.White.copy(alpha = 0.88f),
-                style = Stroke(width = (1.4f * scale).coerceIn(1.0f, 2.2f), cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
+                // 5. Draw Multi-Layer Glowing Solar Terminator Parabola Curve
+                val curvePath = Path()
+                for (i in 0..samples) {
+                    val t = i.toFloat() / samples.toFloat()
+                    val x = t * mapWidth
+                    val y = terminatorY(t)
+                    if (i == 0) curvePath.moveTo(x, y) else curvePath.lineTo(x, y)
+                }
+                // Wide twilight horizon band
+                drawPath(
+                    path = curvePath,
+                    color = mapAccent.copy(alpha = 0.12f),
+                    style = Stroke(width = (12f * scale).coerceIn(6f, 20f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+                // Ambient outer glow
+                drawPath(
+                    path = curvePath,
+                    color = mapAccent.copy(alpha = 0.30f),
+                    style = Stroke(width = (5.5f * scale).coerceIn(3.5f, 9.5f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+                // Mid glow
+                drawPath(
+                    path = curvePath,
+                    color = mapAccent.copy(alpha = 0.68f),
+                    style = Stroke(width = (2.8f * scale).coerceIn(1.8f, 4.8f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+                // Sharp solar terminator core
+                drawPath(
+                    path = curvePath,
+                    color = Color(0xFFFFF8E1).copy(alpha = 0.92f),
+                    style = Stroke(width = (1.4f * scale).coerceIn(1.0f, 2.4f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
 
-            // Intersection point where the parabola overlaps the active Time Zone meridian
-            val tzOverlapX = tzNormX * mapWidth
-            val tzOverlapY = terminatorY(tzNormX).coerceIn(8f, mapHeight - 8f)
-            drawCircle(
-                color = mapAccent.copy(alpha = 0.32f),
-                radius = dotRadius * 3.4f,
-                center = Offset(tzOverlapX, tzOverlapY)
-            )
-            drawCircle(
-                color = mapAccent,
-                radius = dotRadius * 1.5f,
-                center = Offset(tzOverlapX, tzOverlapY)
-            )
+                // Intersection marker where the terminator crosses the active Time Zone meridian (when inside visible map latitudes)
+                val tzOverlapX = tzNormX * mapWidth
+                val tzOverlapY = terminatorY(tzNormX)
+                if (tzOverlapY in 4f..(mapHeight - 4f)) {
+                    drawCircle(
+                        color = mapAccent.copy(alpha = 0.32f),
+                        radius = dotRadius * 3.4f,
+                        center = Offset(tzOverlapX, tzOverlapY)
+                    )
+                    drawCircle(
+                        color = mapAccent,
+                        radius = dotRadius * 1.5f,
+                        center = Offset(tzOverlapX, tzOverlapY)
+                    )
+                }
 
-            // Reference world hub dots
-            val referenceHubs = listOf(
-                -122.42f to 37.77f, // San Francisco
-                -74.01f to 40.71f,  // New York
-                -0.13f to 51.51f,   // London
-                77.21f to 28.61f,   // New Delhi
-                139.77f to 35.68f,  // Tokyo
-                151.21f to -33.87f  // Sydney
-            )
-            referenceHubs.forEach { (hubLon, hubLat) ->
-                val hx = lonToNormX(hubLon) * mapWidth
-                val hy = latToNormY(hubLat) * mapHeight
+                // Reference world hub dots (bright white/gold in Daylight, warm city-light amber in Night)
+                val referenceHubs = listOf(
+                    -122.42f to 37.77f, // San Francisco
+                    -74.01f to 40.71f,  // New York
+                    -0.13f to 51.51f,   // London
+                    77.21f to 28.61f,   // New Delhi
+                    139.77f to 35.68f,  // Tokyo
+                    151.21f to -33.87f  // Sydney
+                )
+                referenceHubs.forEach { (hubLon, hubLat) ->
+                    val hx = lonToNormX(hubLon) * mapWidth
+                    val hy = latToNormY(hubLat).coerceIn(0.03f, 0.97f) * mapHeight
+                    val hubDay = solarState.isDaylight(hubLon, hubLat)
+                    drawCircle(
+                        color = if (hubDay) Color.White.copy(alpha = 0.85f) else Color(0xFFFFB74D).copy(alpha = 0.85f),
+                        radius = dotRadius * 1.45f,
+                        center = Offset(hx, hy)
+                    )
+                }
+
+                // Primary User Location Pin with Glowing Halo
+                val userPx = lonToNormX(regionInfo.longitude) * mapWidth
+                val userPy = latToNormY(regionInfo.latitude).coerceIn(0.04f, 0.96f) * mapHeight
                 drawCircle(
-                    color = mapAccent.copy(alpha = 0.78f),
-                    radius = dotRadius * 1.55f,
-                    center = Offset(hx, hy)
+                    color = mapAccent.copy(alpha = 0.32f),
+                    radius = dotRadius * 5.0f,
+                    center = Offset(userPx, userPy)
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = dotRadius * 2.9f,
+                    center = Offset(userPx, userPy)
+                )
+                drawCircle(
+                    color = mapAccent,
+                    radius = dotRadius * 1.95f,
+                    center = Offset(userPx, userPy)
                 )
             }
-
-            // Primary User Standard Time / Location Pin with Glowing Halo
-            val userPx = lonToNormX(regionInfo.longitude) * mapWidth
-            val userPy = latToNormY(regionInfo.latitude) * mapHeight
-            drawCircle(
-                color = mapAccent.copy(alpha = 0.30f),
-                radius = dotRadius * 5.0f,
-                center = Offset(userPx, userPy)
-            )
-            drawCircle(
-                color = Color.White,
-                radius = dotRadius * 2.9f,
-                center = Offset(userPx, userPy)
-            )
-            drawCircle(
-                color = mapAccent,
-                radius = dotRadius * 1.95f,
-                center = Offset(userPx, userPy)
-            )
         }
 
-        // Top-Right 0000 Solar Telemetry Pill
-        val isLocalDaylight = hourOfDay in 6..17
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .clip(CircleShape)
-                .background(Color(0xFF0B0E14).copy(alpha = 0.82f))
-                .border(1.dp, mapAccent.copy(alpha = 0.38f), CircleShape)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(if (isLocalDaylight) Color(0xFFFFD54F) else Color(0xFF38BDF8))
-            )
-            Text(
-                text = "${if (isLocalDaylight) "DAY" else "NIGHT"} • 0000+${String.format(Locale.US, "%02d:%02d", hourOfDay, minute)} • ${regionInfo.utcOffsetLabel}",
-                color = Color.White.copy(alpha = 0.88f),
-                fontSize = if (isDuoCompact) 9.sp else 11.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                maxLines = 1
-            )
-        }
-
-        // Clean StandBy Bottom-Left Time + Region + Standard Time Readout (without border seconds)
+        // Clean StandBy Bottom-Left Region + Bold Time Readout (no top UTC/hr telemetry pill or UTC offset sub-text)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -385,8 +476,16 @@ fun WorldTimeZoneMapClockFace(
                     tint = mapAccent,
                     modifier = Modifier.size(if (isDuoCompact) 13.dp else 18.dp)
                 )
+                val cleanRegionText = if (
+                    regionInfo.standardTimeShort.startsWith("UTC", ignoreCase = true) ||
+                    regionInfo.standardTimeShort.startsWith("GMT", ignoreCase = true)
+                ) {
+                    regionInfo.regionName
+                } else {
+                    "${regionInfo.regionName} • ${regionInfo.standardTimeShort}"
+                }
                 Text(
-                    text = "${regionInfo.regionName} • ${regionInfo.standardTimeShort}",
+                    text = cleanRegionText,
                     color = mapAccent,
                     fontSize = labelSize,
                     fontWeight = FontWeight.Bold,
@@ -395,15 +494,6 @@ fun WorldTimeZoneMapClockFace(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Text(
-                text = "${regionInfo.standardTimeLong} (${regionInfo.utcOffsetLabel})",
-                color = Color.White.copy(alpha = 0.68f),
-                fontSize = subLabelSize,
-                fontWeight = FontWeight.Medium,
-                fontFamily = customFont,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
             Text(
                 text = timeFormat.format(zonedCal.time),
                 color = Color.White,

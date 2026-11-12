@@ -149,11 +149,14 @@ fun ClockFaceRenderer(
                 .then(clockGradientModifier),
             contentAlignment = Alignment.Center
         ) {
-            // Compute responsive viewport factor so smaller screens scale proportionally
-            val widthFactor = (maxWidth.value / 780f).coerceIn(0.45f, 1.25f)
-            val heightFactor = (maxHeight.value / 380f).coerceIn(0.45f, 1.25f)
-            val viewportScale = minOf(widthFactor, heightFactor)
-            val effectiveScale = (clockScaleValue * viewportScale).coerceIn(0.42f, 1.65f)
+            // Compute continuous relative viewport factor for both tablets (4:3, 16:10) and smartphones (19.5:9, 20:9)
+            val minDim = minOf(maxWidth, maxHeight)
+            val maxDim = maxOf(maxWidth, maxHeight)
+            // Reference baseline is a typical phone landscape viewport: 380dp height x 780dp width
+            val widthFactor = maxWidth.value / 780f
+            val heightFactor = maxHeight.value / 380f
+            val viewportScale = minOf(widthFactor, heightFactor).coerceIn(0.40f, 2.40f)
+            val effectiveScale = (clockScaleValue * viewportScale).coerceIn(0.38f, 2.50f)
 
             when (themeIndex.mod(14)) {
                 0 -> DigitalMinimal(zonedCurrentTime, customColor, customFont, effectiveScale, animsEnabled, use24Hour, showAmPm, showSeconds, glowVal, outlineVal, gradientColors)
@@ -259,8 +262,9 @@ fun DigitalMinimal(
             .padding(horizontal = 24.dp),
         contentAlignment = Alignment.Center
     ) {
-        val maxFitFontSize = (maxWidth.value / (formattedText.length * 0.58f)).coerceAtMost(maxHeight.value * 0.65f)
-        val finalFontSize = minOf(110f * scale, maxFitFontSize).coerceAtLeast(28f)
+        val maxFitFontSize = (maxWidth.value / (formattedText.length * 0.58f)).coerceAtMost(maxHeight.value * 0.70f)
+        val relativeBaseSize = (minOf(maxWidth.value * 0.28f, maxHeight.value * 0.65f)) * scale
+        val finalFontSize = minOf(relativeBaseSize, maxFitFontSize).coerceAtLeast(24f)
 
         val textStyle = androidx.compose.ui.text.TextStyle(
             color = if (gradientColors == null && !outline) color else Color.Unspecified,
@@ -298,18 +302,22 @@ fun AnalogClassic(calendar: Calendar, color: Color, scale: Float = 1.0f, animati
     val second = if (animationsEnabled && showSeconds) calendar.get(Calendar.SECOND) else 0
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        val maxAllowed = minOf(maxWidth, maxHeight)
-        val targetSize = minOf((300 * scale).dp, maxAllowed)
+        val rawMinDim = minOf(maxWidth, maxHeight)
+        val outerPad = (rawMinDim * 0.04f).coerceIn(minOf(2.dp, rawMinDim * 0.2f), 24.dp)
+        val maxAllowed = (rawMinDim - outerPad * 2).coerceAtLeast(0.dp)
+        val minTarget = minOf(24.dp, maxAllowed)
+        val targetSize = (maxAllowed * 0.88f * scale).coerceIn(minTarget, maxAllowed)
 
         Canvas(modifier = Modifier.size(targetSize)) {
             val cx = size.width / 2
             val cy = size.height / 2
-            val radius = (size.minDimension / 2 - 16.dp.toPx()).coerceAtLeast(20f)
+            val radius = (size.minDimension * 0.45f).coerceAtLeast(4f)
+            val strokeScale = (size.minDimension / 300.dp.toPx()).coerceIn(0.3f, 2.5f)
 
-            drawCircle(color = color, radius = radius, style = Stroke(width = 8f))
+            drawCircle(color = color, radius = radius, style = Stroke(width = 8f * strokeScale))
             
             // Hour hand
             val hourAngle = Math.toRadians((hour * 30 + minute / 2).toDouble() - 90)
@@ -320,7 +328,7 @@ fun AnalogClassic(calendar: Calendar, color: Color, scale: Float = 1.0f, animati
                     cx + (radius * 0.5f) * cos(hourAngle).toFloat(),
                     cy + (radius * 0.5f) * sin(hourAngle).toFloat()
                 ),
-                strokeWidth = 14f, cap = StrokeCap.Round
+                strokeWidth = 14f * strokeScale, cap = StrokeCap.Round
             )
 
             // Minute hand
@@ -332,7 +340,7 @@ fun AnalogClassic(calendar: Calendar, color: Color, scale: Float = 1.0f, animati
                     cx + (radius * 0.75f) * cos(minAngle).toFloat(),
                     cy + (radius * 0.75f) * sin(minAngle).toFloat()
                 ),
-                strokeWidth = 10f, cap = StrokeCap.Round
+                strokeWidth = 10f * strokeScale, cap = StrokeCap.Round
             )
 
             // Second hand
@@ -345,7 +353,7 @@ fun AnalogClassic(calendar: Calendar, color: Color, scale: Float = 1.0f, animati
                         cx + (radius * 0.85f) * cos(secAngle).toFloat(),
                         cy + (radius * 0.85f) * sin(secAngle).toFloat()
                     ),
-                    strokeWidth = 4f, cap = StrokeCap.Round
+                    strokeWidth = 4f * strokeScale, cap = StrokeCap.Round
                 )
             }
         }
@@ -366,15 +374,17 @@ fun DigitalNeon(
         val pattern = (if (use24Hour) "HH" else "h") + ":mm" + (if (showSeconds) ":ss" else "") + (if (!use24Hour && showAmPm) " a" else "")
         SimpleDateFormat(pattern, Locale.getDefault())
     }
-    Box(
+    val timeText = format.format(calendar.time)
+
+    BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             // Warm Brick Charcoal background
             drawRect(color = Color(0xFF0F0F10))
-            val brickHeight = 32.dp.toPx()
-            val brickWidth = 64.dp.toPx()
+            val brickHeight = (size.height / 12f).coerceIn(24.dp.toPx(), 48.dp.toPx())
+            val brickWidth = brickHeight * 2f
             val strokeWidth = 1.dp.toPx()
             val brickColor = Color(0xFF1F1F22)
             
@@ -403,19 +413,23 @@ fun DigitalNeon(
             }
         }
         
+        val maxFitSize = (maxWidth.value / (timeText.length * 0.58f)).coerceAtMost(maxHeight.value * 0.70f)
+        val relativeNeonSize = (minOf(maxWidth.value * 0.32f, maxHeight.value * 0.72f)) * scale
+        val finalNeonFontSize = minOf(relativeNeonSize, maxFitSize).coerceAtLeast(24f)
+
         Text(
-            text = format.format(calendar.time),
+            text = timeText,
             maxLines = 1,
             softWrap = false,
             style = androidx.compose.ui.text.TextStyle(
                 color = color,
-                fontSize = (140 * scale).sp,
+                fontSize = finalNeonFontSize.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = fontFamily,
                 shadow = androidx.compose.ui.graphics.Shadow(
                     color = color.copy(alpha = 0.8f),
                     offset = Offset(0f, 0f),
-                    blurRadius = 35f
+                    blurRadius = 35f * scale
                 )
             )
         )
@@ -561,10 +575,10 @@ fun RetroFlip(
         val baseBoardHeight = if (showFlightTicker) 275f else 190f
 
         val fitScale = minOf(
-            scale.coerceIn(0.65f, 1.35f),
+            scale.coerceIn(0.65f, 2.50f),
             availW / baseBoardWidth,
             availH / baseBoardHeight
-        ).coerceIn(0.38f, 1.35f)
+        ).coerceIn(0.35f, 2.40f)
 
         val cellWidth = (if (showSeconds && !isDuoCompact) 66f else 82f) * fitScale
         val cellHeight = (if (showSeconds && !isDuoCompact) 108f else 130f) * fitScale
@@ -1653,8 +1667,8 @@ fun ModernBoldTextClock(
             .padding(horizontal = 24.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
-        val heightLimitScale = (maxHeight.value / 250f).coerceIn(0.45f, 1.35f)
-        val widthLimitScale = (maxWidth.value / 560f).coerceIn(0.45f, 1.35f)
+        val heightLimitScale = (maxHeight.value / 250f).coerceIn(0.40f, 2.50f)
+        val widthLimitScale = (maxWidth.value / 560f).coerceIn(0.40f, 2.50f)
         val fitScale = minOf(scale, heightLimitScale, widthLimitScale)
 
         Column(
@@ -1740,14 +1754,13 @@ fun LargeSidebarClock(
     
     val alarmText = nextSystemAlarm ?: "No Alarm"
 
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .padding(horizontal = (40 * scale).dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
     ) {
+        val relScale = minOf(maxWidth.value / 720f, maxHeight.value / 340f).coerceIn(0.45f, 2.40f) * scale
         val timeStr = timeFormat.format(calendar.time)
         val fullTimeText = if (!use24Hour && showAmPm) {
             timeStr + amPmFormat.format(calendar.time)
@@ -1755,62 +1768,70 @@ fun LargeSidebarClock(
             timeStr
         }
 
-        Text(
-            text = fullTimeText,
-            color = color,
-            fontSize = (if (showSeconds || (!use24Hour && showAmPm)) 100 * scale else 135 * scale).sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = fontFamily,
-            maxLines = 1,
-            softWrap = false,
-            modifier = Modifier.weight(1f)
-        )
-        
-        Box(
+        Row(
             modifier = Modifier
-                .width((2 * scale).dp)
-                .height((100 * scale).dp)
-                .background(Color.DarkGray)
-        )
-
-        Spacer(modifier = Modifier.width((36 * scale).dp))
-
-        Column(
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.Center
+                .fillMaxSize()
+                .padding(horizontal = (36 * relScale).coerceAtLeast(14f).dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = dayOfWeekAbbr,
-                    color = color.copy(alpha = 0.7f),
-                    fontSize = (24 * scale).sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = fontFamily
-                )
-                Spacer(modifier = Modifier.width((8 * scale).dp))
-                Text(
-                    text = dayOfMonth,
-                    color = Color.White,
-                    fontSize = (24 * scale).sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = fontFamily
-                )
-            }
-            Spacer(modifier = Modifier.height((12 * scale).dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "⏰",
-                    color = Color.White,
-                    fontSize = (18 * scale).sp,
-                    modifier = Modifier.padding(end = (6 * scale).dp)
-                )
-                Text(
-                    text = alarmText,
-                    color = Color.LightGray,
-                    fontSize = (18 * scale).sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = fontFamily
-                )
+            Text(
+                text = fullTimeText,
+                color = color,
+                fontSize = (if (showSeconds || (!use24Hour && showAmPm)) 90 * relScale else 125 * relScale).sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = fontFamily,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.weight(1f)
+            )
+            
+            Box(
+                modifier = Modifier
+                    .width((2 * relScale).coerceAtLeast(1.5f).dp)
+                    .height((90 * relScale).coerceAtLeast(40f).dp)
+                    .background(Color.DarkGray)
+            )
+
+            Spacer(modifier = Modifier.width((32 * relScale).coerceAtLeast(12f).dp))
+
+            Column(
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = dayOfWeekAbbr,
+                        color = color.copy(alpha = 0.7f),
+                        fontSize = (22 * relScale).sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fontFamily
+                    )
+                    Spacer(modifier = Modifier.width((8 * relScale).dp))
+                    Text(
+                        text = dayOfMonth,
+                        color = Color.White,
+                        fontSize = (22 * relScale).sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fontFamily
+                    )
+                }
+                Spacer(modifier = Modifier.height((10 * relScale).dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "⏰",
+                        color = Color.White,
+                        fontSize = (18 * scale).sp,
+                        modifier = Modifier.padding(end = (6 * scale).dp)
+                    )
+                    Text(
+                        text = alarmText,
+                        color = Color.LightGray,
+                        fontSize = (18 * scale).sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = fontFamily
+                    )
+                }
             }
         }
     }
@@ -1917,9 +1938,10 @@ fun AnalogDashboard(calendar: Calendar, color: Color, fontFamily: FontFamily, sc
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        val dialScale = scale.coerceIn(0.55f, 1.15f)
-        val topBottomPad = (maxHeight * 0.11f).coerceIn(24.dp, 48.dp)
-        val sidePad = (maxWidth * 0.08f).coerceIn(32.dp, 72.dp)
+        val minDim = minOf(maxWidth, maxHeight)
+        val dialScale = (minDim.value / 360f).coerceIn(0.40f, 2.50f) * scale
+        val topBottomPad = (maxHeight * 0.10f).coerceIn(12.dp, 64.dp)
+        val sidePad = (maxWidth * 0.08f).coerceIn(16.dp, 80.dp)
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             val cx = size.width / 2
@@ -2138,8 +2160,8 @@ fun BubblePastelClock(
         contentAlignment = Alignment.Center
     ) {
         val totalSymbols = hourDigits.size + 1 + minuteDigits.size + (if (showSeconds) 1 + secondDigits.size else 0) + (if (!use24Hour && showAmPm) 1 else 0)
-        val widthFitScale = (maxWidth.value / (totalSymbols * 82f)).coerceIn(0.35f, 1.2f)
-        val heightFitScale = (maxHeight.value / 190f).coerceIn(0.35f, 1.2f)
+        val widthFitScale = (maxWidth.value / (totalSymbols * 82f)).coerceIn(0.35f, 2.50f)
+        val heightFitScale = (maxHeight.value / 190f).coerceIn(0.35f, 2.50f)
         val baseScale = if (showSeconds) scale * 0.8f else scale
         val actualScale = minOf(baseScale, widthFitScale, heightFitScale)
 

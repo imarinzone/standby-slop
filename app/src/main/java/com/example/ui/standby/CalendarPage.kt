@@ -89,6 +89,7 @@ fun CalendarPage(
         ) == PackageManager.PERMISSION_GRANTED || calendarPermissionState.status.isGranted
         if (hasCalendarPermission) {
             viewModel.loadLocalEvents(context)
+            viewModel.loadCalendarSources(context)
         }
     }
 
@@ -99,8 +100,8 @@ fun CalendarPage(
         ) == PackageManager.PERMISSION_GRANTED
         if (hasCalendarPermission) {
             viewModel.loadLocalEvents(context)
+            viewModel.loadCalendarSources(context)
         }
-        viewModel.loadCalendarSources(context)
     }
 
     val bgUri by standbyViewModel.getBgUriFlow(2).collectAsState()
