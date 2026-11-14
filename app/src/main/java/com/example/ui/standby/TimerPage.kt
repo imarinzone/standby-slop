@@ -74,10 +74,27 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
-private val OledCanvasBg = Color(0xFF030407)
-private val OledCardBg = Color(0xFF0B0E15)
-private val OledCardElevated = Color(0xFF121722)
-private val OledBorderSubtle = Color(0xFF222938)
+@Composable
+fun ToolScreenRenderer(
+    toolIndex: Int,
+    viewModel: StandbyViewModel,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = colorScheme.surface
+    ) {
+        when (toolIndex.coerceIn(0, 5)) {
+            0 -> FocusPomodoroTimer(viewModel)
+            1 -> HighTechStopwatch(viewModel)
+            2 -> StandbyGallerySlideshowTool(viewModel)
+            3 -> StandbyConnectedDevicesChargeTool(viewModel)
+            4 -> StandbySmartDevicesControlTool(viewModel)
+            5 -> StandbyDockLabTool(viewModel)
+        }
+    }
+}
 
 @Composable
 fun TimerPage(
@@ -85,31 +102,44 @@ fun TimerPage(
     modifier: Modifier = Modifier
 ) {
     val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
     val selectedColorIdx by viewModel.colorPage4.collectAsState()
-    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color(0xFF38BDF8)
+    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: colorScheme.primary
 
-    val toolItems = remember {
-        listOf(
-            Triple("Focus", "POMODORO", Icons.Default.Bolt),
-            Triple("Chrono", "STOPWATCH", Icons.Default.Timer),
-            Triple("Gallery", "SLIDESHOW", Icons.Default.Collections),
-            Triple("Charge", "CONNECTED DEVICES", Icons.Default.BatteryChargingFull),
-            Triple("Smart Home", "GOOGLE HOME", Icons.Default.Home),
-            Triple("Ambient Light", "FLASH & LEVEL", Icons.Default.FlashlightOn)
-        )
+    val enabledTools by viewModel.enabledToolScreens.collectAsState()
+    val activeToolIndices = remember(enabledTools) {
+        enabledTools.sorted().ifEmpty { listOf(0) }
     }
+    val currentTimerMode by viewModel.timerModeIndex.collectAsState()
 
-    val initialMode = remember { viewModel.timerModeIndex.value.coerceIn(0, toolItems.lastIndex) }
-    val pagerState = rememberPagerState(initialPage = initialMode, pageCount = { toolItems.size })
+    val initialPage = remember {
+        val pos = activeToolIndices.indexOf(viewModel.timerModeIndex.value)
+        if (pos >= 0) pos else 0
+    }
+    val pagerState = rememberPagerState(
+        initialPage = initialPage.coerceIn(0, (activeToolIndices.size - 1).coerceAtLeast(0)),
+        pageCount = { activeToolIndices.size }
+    )
     val coroutineScope = rememberCoroutineScope()
 
     var hasInitPager by remember { mutableStateOf(false) }
-    LaunchedEffect(pagerState.currentPage) {
+    LaunchedEffect(pagerState.currentPage, activeToolIndices) {
         if (!hasInitPager) {
             hasInitPager = true
         } else {
-            haptics.tick()
-            viewModel.setTimerModeIndex(pagerState.currentPage)
+            val safePage = pagerState.currentPage.coerceIn(0, (activeToolIndices.size - 1).coerceAtLeast(0))
+            val toolIdx = activeToolIndices.getOrElse(safePage) { 0 }
+            if (viewModel.timerModeIndex.value != toolIdx) {
+                haptics.tick()
+                viewModel.setTimerModeIndex(toolIdx)
+            }
+        }
+    }
+
+    LaunchedEffect(currentTimerMode, activeToolIndices) {
+        val targetPos = activeToolIndices.indexOf(currentTimerMode)
+        if (targetPos >= 0 && pagerState.currentPage != targetPos && !pagerState.isScrollInProgress) {
+            pagerState.scrollToPage(targetPos)
         }
     }
 
@@ -117,55 +147,55 @@ fun TimerPage(
         modifier = modifier
             .fillMaxSize()
             .testTag("tools_hub_page"),
-        color = OledCanvasBg
+        color = colorScheme.surface
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             VerticalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
-                when (page) {
-                    0 -> FocusPomodoroTimer(viewModel)
-                    1 -> HighTechStopwatch(viewModel)
-                    2 -> StandbyGallerySlideshowTool(viewModel)
-                    3 -> StandbyConnectedDevicesChargeTool(viewModel)
-                    4 -> StandbySmartDevicesControlTool(viewModel)
-                    5 -> StandbyDockLabTool(viewModel)
-                }
+                val toolIdx = activeToolIndices.getOrElse(page) { 0 }
+                ToolScreenRenderer(toolIndex = toolIdx, viewModel = viewModel)
             }
 
-            // Right-Edge Vertical Mode Indicator Dots (preserves timer_mode_dot_$i testTags)
+            // Right-Edge Vertical Mode Indicator Dots (preserves timer_mode_dot_$toolIdx testTags)
             Surface(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 10.dp),
                 shape = CircleShape,
-                color = OledCardElevated.copy(alpha = 0.90f),
-                border = BorderStroke(1.dp, OledBorderSubtle)
+                color = colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
+                tonalElevation = if (com.example.ui.theme.LocalPureAmoled.current) 0.dp else 4.dp,
+                border = expressiveSurfaceBorder()
             ) {
                 Column(
                     modifier = Modifier.padding(vertical = 10.dp, horizontal = 7.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    for (i in toolItems.indices) {
-                        val isSelected = pagerState.currentPage == i
+                    activeToolIndices.forEachIndexed { pagePos, toolIdx ->
+                        val isSelected = pagerState.currentPage == pagePos
+                        val dotHeight by animateDpAsState(
+                            targetValue = if (isSelected) 18.dp else 7.dp,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                            label = "timerDotHeight"
+                        )
                         Box(
                             modifier = Modifier
-                                .size(width = 7.dp, height = if (isSelected) 16.dp else 7.dp)
+                                .size(width = 7.dp, height = dotHeight)
                                 .clip(CircleShape)
                                 .background(
                                     if (isSelected) accentColor
-                                    else Color.White.copy(alpha = 0.28f)
+                                    else colorScheme.onSurfaceVariant.copy(alpha = 0.42f)
                                 )
                                 .clickable {
                                     haptics.tick()
-                                    viewModel.setTimerModeIndex(i)
+                                    viewModel.setTimerModeIndex(toolIdx)
                                     coroutineScope.launch {
-                                        pagerState.animateScrollToPage(i)
+                                        pagerState.animateScrollToPage(pagePos)
                                     }
                                 }
-                                .testTag("timer_mode_dot_$i")
+                                .testTag("timer_mode_dot_$toolIdx")
                         )
                     }
                 }
@@ -180,6 +210,7 @@ fun TimerPage(
 @Composable
 fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
     val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
 
     val selectedColorIdx by viewModel.colorPage4.collectAsState()
     val selectedFontIdx by viewModel.fontPage4.collectAsState()
@@ -191,6 +222,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
 
     val accentColor = viewModel.colors[selectedColorIdx].first
     val customFont = viewModel.fonts[selectedFontIdx].first
+    val accentContentFg = if (accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f > 0.55f) Color.Black else Color.White
     val gradientColors = if (gradientIdx > 0 && gradientIdx < viewModel.gradients.size) {
         viewModel.gradients[gradientIdx].second
     } else null
@@ -203,20 +235,6 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
             1, 3, 5 -> 5 * 60
             7 -> 15 * 60
             else -> focusMins * 60
-        }
-    }
-
-    fun getSegmentLabel(index: Int): String {
-        return when (index) {
-            0 -> "Focus Session 01"
-            1 -> "Short Recovery 01"
-            2 -> "Focus Session 02"
-            3 -> "Short Recovery 02"
-            4 -> "Focus Session 03"
-            5 -> "Short Recovery 03"
-            6 -> "Focus Session 04"
-            7 -> "Deep Recovery Break"
-            else -> ""
         }
     }
 
@@ -247,13 +265,12 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(OledCanvasBg)
+            .background(colorScheme.surface)
     ) {
         val isCompactHeight = maxHeight < 380.dp
         val isCompactWidth = maxWidth < 640.dp
         val outerHPad = if (isCompactWidth) 16.dp else 28.dp
         val outerVPad = if (isCompactHeight) 12.dp else 18.dp
-        val paneSpacing = if (isCompactWidth) 12.dp else 18.dp
 
         if (bgUri != null) {
             coil.compose.AsyncImage(
@@ -262,17 +279,17 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.76f)))
+            Box(modifier = Modifier.fillMaxSize().background(colorScheme.surface.copy(alpha = 0.74f)))
         }
 
-        // Unified Single Full-Screen Pomodoro Card (no 2-pane split)
+        // Unified Single Full-Screen Pomodoro Card (Sculpted Material 3 Expressive Surface)
         Surface(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = outerHPad, end = outerHPad + 14.dp, top = outerVPad, bottom = outerVPad),
-            shape = RoundedCornerShape(28.dp),
-            color = OledCardBg,
-            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.28f))
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder(highlighted = isRunning, accentColor = accentColor.copy(alpha = 0.65f))
         ) {
             BoxWithConstraints(
                 modifier = Modifier
@@ -294,18 +311,23 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                     verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Top Bar: Visual Duration Chips + Config Icon
+                    // Top Bar: Expressive Morphing Duration Chips + Config Icon
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             listOf(15, 25, 45, 60).forEach { mins ->
                                 val isSel = focusMinutes == mins
+                                val pillCorner by animateDpAsState(
+                                    targetValue = if (isSel) 20.dp else 12.dp,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                    label = "pomodoroPillCorner"
+                                )
                                 Surface(
                                     onClick = {
                                         haptics.tick()
@@ -315,41 +337,35 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         initialSeconds = nextDur
                                         secondsLeft = nextDur
                                     },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (isSel) accentColor.copy(alpha = 0.24f) else OledCardElevated,
-                                    border = BorderStroke(1.dp, if (isSel) accentColor else OledBorderSubtle)
+                                    shape = RoundedCornerShape(pillCorner),
+                                    color = if (isSel) accentColor.copy(alpha = 0.22f) else colorScheme.surfaceContainerHigh,
+                                    border = expressiveSurfaceBorder(highlighted = isSel, accentColor = accentColor)
                                 ) {
                                     Text(
                                         text = "${mins}m",
-                                        color = if (isSel) accentColor else Color.White.copy(alpha = 0.75f),
+                                        color = if (isSel) accentColor else colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.ExtraBold,
                                         fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                     )
                                 }
                             }
                         }
 
-                        IconButton(
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.tick()
                                 showConfigDialog = true
                             },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(OledCardElevated)
-                                .border(1.dp, OledBorderSubtle, CircleShape)
-                                .testTag("pomodoro_config_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Tune,
-                                contentDescription = "Set Focus Duration",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                            icon = Icons.Default.Tune,
+                            contentDescription = "Set Focus Duration",
+                            size = 38.dp,
+                            iconSize = 18.dp,
+                            containerColor = colorScheme.secondaryContainer,
+                            contentColor = colorScheme.onSecondaryContainer,
+                            modifier = Modifier.testTag("pomodoro_config_btn")
+                        )
                     }
 
                     // Center: 60-Tick StandBy Countdown Dial + Start / Reset Controls
@@ -359,6 +375,8 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                     ) {
                         val progress = if (initialSeconds > 0) secondsLeft.toFloat() / initialSeconds.toFloat() else 1f
                         val activeTickBoundary = (progress * 60).roundToInt()
+                        val inactiveTickColor = colorScheme.onSurface.copy(alpha = 0.16f)
+                        val trackCircleColor = colorScheme.onSurface.copy(alpha = 0.08f)
 
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val strokePx = strokeWidthDp.toPx()
@@ -372,7 +390,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                 val isActiveTick = i <= activeTickBoundary
                                 val tickLen = if (i % 5 == 0) 6.dp.toPx() else 3.5.dp.toPx()
                                 drawLine(
-                                    color = if (isActiveTick) accentColor.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.14f),
+                                    color = if (isActiveTick) accentColor.copy(alpha = 0.85f) else inactiveTickColor,
                                     start = Offset(cx + cos(angleRad) * (outerRadius - tickLen), cy + sin(angleRad) * (outerRadius - tickLen)),
                                     end = Offset(cx + cos(angleRad) * outerRadius, cy + sin(angleRad) * outerRadius),
                                     strokeWidth = if (i % 5 == 0) 2.5f else 1.4f,
@@ -381,7 +399,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                             }
 
                             drawCircle(
-                                color = Color.White.copy(alpha = 0.08f),
+                                color = trackCircleColor,
                                 radius = arcRadius,
                                 style = Stroke(width = strokePx)
                             )
@@ -405,7 +423,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                             val timerString = String.format(Locale.US, "%02d:%02d", minutes, secs)
 
                             val pomodoroTextStyle = androidx.compose.ui.text.TextStyle(
-                                color = if (gradientColors == null && !outlineVal) Color.White else Color.Unspecified,
+                                color = if (gradientColors == null && !outlineVal) colorScheme.onSurface else Color.Unspecified,
                                 fontSize = timerFontSize,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = customFont,
@@ -444,18 +462,20 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Button(
+                                ExpressiveMorphButton(
                                     onClick = {
                                         haptics.confirm()
                                         isRunning = !isRunning
                                     },
-                                    modifier = Modifier.testTag("pomodoro_start_pause_btn"),
-                                    shape = RoundedCornerShape(16.dp),
+                                    selected = isRunning,
+                                    idleCorner = 16.dp,
+                                    activeCorner = 12.dp,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = accentColor,
-                                        contentColor = Color.Black
+                                        contentColor = accentContentFg
                                     ),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                    modifier = Modifier.testTag("pomodoro_start_pause_btn")
                                 ) {
                                     Icon(
                                         imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -464,35 +484,29 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                     )
                                 }
 
-                                IconButton(
+                                ExpressiveIconActionButton(
                                     onClick = {
                                         haptics.tick()
                                         isRunning = false
                                         secondsLeft = initialSeconds
                                     },
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(OledCardElevated)
-                                        .border(1.dp, OledBorderSubtle, CircleShape)
-                                        .testTag("pomodoro_reset_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Reset Timer",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                    icon = Icons.Default.Refresh,
+                                    contentDescription = "Reset Timer",
+                                    size = 36.dp,
+                                    iconSize = 18.dp,
+                                    containerColor = colorScheme.surfaceContainerHigh,
+                                    contentColor = colorScheme.onSurface,
+                                    modifier = Modifier.testTag("pomodoro_reset_btn")
+                                )
                             }
                         }
                     }
 
                     // Bottom Bar: 8-Stage Visual Cycle Indicators
                     Surface(
-                        color = OledCardElevated,
+                        color = colorScheme.surfaceContainerHigh,
                         shape = CircleShape,
-                        border = BorderStroke(1.dp, OledBorderSubtle)
+                        border = expressiveSurfaceBorder()
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
@@ -522,7 +536,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                         secondsLeft = duration
                                     },
                                     modifier = Modifier.size(28.dp),
-                                    shape = CircleShape,
+                                    shape = if (isCurrent) CircleShape else RoundedCornerShape(10.dp),
                                     color = when {
                                         isCurrent -> accentColor
                                         isCompleted -> accentColor.copy(alpha = 0.22f)
@@ -534,9 +548,9 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                             imageVector = icon,
                                             contentDescription = label,
                                             tint = when {
-                                                isCurrent -> Color.Black
+                                                isCurrent -> accentContentFg
                                                 isCompleted -> accentColor
-                                                else -> Color.White.copy(alpha = 0.40f)
+                                                else -> colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                                             },
                                             modifier = Modifier.size(14.dp)
                                         )
@@ -553,14 +567,15 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
     if (showConfigDialog) {
         AlertDialog(
             onDismissRequest = { showConfigDialog = false },
-            shape = RoundedCornerShape(28.dp),
-            containerColor = OledCardElevated,
+            shape = RoundedCornerShape(30.dp),
+            containerColor = colorScheme.surfaceContainerHigh,
             title = {
+                KeepDialogImmersiveFullScreen()
                 Text(
                     text = "Focus Session Length",
                     style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
+                    color = colorScheme.onSurface,
+                    fontWeight = FontWeight.ExtraBold
                 )
             },
             text = {
@@ -571,7 +586,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                     Text(
                         text = "Choose your preferred Pomodoro duration:",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = colorScheme.onSurfaceVariant
                     )
                     listOf(15, 25, 45, 60).forEach { mins ->
                         val isSel = focusMinutes == mins
@@ -585,12 +600,9 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                                 secondsLeft = nextDur
                                 showConfigDialog = false
                             },
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSel) accentColor.copy(alpha = 0.22f) else OledCardBg,
-                            border = BorderStroke(
-                                width = 1.dp,
-                                color = if (isSel) accentColor else OledBorderSubtle
-                            ),
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (isSel) colorScheme.primaryContainer else colorScheme.surfaceContainer,
+                            border = expressiveSurfaceBorder(highlighted = isSel, accentColor = accentColor),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("pomodoro_preset_$mins")
@@ -598,20 +610,20 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = "$mins Minutes",
-                                    color = if (isSel) accentColor else Color.White,
-                                    fontWeight = FontWeight.SemiBold
+                                    color = if (isSel) colorScheme.onPrimaryContainer else colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold
                                 )
                                 if (isSel) {
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
-                                        tint = accentColor,
+                                        tint = colorScheme.onPrimaryContainer,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -621,8 +633,11 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showConfigDialog = false }) {
-                    Text("Close", color = accentColor)
+                ExpressiveMorphButton(
+                    onClick = { showConfigDialog = false },
+                    selected = false
+                ) {
+                    Text("Close", fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -635,6 +650,7 @@ fun FocusPomodoroTimer(viewModel: StandbyViewModel) {
 @Composable
 fun HighTechStopwatch(viewModel: StandbyViewModel) {
     val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
 
     val selectedColorIdx by viewModel.colorPage4.collectAsState()
     val selectedFontIdx by viewModel.fontPage4.collectAsState()
@@ -644,6 +660,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
     val bgUri by viewModel.getBgUriFlow(4).collectAsState()
 
     val accentColor = viewModel.colors[selectedColorIdx].first
+    val accentContentFg = if (accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f > 0.55f) Color.Black else Color.White
     val customFont = viewModel.fonts[selectedFontIdx].first
     val gradientColors = if (gradientIdx > 0 && gradientIdx < viewModel.gradients.size) {
         viewModel.gradients[gradientIdx].second
@@ -682,7 +699,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(OledCanvasBg),
+            .background(colorScheme.surface),
         contentAlignment = Alignment.Center
     ) {
         val isCompactHeight = maxHeight < 380.dp
@@ -696,16 +713,16 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.76f)))
+            Box(modifier = Modifier.fillMaxSize().background(colorScheme.surface.copy(alpha = 0.74f)))
         }
 
         Surface(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = outerHPad, end = outerHPad + 14.dp, top = outerVPad, bottom = outerVPad + 32.dp),
-            shape = RoundedCornerShape(26.dp),
-            color = OledCardBg,
-            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.25f))
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder(highlighted = isRunning, accentColor = accentColor.copy(alpha = 0.65f))
         ) {
             BoxWithConstraints(
                 modifier = Modifier
@@ -734,7 +751,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                         Surface(
                             shape = CircleShape,
                             color = accentColor.copy(alpha = 0.16f),
-                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.42f))
+                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f))
                         ) {
                             Text(
                                 text = "02 • PRECISION CHRONOGRAPH",
@@ -748,7 +765,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
 
                         Text(
                             text = if (isRunning) "LIVE TELEMETRY • 60HZ" else "STANDBY READY",
-                            color = if (isRunning) Color(0xFF34D399) else Color.White.copy(alpha = 0.5f),
+                            color = if (isRunning) Color(0xFF34D399) else colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold
@@ -769,7 +786,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                     } else Modifier
 
                     val mainTextStyle = androidx.compose.ui.text.TextStyle(
-                        color = if (gradientColors == null && !outlineVal) Color.White else Color.Unspecified,
+                        color = if (gradientColors == null && !outlineVal) colorScheme.onSurface else Color.Unspecified,
                         fontSize = mainFontSize,
                         fontWeight = FontWeight.Black,
                         fontFamily = customFont,
@@ -842,12 +859,9 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                 }
                             },
                             enabled = !isRunning,
-                            color = OledCardElevated,
+                            color = colorScheme.surfaceContainerHigh,
                             shape = CircleShape,
-                            border = BorderStroke(
-                                1.dp,
-                                if (!isRunning) accentColor.copy(alpha = 0.65f) else OledBorderSubtle
-                            ),
+                            border = expressiveSurfaceBorder(highlighted = !isRunning, accentColor = accentColor),
                             modifier = Modifier.testTag("stopwatch_lap_pill")
                         ) {
                             Row(
@@ -867,7 +881,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = lapTextValue,
-                                    color = Color.White,
+                                    color = colorScheme.onSurface,
                                     style = MaterialTheme.typography.labelLarge,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.SemiBold,
@@ -888,14 +902,19 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                     }
 
                     val sideBtnSize = if (isCompactHeight) 48.dp else 54.dp
-                    val mainBtnWidth = if (isCompactHeight) 78.dp else 90.dp
+                    val mainBtnWidth = if (isCompactHeight) 82.dp else 94.dp
                     val mainBtnHeight = if (isCompactHeight) 50.dp else 58.dp
+                    val mainCorner by animateDpAsState(
+                        targetValue = if (isRunning) 29.dp else 18.dp,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                        label = "chronoStartCorner"
+                    )
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(if (isCompactHeight) 18.dp else 24.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.tick()
                                 isRunning = false
@@ -904,22 +923,16 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                 lastRecordedTime = 0L
                                 showLapDialog = false
                             },
-                            modifier = Modifier
-                                .size(sideBtnSize)
-                                .clip(CircleShape)
-                                .background(Color(0xFF2B1218))
-                                .border(1.dp, Color(0xFFF43F5E).copy(alpha = 0.45f), CircleShape)
-                                .testTag("stopwatch_reset_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Reset Stopwatch",
-                                tint = Color(0xFFFDA4AF),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                            icon = Icons.Default.Refresh,
+                            contentDescription = "Reset Stopwatch",
+                            size = sideBtnSize,
+                            iconSize = 22.dp,
+                            containerColor = colorScheme.errorContainer,
+                            contentColor = colorScheme.onErrorContainer,
+                            modifier = Modifier.testTag("stopwatch_reset_btn")
+                        )
 
-                        FilledIconButton(
+                        Surface(
                             onClick = {
                                 haptics.confirm()
                                 isRunning = !isRunning
@@ -927,20 +940,22 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                             modifier = Modifier
                                 .size(width = mainBtnWidth, height = mainBtnHeight)
                                 .testTag("stopwatch_start_pause_btn"),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = accentColor,
-                                contentColor = Color.Black
-                            )
+                            shape = RoundedCornerShape(mainCorner),
+                            color = accentColor,
+                            contentColor = accentContentFg,
+                            border = expressiveSurfaceBorder(highlighted = isRunning, accentColor = accentColor)
                         ) {
-                            Icon(
-                                imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Toggle Stopwatch",
-                                modifier = Modifier.size(if (isCompactHeight) 26.dp else 30.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "Toggle Stopwatch",
+                                    modifier = Modifier.size(if (isCompactHeight) 26.dp else 30.dp)
+                                )
+                            }
                         }
 
-                        IconButton(
+                        val canLap = isRunning || laps.isNotEmpty() || timeMillis > 0L
+                        Surface(
                             onClick = {
                                 if (isRunning) {
                                     haptics.tick()
@@ -952,20 +967,22 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                     showLapDialog = true
                                 }
                             },
-                            enabled = isRunning || laps.isNotEmpty() || timeMillis > 0L,
+                            enabled = canLap,
+                            shape = if (canLap) CircleShape else RoundedCornerShape(16.dp),
+                            color = if (canLap) colorScheme.secondaryContainer else colorScheme.surfaceContainerHigh,
+                            border = expressiveSurfaceBorder(highlighted = canLap, accentColor = accentColor),
                             modifier = Modifier
                                 .size(sideBtnSize)
-                                .clip(CircleShape)
-                                .background(OledCardElevated)
-                                .border(1.dp, OledBorderSubtle, CircleShape)
                                 .testTag("stopwatch_lap_btn")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Flag,
-                                contentDescription = if (isRunning) "Record Lap Split" else "View Lap Timings",
-                                tint = if (isRunning || laps.isNotEmpty() || timeMillis > 0L) accentColor else Color.White.copy(alpha = 0.3f),
-                                modifier = Modifier.size(22.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Flag,
+                                    contentDescription = if (isRunning) "Record Lap Split" else "View Lap Timings",
+                                    tint = if (canLap) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -990,9 +1007,10 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
         AlertDialog(
             onDismissRequest = { showLapDialog = false },
             modifier = Modifier.testTag("lap_timings_dialog"),
-            shape = RoundedCornerShape(28.dp),
-            containerColor = OledCardElevated,
+            shape = RoundedCornerShape(30.dp),
+            containerColor = colorScheme.surfaceContainerHigh,
             title = {
+                KeepDialogImmersiveFullScreen()
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1011,19 +1029,19 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                         Text(
                             text = "Lap Split Telemetry",
                             style = MaterialTheme.typography.titleLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
+                            color = colorScheme.onSurface,
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
                     Surface(
                         shape = CircleShape,
-                        color = accentColor.copy(alpha = 0.2f)
+                        color = colorScheme.primaryContainer
                     ) {
                         val totalFmt = formatDisplayTime(timeMillis)
                         Text(
                             text = "Total ${totalFmt.first}${totalFmt.second}",
                             style = MaterialTheme.typography.labelMedium,
-                            color = accentColor,
+                            color = colorScheme.onPrimaryContainer,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -1049,14 +1067,14 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                             val cumFmt = formatDisplayTime(cumulativeMillis)
 
                             Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = OledCardBg,
+                                shape = RoundedCornerShape(18.dp),
+                                color = colorScheme.surfaceContainerLow,
                                 border = BorderStroke(
-                                    width = 1.dp,
+                                    width = if (isFastest || isSlowest) 1.5.dp else 1.dp,
                                     color = when {
-                                        isFastest -> Color(0xFF10B981).copy(alpha = 0.6f)
-                                        isSlowest -> Color(0xFFF43F5E).copy(alpha = 0.6f)
-                                        else -> OledBorderSubtle
+                                        isFastest -> Color(0xFF10B981).copy(alpha = 0.7f)
+                                        isSlowest -> Color(0xFFF43F5E).copy(alpha = 0.7f)
+                                        else -> colorScheme.outlineVariant.copy(alpha = 0.55f)
                                     }
                                 ),
                                 modifier = Modifier.fillMaxWidth()
@@ -1077,7 +1095,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                             style = MaterialTheme.typography.labelLarge,
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace,
-                                            color = Color.White
+                                            color = colorScheme.onSurface
                                         )
                                         if (isFastest) {
                                             Text(
@@ -1108,7 +1126,7 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                                             text = "${cumFmt.first}${cumFmt.second}",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontFamily = FontFamily.Monospace,
-                                            color = Color.White.copy(alpha = 0.55f)
+                                            color = colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -1118,8 +1136,11 @@ fun HighTechStopwatch(viewModel: StandbyViewModel) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showLapDialog = false }) {
-                    Text("Done", color = accentColor, fontWeight = FontWeight.Bold)
+                ExpressiveMorphButton(
+                    onClick = { showLapDialog = false },
+                    selected = true
+                ) {
+                    Text("Done", fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -1238,22 +1259,25 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
 
     val showSlideshowTime by viewModel.showSlideshowTimeOverlay.collectAsState()
 
+    val colorScheme = MaterialTheme.colorScheme
+    val accentContentFg = if (accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f > 0.55f) Color.Black else Color.White
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(OledCanvasBg)
+            .background(colorScheme.surface)
             .testTag("gallery_slideshow_tool")
     ) {
         if (!isPermissionGranted) {
-            // STEP 1: Minimal Visual Permission Card before showing Gallery / Slideshow
+            // STEP 1: Minimal Expressive Permission Card before showing Gallery / Slideshow
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp)
                     .testTag("gallery_permission_card"),
-                shape = RoundedCornerShape(28.dp),
-                color = OledCardBg,
-                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
+                shape = RoundedCornerShape(30.dp),
+                color = colorScheme.surfaceContainerLow,
+                border = expressiveSurfaceBorder()
             ) {
                 Column(
                     modifier = Modifier
@@ -1267,38 +1291,38 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(84.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(accentColor.copy(alpha = 0.16f))
-                            .border(1.5.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(24.dp)),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        modifier = Modifier.size(84.dp),
+                        shape = RoundedCornerShape(26.dp),
+                        color = colorScheme.primaryContainer,
+                        border = expressiveSurfaceBorder(highlighted = true, accentColor = accentColor)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Collections,
-                            contentDescription = "Gallery Permission",
-                            tint = accentColor,
-                            modifier = Modifier.size(40.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Collections,
+                                contentDescription = "Gallery Permission",
+                                tint = colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Button(
+                        ExpressiveMorphButton(
                             onClick = {
                                 haptics.confirm()
                                 viewModel.setGalleryPermissionGranted(true)
                             },
+                            selected = true,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = accentColor,
-                                contentColor = Color.Black
+                                contentColor = accentContentFg
                             ),
-                            shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.testTag("gallery_grant_permission_btn")
                         ) {
                             Icon(
@@ -1308,7 +1332,7 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                             )
                         }
 
-                        OutlinedButton(
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.tick()
                                 viewModel.setGalleryPermissionGranted(true)
@@ -1319,16 +1343,13 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                                 } catch (_: Exception) {
                                 }
                             },
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AddPhotoAlternate,
-                                contentDescription = "Add Photos",
-                                tint = accentColor,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                            icon = Icons.Default.AddPhotoAlternate,
+                            contentDescription = "Add Photos",
+                            size = 48.dp,
+                            iconSize = 22.dp,
+                            containerColor = colorScheme.secondaryContainer,
+                            contentColor = colorScheme.onSecondaryContainer
+                        )
                     }
                 }
             }
@@ -1474,14 +1495,14 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                     }
                 }
             } else {
-                // GALLERY GRID VIEW MODE (Visual-only photo grid)
+                // GALLERY GRID VIEW MODE (Visual-only photo grid with Material 3 Expressive framing)
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    color = OledCardBg,
-                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.30f))
+                    shape = RoundedCornerShape(30.dp),
+                    color = colorScheme.surfaceContainerLow,
+                    border = expressiveSurfaceBorder()
                 ) {
                     Column(
                         modifier = Modifier
@@ -1495,7 +1516,7 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilledTonalIconButton(
+                                ExpressiveIconActionButton(
                                     onClick = {
                                         haptics.tick()
                                         try {
@@ -1504,30 +1525,28 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                                             )
                                         } catch (_: Exception) {
                                         }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AddPhotoAlternate,
-                                        contentDescription = "Add Photos",
-                                        tint = accentColor
-                                    )
-                                }
+                                    },
+                                    icon = Icons.Default.AddPhotoAlternate,
+                                    contentDescription = "Add Photos",
+                                    size = 44.dp,
+                                    iconSize = 20.dp,
+                                    containerColor = colorScheme.secondaryContainer,
+                                    contentColor = colorScheme.onSecondaryContainer
+                                )
 
-                                FilledIconButton(
+                                ExpressiveIconActionButton(
                                     onClick = {
                                         haptics.tick()
                                         isGridViewMode = false
                                     },
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = accentColor,
-                                        contentColor = Color.Black
-                                    )
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Slideshow,
-                                        contentDescription = "Full Screen Slideshow"
-                                    )
-                                }
+                                    icon = Icons.Default.Slideshow,
+                                    contentDescription = "Full Screen Slideshow",
+                                    selected = true,
+                                    size = 44.dp,
+                                    iconSize = 20.dp,
+                                    containerColor = accentColor,
+                                    contentColor = accentContentFg
+                                )
                             }
                         }
 
@@ -1549,12 +1568,9 @@ fun StandbyGallerySlideshowTool(viewModel: StandbyViewModel) {
                                     modifier = Modifier
                                         .width(190.dp)
                                         .fillMaxHeight(),
-                                    shape = RoundedCornerShape(18.dp),
-                                    color = OledCardElevated,
-                                    border = BorderStroke(
-                                        width = if (isCurrent) 2.dp else 1.dp,
-                                        color = if (isCurrent) accentColor else OledBorderSubtle
-                                    )
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = colorScheme.surfaceContainerHigh,
+                                    border = expressiveSurfaceBorder(highlighted = isCurrent, accentColor = accentColor)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
                                         if (idx < userPhotoUris.size) {
@@ -1660,25 +1676,25 @@ private fun CuratedStandbyArtworkCanvas(
 @Composable
 fun StandbyConnectedDevicesChargeTool(viewModel: StandbyViewModel) {
     val context = LocalContext.current
+    val colorScheme = MaterialTheme.colorScheme
     val selectedColorIdx by viewModel.colorPage4.collectAsState()
-    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color(0xFF34D399)
-    val devices = rememberGoogleBatteryDevices()
+    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: colorScheme.primary
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(OledCanvasBg)
+            .background(colorScheme.surface)
             .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp)
             .testTag("connected_devices_charge_tool")
     ) {
         var showBtInfo by remember { mutableStateOf(false) }
 
-        // Unified Single Full-Screen Charge Card (no 2-pane split)
+        // Unified Single Full-Screen Charge Card (Material 3 Expressive Surface)
         Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(28.dp),
-            color = OledCardBg,
-            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.28f))
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder()
         ) {
             Column(
                 modifier = Modifier
@@ -1693,34 +1709,41 @@ fun StandbyConnectedDevicesChargeTool(viewModel: StandbyViewModel) {
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.BatteryChargingFull,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = colorScheme.primaryContainer
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BatteryChargingFull,
+                                contentDescription = null,
+                                tint = colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .padding(7.dp)
+                                    .size(18.dp)
+                            )
+                        }
                         Text(
                             text = "Connected Devices",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
+                            color = colorScheme.onSurface,
                             fontWeight = FontWeight.ExtraBold
                         )
                         IconButton(
                             onClick = { showBtInfo = !showBtInfo },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = "Info",
-                                tint = if (showBtInfo) accentColor else Color.White.copy(alpha = 0.55f),
-                                modifier = Modifier.size(15.dp)
+                                tint = if (showBtInfo) accentColor else colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
 
-                    FilledTonalButton(
+                    ExpressiveMorphButton(
                         onClick = {
                             try {
                                 context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
@@ -1728,20 +1751,20 @@ fun StandbyConnectedDevicesChargeTool(viewModel: StandbyViewModel) {
                                 })
                             } catch (_: Exception) {}
                         },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(10.dp)
+                        selected = false,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Pair", fontSize = 11.sp)
+                        Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Pair", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
                 AnimatedVisibility(visible = showBtInfo) {
                     Text(
                         text = "Pair your Pixel Buds, Wear OS watch, or Bluetooth headphones in Android Settings to monitor live battery telemetry here.",
-                        color = Color.White.copy(alpha = 0.60f),
-                        fontSize = 11.sp
+                        color = colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
 
@@ -1764,8 +1787,9 @@ fun StandbyConnectedDevicesChargeTool(viewModel: StandbyViewModel) {
 fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
     val context = LocalContext.current
     val haptics = rememberStandbyHaptics()
+    val colorScheme = MaterialTheme.colorScheme
     val selectedColorIdx by viewModel.colorPage4.collectAsState()
-    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: Color(0xFF38BDF8)
+    val accentColor = viewModel.colors.getOrNull(selectedColorIdx)?.first ?: colorScheme.primary
     val homeDevices by viewModel.googleHomeDevices.collectAsState()
     var selectedDeviceId by remember { mutableStateOf(homeDevices.firstOrNull()?.id ?: "") }
     val activeDevice = homeDevices.firstOrNull { it.id == selectedDeviceId } ?: homeDevices.firstOrNull()
@@ -1776,16 +1800,15 @@ fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(OledCanvasBg)
+            .background(colorScheme.surface)
             .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp)
             .testTag("smart_devices_control_tool")
     ) {
-        // Unified Single Full-Screen Smart Home Card (no 2-pane split)
         Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(28.dp),
-            color = OledCardBg,
-            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.28f))
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder()
         ) {
             Column(
                 modifier = Modifier
@@ -1800,50 +1823,57 @@ fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = colorScheme.primaryContainer
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Home,
+                                contentDescription = null,
+                                tint = colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .padding(7.dp)
+                                    .size(18.dp)
+                            )
+                        }
                         Text(
                             text = "Smart Home",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
+                            color = colorScheme.onSurface,
                             fontWeight = FontWeight.ExtraBold
                         )
                         IconButton(
                             onClick = { showSmartInfo = !showSmartInfo },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = "Info",
-                                tint = if (showSmartInfo) accentColor else Color.White.copy(alpha = 0.55f),
-                                modifier = Modifier.size(15.dp)
+                                tint = if (showSmartInfo) accentColor else colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FilledTonalButton(
+                        ExpressiveMorphButton(
                             onClick = {
                                 haptics.tick()
                                 showAddDeviceDialog = true
                             },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(10.dp)
+                            selected = true,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Add", fontSize = 11.sp)
+                            Text("Add", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         }
-                        FilledTonalButton(
+                        ExpressiveMorphButton(
                             onClick = {
                                 haptics.confirm()
                                 try {
@@ -1858,24 +1888,24 @@ fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
                                     } catch (_: Exception) {}
                                 }
                             },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(10.dp)
+                            selected = false,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Controls", fontSize = 11.sp)
+                            Text("Controls", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                         }
-                        FilledTonalButton(
+                        ExpressiveMorphButton(
                             onClick = {
                                 haptics.tick()
                                 GoogleDeviceAndHomeMonitor.openGoogleHomeApp(context)
                             },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(10.dp)
+                            selected = false,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Google Home", fontSize = 11.sp)
+                            Text("Google Home", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -1883,8 +1913,8 @@ fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
                 AnimatedVisibility(visible = showSmartInfo) {
                     Text(
                         text = "Manage your real smart lights, thermostat, and plugs through Android's system Device Controls or add custom tiles here.",
-                        color = Color.White.copy(alpha = 0.60f),
-                        fontSize = 11.sp
+                        color = colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
 
@@ -1917,32 +1947,33 @@ fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
                                         haptics.tick()
                                         selectedDeviceId = item.id
                                     },
-                                    label = { Text(item.name, fontSize = 11.sp, maxLines = 1) }
+                                    shape = CircleShape,
+                                    label = { Text(item.name, fontSize = 11.sp, maxLines = 1, fontWeight = FontWeight.SemiBold) }
                                 )
                             }
                         }
 
-                        OutlinedButton(
+                        ExpressiveMorphButton(
                             onClick = {
                                 haptics.tick()
                                 val step = if (activeDevice.type == "thermostat") -1 else -10
                                 viewModel.adjustGoogleHomeDeviceValue(activeDevice.id, step)
                             },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(10.dp)
+                            selected = false,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text(if (activeDevice.type == "thermostat") "-1°F" else "-10%", color = Color.White, fontSize = 11.sp)
+                            Text(if (activeDevice.type == "thermostat") "-1°F" else "-10%", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         }
-                        OutlinedButton(
+                        ExpressiveMorphButton(
                             onClick = {
                                 haptics.tick()
                                 val step = if (activeDevice.type == "thermostat") 1 else 10
                                 viewModel.adjustGoogleHomeDeviceValue(activeDevice.id, step)
                             },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(10.dp)
+                            selected = false,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text(if (activeDevice.type == "thermostat") "+1°F" else "+10%", color = Color.White, fontSize = 11.sp)
+                            Text(if (activeDevice.type == "thermostat") "+1°F" else "+10%", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1956,15 +1987,25 @@ fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
 
             AlertDialog(
                 onDismissRequest = { showAddDeviceDialog = false },
-                title = { Text("Add Smart Device Controller", fontWeight = FontWeight.Bold) },
+                shape = RoundedCornerShape(30.dp),
+                containerColor = colorScheme.surfaceContainerHigh,
+                title = {
+                    KeepDialogImmersiveFullScreen()
+                    Text("Add Smart Device Controller", fontWeight = FontWeight.ExtraBold)
+                },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Add a controller for your real smart appliances:", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+                        Text(
+                            "Add a controller for your real smart appliances:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colorScheme.onSurfaceVariant
+                        )
                         OutlinedTextField(
                             value = newName,
                             onValueChange = { newName = it },
                             label = { Text("Device Name (e.g. Desk Lamp)") },
                             singleLine = true,
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
@@ -1972,6 +2013,7 @@ fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
                             onValueChange = { newRoom = it },
                             label = { Text("Room (e.g. Bedroom, Office)") },
                             singleLine = true,
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1979,27 +2021,32 @@ fun StandbySmartDevicesControlTool(viewModel: StandbyViewModel) {
                                 FilterChip(
                                     selected = newType == typeKey,
                                     onClick = { newType = typeKey },
-                                    label = { Text(typeLabel, fontSize = 11.sp) }
+                                    shape = CircleShape,
+                                    label = { Text(typeLabel, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
                                 )
                             }
                         }
                     }
                 },
                 confirmButton = {
-                    Button(
+                    ExpressiveMorphButton(
                         onClick = {
                             if (newName.isNotBlank()) {
                                 viewModel.addUserSmartDevice(newName, newRoom, newType)
                                 showAddDeviceDialog = false
                             }
-                        }
+                        },
+                        selected = true
                     ) {
-                        Text("Add Device")
+                        Text("Add Device", fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showAddDeviceDialog = false }) {
-                        Text("Cancel")
+                    ExpressiveMorphButton(
+                        onClick = { showAddDeviceDialog = false },
+                        selected = false
+                    ) {
+                        Text("Cancel", fontWeight = FontWeight.SemiBold)
                     }
                 }
             )
@@ -2187,23 +2234,22 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
         }
     }
 
+    val colorScheme = MaterialTheme.colorScheme
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(OledCanvasBg)
+            .background(colorScheme.surface)
             .padding(start = 18.dp, end = 30.dp, top = 14.dp, bottom = 14.dp)
             .testTag("dock_lab_tool")
     ) {
-        // Unified Single Full-Screen Ambient Light Studio (no 2-pane split, no 2D level)
+        // Unified Single Full-Screen Ambient Light Studio (Material 3 Expressive Surface)
         Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(28.dp),
-            color = OledCardBg,
-            border = BorderStroke(
-                1.5.dp,
-                if (flashAmbientMode != 0) Color(0xFFFFD54F).copy(alpha = 0.75f)
-                else if (activeNightlightColor != Color.Transparent) activeNightlightColor.copy(alpha = 0.55f)
-                else OledBorderSubtle
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder(
+                highlighted = flashAmbientMode != 0 || activeNightlightColor != Color.Transparent,
+                accentColor = if (flashAmbientMode != 0) Color(0xFFFFD54F) else activeNightlightColor
             )
         ) {
             Box(
@@ -2230,7 +2276,7 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Header with Hero Flash Toggle Button
+                    // Header with Expressive Morphing Hero Flash Toggle Button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2240,45 +2286,41 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.WbIncandescent,
-                                contentDescription = null,
-                                tint = if (flashAmbientMode != 0) Color(0xFFFFD54F) else accentColor,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (flashAmbientMode != 0) Color(0xFFFFD54F).copy(alpha = 0.22f) else colorScheme.primaryContainer
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WbIncandescent,
+                                    contentDescription = null,
+                                    tint = if (flashAmbientMode != 0) Color(0xFFFFD54F) else colorScheme.onPrimaryContainer,
+                                    modifier = Modifier
+                                        .padding(7.dp)
+                                        .size(20.dp)
+                                )
+                            }
                             Text(
                                 text = "Ambient Light",
                                 style = MaterialTheme.typography.titleLarge,
-                                color = Color.White,
+                                color = colorScheme.onSurface,
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
 
-                        IconButton(
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.confirm()
                                 flashAmbientMode = if (flashAmbientMode == 0) 1 else 0
                             },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (flashAmbientMode != 0) Color(0xFFFFD54F) else OledCardElevated
-                                )
-                                .border(
-                                    1.dp,
-                                    if (flashAmbientMode != 0) Color(0xFFFFD54F) else OledBorderSubtle,
-                                    CircleShape
-                                )
-                                .testTag("camera_flash_ambient_toggle_btn")
-                        ) {
-                            Icon(
-                                imageVector = if (flashAmbientMode != 0) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
-                                contentDescription = "Toggle Phone Flash Ambient Light",
-                                tint = if (flashAmbientMode != 0) Color.Black else Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                            icon = if (flashAmbientMode != 0) Icons.Default.FlashlightOn else Icons.Default.FlashlightOff,
+                            contentDescription = "Toggle Phone Flash Ambient Light",
+                            selected = flashAmbientMode != 0,
+                            size = 50.dp,
+                            iconSize = 24.dp,
+                            containerColor = if (flashAmbientMode != 0) Color(0xFFFFD54F) else colorScheme.surfaceContainerHigh,
+                            contentColor = if (flashAmbientMode != 0) Color.Black else colorScheme.onSurface,
+                            modifier = Modifier.testTag("camera_flash_ambient_toggle_btn")
+                        )
                     }
 
                     // Phone Rear Flash Mode Chips (Off / Steady / Breathe / Candle)
@@ -2293,21 +2335,26 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
                             3 to "Candle"
                         ).forEach { (modeIdx, label) ->
                             val isSel = flashAmbientMode == modeIdx
+                            val chipCorner by animateDpAsState(
+                                targetValue = if (isSel) 22.dp else 14.dp,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                label = "flashModeCorner"
+                            )
                             Surface(
                                 onClick = {
                                     haptics.tick()
                                     flashAmbientMode = modeIdx
                                 },
-                                shape = RoundedCornerShape(14.dp),
-                                color = if (isSel) Color(0xFFFFD54F).copy(alpha = 0.24f) else OledCardElevated,
-                                border = BorderStroke(1.dp, if (isSel) Color(0xFFFFD54F) else OledBorderSubtle),
+                                shape = RoundedCornerShape(chipCorner),
+                                color = if (isSel) Color(0xFFFFD54F).copy(alpha = 0.24f) else colorScheme.surfaceContainerHigh,
+                                border = expressiveSurfaceBorder(highlighted = isSel, accentColor = Color(0xFFFFD54F)),
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("flash_ambient_mode_$modeIdx")
                             ) {
                                 Text(
                                     text = label,
-                                    color = if (isSel) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.85f),
+                                    color = if (isSel) Color(0xFFFFD54F) else colorScheme.onSurfaceVariant,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,
@@ -2345,7 +2392,7 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
                         )
                     }
 
-                    // Bottom Row: OLED Screen Halo Color Swatches + Ambient Soundscape Chips
+                    // Bottom Row: Expressive OLED Halo Swatches + Ambient Soundscape Chips
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -2358,37 +2405,40 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
                         ) {
                             nightlightColors.forEachIndexed { idx, (glowCol, label) ->
                                 val isSel = nightlightWarmthIdx == idx
-                                val chipAccent = if (glowCol == Color.Transparent) Color.White.copy(alpha = 0.35f) else glowCol
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(if (glowCol == Color.Transparent) OledCardElevated else glowCol)
-                                        .border(
-                                            width = if (isSel) 2.5.dp else 1.dp,
-                                            color = if (isSel) Color.White else chipAccent.copy(alpha = 0.5f),
-                                            shape = CircleShape
-                                        )
-                                        .clickable {
-                                            haptics.tick()
-                                            nightlightWarmthIdx = idx
-                                        },
-                                    contentAlignment = Alignment.Center
+                                val swatchRadius by animateDpAsState(
+                                    targetValue = if (isSel) 18.dp else 10.dp,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                    label = "haloSwatchCorner"
+                                )
+                                Surface(
+                                    onClick = {
+                                        haptics.tick()
+                                        nightlightWarmthIdx = idx
+                                    },
+                                    shape = RoundedCornerShape(swatchRadius),
+                                    color = if (glowCol == Color.Transparent) colorScheme.surfaceContainerHigh else glowCol,
+                                    border = BorderStroke(
+                                        width = if (isSel) 2.5.dp else 1.dp,
+                                        color = if (isSel) colorScheme.onSurface else colorScheme.outlineVariant
+                                    ),
+                                    modifier = Modifier.size(36.dp)
                                 ) {
-                                    if (glowCol == Color.Transparent) {
-                                        Icon(
-                                            imageVector = Icons.Default.Block,
-                                            contentDescription = label,
-                                            tint = Color.White.copy(alpha = 0.6f),
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                    } else if (isSel) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = label,
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(16.dp)
-                                        )
+                                    Box(contentAlignment = Alignment.Center) {
+                                        if (glowCol == Color.Transparent) {
+                                            Icon(
+                                                imageVector = Icons.Default.Block,
+                                                contentDescription = label,
+                                                tint = colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        } else if (isSel) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = label,
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -2408,19 +2458,24 @@ fun StandbyDockLabTool(viewModel: StandbyViewModel) {
                                 3 to "432Hz"
                             ).forEach { (modeIdx, title) ->
                                 val isSel = activeSoundMode == modeIdx
+                                val soundCorner by animateDpAsState(
+                                    targetValue = if (isSel) 20.dp else 12.dp,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                    label = "soundChipCorner"
+                                )
                                 Surface(
                                     onClick = {
                                         haptics.tick()
                                         activeSoundMode = modeIdx
                                     },
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (isSel) accentColor.copy(alpha = 0.22f) else OledCardElevated,
-                                    border = BorderStroke(1.dp, if (isSel) accentColor else OledBorderSubtle),
+                                    shape = RoundedCornerShape(soundCorner),
+                                    color = if (isSel) colorScheme.primaryContainer else colorScheme.surfaceContainerHigh,
+                                    border = expressiveSurfaceBorder(highlighted = isSel, accentColor = accentColor),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text(
                                         text = title,
-                                        color = if (isSel) accentColor else Color.White.copy(alpha = 0.78f),
+                                        color = if (isSel) colorScheme.onPrimaryContainer else colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center,

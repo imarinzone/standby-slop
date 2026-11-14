@@ -61,3 +61,16 @@ val M3SurfaceContainerHighLight = Color(0xFFE6E8EE)
 val M3SurfaceContainerHighestLight = Color(0xFFE1E2E9)
 val M3OutlineLight = Color(0xFF74777F)
 val M3OutlineVariantLight = Color(0xFFC4C6D0)
+
+// Pure AMOLED Mode Surface & Expressive Accent Tokens
+val AmoledBlack = Color(0xFF000000)
+val AmoledSurfaceContainerLow = Color(0xFF05070A)
+val AmoledSurfaceContainer = Color(0xFF0B0E14)
+val AmoledSurfaceContainerHigh = Color(0xFF12161F)
+val AmoledSurfaceContainerHighest = Color(0xFF1A1F2B)
+val AmoledOutline = Color(0xFF838896)
+val AmoledOutlineVariant = Color(0xFF282F3D)
+val AmoledExpressivePrimary = Color(0xFFA8C7FA)
+val AmoledExpressiveSecondaryContainer = Color(0xFF1B2B48)
+val AmoledExpressiveTertiary = Color(0xFFE9B3FF)
+

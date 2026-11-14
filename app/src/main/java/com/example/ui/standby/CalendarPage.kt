@@ -181,10 +181,10 @@ fun CalendarPage(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 12.dp),
-                color = colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
+                color = colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
                 shape = CircleShape,
-                tonalElevation = 4.dp,
-                border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.4f))
+                tonalElevation = if (com.example.ui.theme.LocalPureAmoled.current) 0.dp else 4.dp,
+                border = expressiveSurfaceBorder()
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
@@ -239,12 +239,11 @@ fun CalendarHeroDayScreen(
     ) {
         val isCompactHeight = maxHeight < 360.dp
 
-        ElevatedCard(
+        Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = colorScheme.surfaceContainerLow
-            )
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder()
         ) {
             BoxWithConstraints(
                 modifier = Modifier
@@ -370,12 +369,11 @@ fun CalendarMonthGridScreen(
     ) {
         val isCompactHeight = maxHeight < 360.dp
 
-        ElevatedCard(
+        Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = colorScheme.surfaceContainerLow
-            )
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder()
         ) {
             Column(
                 modifier = Modifier
@@ -417,52 +415,49 @@ fun CalendarMonthGridScreen(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (monthOffset != 0) {
-                            FilledTonalButton(
+                            ExpressiveMorphButton(
                                 onClick = {
                                     haptics.tick()
                                     monthOffset = 0
                                 },
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                selected = true,
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                                 modifier = Modifier
-                                    .height(34.dp)
+                                    .height(38.dp)
                                     .testTag("calendar_today_reset_btn")
                             ) {
-                                Text("Today", style = MaterialTheme.typography.labelMedium)
+                                Text("Today", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                             }
                         }
-                        FilledTonalIconButton(
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.tick()
                                 monthOffset -= 1
                             },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .testTag("calendar_prev_month_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                contentDescription = "Previous Month",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        FilledTonalIconButton(
+                            icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Previous Month",
+                            size = 38.dp,
+                            iconSize = 20.dp,
+                            containerColor = colorScheme.secondaryContainer,
+                            contentColor = colorScheme.onSecondaryContainer,
+                            modifier = Modifier.testTag("calendar_prev_month_btn")
+                        )
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.tick()
                                 monthOffset += 1
                             },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .testTag("calendar_next_month_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = "Next Month",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                            icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "Next Month",
+                            size = 38.dp,
+                            iconSize = 20.dp,
+                            containerColor = colorScheme.secondaryContainer,
+                            contentColor = colorScheme.onSecondaryContainer,
+                            modifier = Modifier.testTag("calendar_next_month_btn")
+                        )
                     }
                 }
 
@@ -708,12 +703,11 @@ fun CalendarEventsAgendaScreen(
         val isCompactHeight = maxHeight < 380.dp
         val isCompactWidth = maxWidth < 600.dp
 
-        ElevatedCard(
+        Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = colorScheme.surfaceContainerLow
-            )
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder()
         ) {
             Column(
                 modifier = Modifier
@@ -1034,16 +1028,15 @@ fun CalendarEventsAgendaScreen(
                             val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
                             val dateLabel = dateFormat.format(Date(event.dtStart))
 
-                            ElevatedCard(
+                            Surface(
                                 onClick = {
                                     haptics.tick()
                                     openEventInCalendar(context, event.id)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainer
-                                )
+                                shape = RoundedCornerShape(20.dp),
+                                color = colorScheme.surfaceContainer,
+                                border = expressiveSurfaceBorder()
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -1167,11 +1160,10 @@ fun EmptyCalendarView(
         contentAlignment = Alignment.Center
     ) {
         val isCompactHeight = maxHeight < 370.dp
-        ElevatedCard(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = colorScheme.surfaceContainerLow
-            ),
+        Surface(
+            shape = RoundedCornerShape(30.dp),
+            color = colorScheme.surfaceContainerLow,
+            border = expressiveSurfaceBorder(),
             modifier = Modifier.widthIn(max = 460.dp)
         ) {
             Column(
@@ -1233,11 +1225,12 @@ fun EmptyCalendarView(
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(
+                ExpressiveMorphButton(
                     onClick = {
                         haptics.confirm()
                         calendarPermissionState.launchPermissionRequest()
-                    }
+                    },
+                    selected = true
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,

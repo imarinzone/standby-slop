@@ -1142,7 +1142,9 @@ fun SmartHomeControlGridWidget(
     val googleAccount by vm.googleConnectedAccount.collectAsState()
 
     LaunchedEffect(context) {
-        val detectedAccount = GoogleDeviceAndHomeMonitor.detectConnectedGoogleAccount(context)
+        val detectedAccount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            GoogleDeviceAndHomeMonitor.detectConnectedGoogleAccount(context)
+        }
         vm.setGoogleConnectedAccount(detectedAccount)
     }
 

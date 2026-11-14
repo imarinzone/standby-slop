@@ -1,9 +1,29 @@
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
 }
+
+abstract class AutoVersionCodeSource : ValueSource<Int, ValueSourceParameters.None> {
+  override fun obtain(): Int {
+    // 15-second monotonic intervals since 2025-01-01T00:00:00Z (~3.9M+ in 2026, <2.1B for ~998 years).
+    // Ensures every newly built APK (AI Studio, GitHub CI, or local) has versionCode > installed versionCode.
+    val epoch2025Millis = 1_735_689_600_000L
+    return (((System.currentTimeMillis() - epoch2025Millis) / 15_000L).toInt()).coerceAtLeast(2)
+  }
+}
+
+val computedVersionCode = providers.environmentVariable("APP_VERSION_CODE")
+  .orNull?.toIntOrNull()
+  ?: providers.of(AutoVersionCodeSource::class) {}.get()
+
+val ciRunNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull
+val computedVersionName = providers.environmentVariable("APP_VERSION_NAME").orNull
+  ?: if (!ciRunNumber.isNullOrBlank()) "1.1.$ciRunNumber" else "1.1.$computedVersionCode"
 
 android {
   namespace = "com.example"
@@ -13,8 +33,8 @@ android {
     applicationId = "com.example"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = computedVersionCode
+    versionName = computedVersionName
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

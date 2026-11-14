@@ -160,34 +160,26 @@ fun DuoPage(
                         .fillMaxHeight()
                 ) {
                     if (leftScreens.isEmpty()) {
-                        // Empty State: Just show a clean + sign until user adds a screen
+                        // Empty State: Expressive squircle + sign until user adds a screen
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black),
+                                .background(colorScheme.surface),
                             contentAlignment = Alignment.Center
                         ) {
-                            Surface(
+                            ExpressiveIconActionButton(
                                 onClick = {
                                     haptics.confirm()
                                     activeScreenManagerPane = 1
                                 },
-                                modifier = Modifier
-                                    .size(76.dp)
-                                    .testTag("duo_left_empty_add_btn"),
-                                shape = CircleShape,
-                                color = Color(0xFF14161D),
-                                border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.24f))
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add Left Screen",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(34.dp)
-                                    )
-                                }
-                            }
+                                icon = Icons.Default.Add,
+                                contentDescription = "Add Left Screen",
+                                size = 84.dp,
+                                iconSize = 36.dp,
+                                containerColor = colorScheme.primaryContainer,
+                                contentColor = colorScheme.onPrimaryContainer,
+                                modifier = Modifier.testTag("duo_left_empty_add_btn")
+                            )
                         }
                     } else {
                         VerticalPager(
@@ -218,29 +210,28 @@ fun DuoPage(
                         ) {
                             if (currentLeftScreen in 0..13) {
                                 Surface(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            haptics.tick()
-                                            activeTimezonePickerPane = 1
-                                        },
+                                    onClick = {
+                                        haptics.tick()
+                                        activeTimezonePickerPane = 1
+                                    },
                                     shape = CircleShape,
-                                    color = Color(0xFF14161C).copy(alpha = 0.78f)
+                                    color = colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+                                    border = expressiveSurfaceBorder()
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Public,
                                             contentDescription = "Left Pane TimeZone",
-                                            tint = Color(0xFFFF9F0A),
-                                            modifier = Modifier.size(11.dp)
+                                            tint = colorScheme.primary,
+                                            modifier = Modifier.size(12.dp)
                                         )
                                         Text(
                                             text = "${leftRegionInfo.airportCode} • ${leftRegionInfo.standardTimeShort}",
-                                            color = Color.White.copy(alpha = 0.88f),
+                                            color = colorScheme.onSurface,
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace
@@ -249,27 +240,19 @@ fun DuoPage(
                                 }
                             }
 
-                            Surface(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        haptics.tick()
-                                        activeScreenManagerPane = 1
-                                    }
-                                    .testTag("duo_left_manage_screens_btn"),
-                                shape = CircleShape,
-                                color = Color(0xFF14161C).copy(alpha = 0.78f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add Left Screen",
-                                        tint = Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                            }
+                            ExpressiveIconActionButton(
+                                onClick = {
+                                    haptics.tick()
+                                    activeScreenManagerPane = 1
+                                },
+                                icon = Icons.Default.Add,
+                                contentDescription = "Add Left Screen",
+                                size = 26.dp,
+                                iconSize = 15.dp,
+                                containerColor = colorScheme.primaryContainer.copy(alpha = 0.9f),
+                                contentColor = colorScheme.onPrimaryContainer,
+                                modifier = Modifier.testTag("duo_left_manage_screens_btn")
+                            )
                         }
 
                         // Left Pager Compact Vertical Indicator for active screens in this pane
@@ -327,34 +310,26 @@ fun DuoPage(
                         .fillMaxHeight()
                 ) {
                     if (rightScreens.isEmpty()) {
-                        // Empty State: Just show a clean + sign until user adds a screen
+                        // Empty State: Expressive squircle + sign until user adds a screen
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black),
+                                .background(colorScheme.surface),
                             contentAlignment = Alignment.Center
                         ) {
-                            Surface(
+                            ExpressiveIconActionButton(
                                 onClick = {
                                     haptics.confirm()
                                     activeScreenManagerPane = 2
                                 },
-                                modifier = Modifier
-                                    .size(76.dp)
-                                    .testTag("duo_right_empty_add_btn"),
-                                shape = CircleShape,
-                                color = Color(0xFF14161D),
-                                border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.24f))
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add Right Screen",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(34.dp)
-                                    )
-                                }
-                            }
+                                icon = Icons.Default.Add,
+                                contentDescription = "Add Right Screen",
+                                size = 84.dp,
+                                iconSize = 36.dp,
+                                containerColor = colorScheme.primaryContainer,
+                                contentColor = colorScheme.onPrimaryContainer,
+                                modifier = Modifier.testTag("duo_right_empty_add_btn")
+                            )
                         }
                     } else {
                         VerticalPager(
@@ -383,53 +358,44 @@ fun DuoPage(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Surface(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        haptics.tick()
-                                        activeScreenManagerPane = 2
-                                    }
-                                    .testTag("duo_right_manage_screens_btn"),
-                                shape = CircleShape,
-                                color = Color(0xFF14161C).copy(alpha = 0.78f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add Right Screen",
-                                        tint = Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                            }
+                            ExpressiveIconActionButton(
+                                onClick = {
+                                    haptics.tick()
+                                    activeScreenManagerPane = 2
+                                },
+                                icon = Icons.Default.Add,
+                                contentDescription = "Add Right Screen",
+                                size = 26.dp,
+                                iconSize = 15.dp,
+                                containerColor = colorScheme.primaryContainer.copy(alpha = 0.9f),
+                                contentColor = colorScheme.onPrimaryContainer,
+                                modifier = Modifier.testTag("duo_right_manage_screens_btn")
+                            )
 
                             if (currentRightScreen in 0..13) {
                                 Surface(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            haptics.tick()
-                                            activeTimezonePickerPane = 2
-                                        },
+                                    onClick = {
+                                        haptics.tick()
+                                        activeTimezonePickerPane = 2
+                                    },
                                     shape = CircleShape,
-                                    color = Color(0xFF14161C).copy(alpha = 0.78f)
+                                    color = colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+                                    border = expressiveSurfaceBorder()
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Public,
                                             contentDescription = "Right Pane TimeZone",
-                                            tint = Color(0xFF81C995),
-                                            modifier = Modifier.size(11.dp)
+                                            tint = colorScheme.tertiary,
+                                            modifier = Modifier.size(12.dp)
                                         )
                                         Text(
                                             text = "${rightRegionInfo.airportCode} • ${rightRegionInfo.standardTimeShort}",
-                                            color = Color.White.copy(alpha = 0.88f),
+                                            color = colorScheme.onSurface,
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace
@@ -523,23 +489,28 @@ fun DuoPaneScreenManagerDialog(
     val isLeft = paneIndex == 1
     val screens by (if (isLeft) viewModel.duoLeftScreenIndices else viewModel.duoRightScreenIndices).collectAsState()
     val allIndices = remember(viewModel.duoWidgetTitles) { viewModel.duoWidgetTitles.indices.toList() }
+    val isPureAmoled by viewModel.isPureAmoledEnabled.collectAsState()
     val haptics = rememberStandbyHaptics()
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
-        com.example.ui.theme.MyApplicationTheme {
+        KeepDialogImmersiveFullScreen()
+        com.example.ui.theme.MyApplicationTheme(pureAmoled = isPureAmoled) {
             val colorScheme = MaterialTheme.colorScheme
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 20.dp, vertical = 14.dp)
                     .testTag("duo_visual_screen_picker_dialog"),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(30.dp),
                 color = colorScheme.surface,
-                tonalElevation = 6.dp,
-                border = BorderStroke(1.dp, colorScheme.outlineVariant)
+                tonalElevation = if (isPureAmoled) 0.dp else 6.dp,
+                border = expressiveSurfaceBorder()
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     LazyVerticalGrid(
@@ -629,7 +600,7 @@ fun DuoPaneScreenManagerDialog(
                         }
                     }
 
-                    // Material 3 FloatingActionButton at bottom-end
+                    // Material 3 Expressive FloatingActionButton at bottom-end
                     FloatingActionButton(
                         onClick = {
                             haptics.confirm()
@@ -638,11 +609,11 @@ fun DuoPaneScreenManagerDialog(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(16.dp)
-                            .size(48.dp)
+                            .size(54.dp)
                             .testTag("duo_visual_picker_done_btn"),
-                        shape = CircleShape,
-                        containerColor = colorScheme.primaryContainer,
-                        contentColor = colorScheme.onPrimaryContainer
+                        shape = RoundedCornerShape(18.dp),
+                        containerColor = colorScheme.primary,
+                        contentColor = colorScheme.onPrimary
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
@@ -669,11 +640,14 @@ fun DuoPaneTimeZonePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(30.dp),
+        containerColor = colorScheme.surfaceContainerHigh,
         title = {
+            KeepDialogImmersiveFullScreen()
             Text(
                 text = if (isLeft) "Left Duo Pane Location & Time Zone" else "Right Duo Pane Location & Time Zone",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.ExtraBold
             )
         },
         text = {
@@ -698,8 +672,11 @@ fun DuoPaneTimeZonePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Done")
+            ExpressiveMorphButton(
+                onClick = onDismiss,
+                selected = true
+            ) {
+                Text("Done", fontWeight = FontWeight.Bold)
             }
         }
     )
@@ -741,7 +718,7 @@ private fun DuoAspectScaledScreen(
         val baseVirtualH = 420.dp
         val scaleX = maxWidth.value / baseVirtualW.value
         val scaleY = maxHeight.value / baseVirtualH.value
-        val uniformScale = minOf(scaleX, scaleY).coerceIn(0.35f, 2.40f)
+        val uniformScale = minOf(scaleX, scaleY).coerceIn(0.18f, 2.40f)
 
         Box(
             modifier = Modifier
@@ -869,10 +846,17 @@ fun RenderDuoWidget(
             paneIndex = paneIndex
         )
 
-        // 14..17: The 4 Main Utility Screens (Alarm, Calendar, Music, Tools) scaled for Duo aspect ratio
+        // 14..16: Main Utility Screens (Alarm, Calendar, Music) scaled for Duo aspect ratio
         14 -> DuoAspectScaledScreen { AlarmPage(viewModel = viewModel) }
         15 -> DuoAspectScaledScreen { CalendarPage(viewModel = calendarViewModel, standbyViewModel = viewModel) }
         16 -> DuoAspectScaledScreen { MediaPage(standbyViewModel = viewModel) }
-        17 -> DuoAspectScaledScreen { TimerPage(viewModel = viewModel) }
+
+        // 17..22: Separate Individual Tool Screens (addable independently like Clock Faces)
+        17 -> DuoAspectScaledScreen { ToolScreenRenderer(toolIndex = 0, viewModel = viewModel) }
+        18 -> DuoAspectScaledScreen { ToolScreenRenderer(toolIndex = 1, viewModel = viewModel) }
+        19 -> DuoAspectScaledScreen { ToolScreenRenderer(toolIndex = 2, viewModel = viewModel) }
+        20 -> DuoAspectScaledScreen { ToolScreenRenderer(toolIndex = 3, viewModel = viewModel) }
+        21 -> DuoAspectScaledScreen { ToolScreenRenderer(toolIndex = 4, viewModel = viewModel) }
+        22 -> DuoAspectScaledScreen { ToolScreenRenderer(toolIndex = 5, viewModel = viewModel) }
     }
 }

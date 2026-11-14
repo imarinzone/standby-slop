@@ -124,15 +124,15 @@ jobs:
       - name: Prepare Release APK with Custom Name
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/standby-slop-v1.0.${{ github.run_number }}.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/standby-slop-v1.1.${{ github.run_number }}.apk
 
       - name: Create GitHub Release (Dynamic Build Tag)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/debug/standby-slop-v1.0.${{ github.run_number }}.apk
-          tag_name: v1.0.${{ github.run_number }}
-          name: standby-slop-v1.0.${{ github.run_number }}
+          files: app/build/outputs/apk/debug/standby-slop-v1.1.${{ github.run_number }}.apk
+          tag_name: v1.1.${{ github.run_number }}
+          name: standby-slop-v1.1.${{ github.run_number }}
           draft: false
           prerelease: false
         env:

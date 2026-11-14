@@ -3,6 +3,7 @@ package com.example.ui.standby
 import android.Manifest
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
@@ -17,6 +18,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+
+private fun SharedPreferences.safeCalInt(key: String, default: Int): Int =
+    try { getInt(key, default) } catch (_: Exception) { default }
+
+private fun SharedPreferences.safeCalBoolean(key: String, default: Boolean): Boolean =
+    try { getBoolean(key, default) } catch (_: Exception) { default }
+
+private fun SharedPreferences.safeCalStringSet(key: String): Set<String>? =
+    try { getStringSet(key, null) } catch (_: Exception) { null }
 
 data class LocalCalendarEvent(
     val id: Long,
@@ -76,7 +86,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                     list
                 }
                 calendarSources.value = sources
-                val savedIds = prefs.getStringSet("selectedCalendarIds", null)?.mapNotNull { it.toLongOrNull() }?.toSet()
+                val savedIds = prefs.safeCalStringSet("selectedCalendarIds")?.mapNotNull { it.toLongOrNull() }?.toSet()
                 if (!savedIds.isNullOrEmpty()) {
                     selectedCalendarIds.value = savedIds
                 } else if (selectedCalendarIds.value.isEmpty() && sources.isNotEmpty()) {
@@ -100,14 +110,14 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     }
 
     // Filtering preferences
-    val calendarFilter = MutableStateFlow(prefs.getInt("calendarFilter", 0)) // 0 = Daily, 1 = Weekly, 2 = Monthly
-    val calendarScreenIndex = MutableStateFlow(prefs.getInt("calendarScreenIndex", 0).coerceIn(0, 2)) // 0 = Today Day Hero, 1 = Month View Grid, 2 = Events Agenda
+    val calendarFilter = MutableStateFlow(prefs.safeCalInt("calendarFilter", 0).coerceIn(0, 2)) // 0 = Daily, 1 = Weekly, 2 = Monthly
+    val calendarScreenIndex = MutableStateFlow(prefs.safeCalInt("calendarScreenIndex", 0).coerceIn(0, 2)) // 0 = Today Day Hero, 1 = Month View Grid, 2 = Events Agenda
     
     // Split View (Slide-Up) Theme Preferences
-    val startWeekOnMonday = MutableStateFlow(prefs.getBoolean("startWeekOnMonday", false))
-    val showEventDots = MutableStateFlow(prefs.getBoolean("showEventDots", true))
-    val leftThemeStyle = MutableStateFlow(prefs.getInt("leftThemeStyle", 1)) // 0 = Cal Grid Only, 1 = Bold Date Only
-    val use24HourFormat = MutableStateFlow(prefs.getBoolean("use24HourFormat", false))
+    val startWeekOnMonday = MutableStateFlow(prefs.safeCalBoolean("startWeekOnMonday", false))
+    val showEventDots = MutableStateFlow(prefs.safeCalBoolean("showEventDots", true))
+    val leftThemeStyle = MutableStateFlow(prefs.safeCalInt("leftThemeStyle", 1).coerceIn(0, 1)) // 0 = Cal Grid Only, 1 = Bold Date Only
+    val use24HourFormat = MutableStateFlow(prefs.safeCalBoolean("use24HourFormat", false))
 
     fun setCalendarFilter(filter: Int) { calendarFilter.value = filter; prefs.edit().putInt("calendarFilter", filter).apply() }
     fun setCalendarScreenIndex(index: Int) {

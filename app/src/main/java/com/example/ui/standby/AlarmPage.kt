@@ -151,37 +151,52 @@ fun AlarmPage(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            FilterChip(
-                                selected = gradualDimEnabled,
+                            ExpressiveMorphButton(
                                 onClick = {
                                     haptics.confirm()
                                     viewModel.setGradualAlarmDimEnabled(!gradualDimEnabled)
                                 },
-                                label = {
-                                    Text(
-                                        text = when {
-                                            !gradualDimEnabled -> "Pre-Alarm Dim: Off"
-                                            isPreAlarmDimming -> "Dimming ${(liveBrightness * 100).toInt()}%"
-                                            else -> "Pre-Alarm Dim (${gradualDimWindowMins}m)"
-                                        },
-                                        maxLines = 1
+                                selected = gradualDimEnabled,
+                                idleCorner = 18.dp,
+                                activeCorner = 12.dp,
+                                colors = if (gradualDimEnabled) {
+                                    ButtonDefaults.buttonColors(
+                                        containerColor = colorScheme.secondaryContainer,
+                                        contentColor = colorScheme.onSecondaryContainer
+                                    )
+                                } else {
+                                    ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = colorScheme.surfaceContainerHigh,
+                                        contentColor = colorScheme.onSurfaceVariant
                                     )
                                 },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = if (gradualDimEnabled) Icons.Default.BrightnessLow else Icons.Default.BrightnessHigh,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                                 modifier = Modifier.testTag("alarm_page_gradual_dim_chip")
-                            )
+                            ) {
+                                Icon(
+                                    imageVector = if (gradualDimEnabled) Icons.Default.BrightnessLow else Icons.Default.BrightnessHigh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = when {
+                                        !gradualDimEnabled -> "Pre-Alarm Dim: Off"
+                                        isPreAlarmDimming -> "Dimming ${(liveBrightness * 100).toInt()}%"
+                                        else -> "Pre-Alarm Dim (${gradualDimWindowMins}m)"
+                                    },
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1
+                                )
+                            }
 
                             ExtendedFloatingActionButton(
                                 onClick = {
                                     haptics.tick()
                                     showAddDialog = true
                                 },
+                                shape = RoundedCornerShape(22.dp),
                                 icon = {
                                     Icon(
                                         imageVector = Icons.Outlined.AlarmAdd,
@@ -192,12 +207,13 @@ fun AlarmPage(
                                     Text(
                                         text = "New Alarm",
                                         fontFamily = customFont,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Bold,
                                         maxLines = 1
                                     )
                                 },
-                                containerColor = colorScheme.primaryContainer,
-                                contentColor = colorScheme.onPrimaryContainer,
+                                containerColor = colorScheme.primary,
+                                contentColor = colorScheme.onPrimary,
+                                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 2.dp),
                                 modifier = Modifier.testTag("add_alarm_fab")
                             )
                         }
@@ -210,11 +226,10 @@ fun AlarmPage(
                                 .weight(1f),
                             contentAlignment = Alignment.Center
                         ) {
-                            ElevatedCard(
-                                colors = CardDefaults.elevatedCardColors(
-                                    containerColor = colorScheme.surfaceContainerLow
-                                ),
-                                shape = RoundedCornerShape(24.dp),
+                            Surface(
+                                color = colorScheme.surfaceContainerLow,
+                                shape = RoundedCornerShape(30.dp),
+                                border = expressiveSurfaceBorder(),
                                 modifier = Modifier.widthIn(max = 460.dp)
                             ) {
                                 Column(
@@ -354,13 +369,15 @@ fun AlarmCard(
     val colorScheme = MaterialTheme.colorScheme
     val enabledState = alarm.isEnabled
 
-    ElevatedCard(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("alarm_card_${alarm.id}"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (enabledState) colorScheme.surfaceContainerHigh else colorScheme.surfaceContainerLow
+        shape = RoundedCornerShape(26.dp),
+        color = if (enabledState) colorScheme.surfaceContainerHigh else colorScheme.surfaceContainerLow,
+        border = expressiveSurfaceBorder(
+            highlighted = enabledState,
+            accentColor = accentColor.copy(alpha = 0.6f)
         )
     ) {
         Row(
@@ -430,11 +447,11 @@ fun AlarmCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = colorScheme.secondaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
+                        shape = CircleShape,
+                        color = colorScheme.secondaryContainer.copy(alpha = if (enabledState) 0.85f else 0.4f)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -449,6 +466,7 @@ fun AlarmCard(
                                 color = colorScheme.onSecondaryContainer,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = customFont,
+                                fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -456,11 +474,11 @@ fun AlarmCard(
                     }
 
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = colorScheme.primaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
+                        shape = CircleShape,
+                        color = colorScheme.primaryContainer.copy(alpha = if (enabledState) 0.85f else 0.4f)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -475,6 +493,7 @@ fun AlarmCard(
                                 color = colorScheme.onPrimaryContainer,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = customFont,
+                                fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -483,11 +502,11 @@ fun AlarmCard(
 
                     if (alarm.gradualVolume) {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = colorScheme.tertiaryContainer.copy(alpha = if (enabledState) 0.75f else 0.35f)
+                            shape = CircleShape,
+                            color = colorScheme.tertiaryContainer.copy(alpha = if (enabledState) 0.85f else 0.4f)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
@@ -502,6 +521,7 @@ fun AlarmCard(
                                     color = colorScheme.onTertiaryContainer,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontFamily = customFont,
+                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1
                                 )
                             }
@@ -514,39 +534,35 @@ fun AlarmCard(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (isCompact) 4.dp else 8.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isCompact) 6.dp else 10.dp)
             ) {
-                IconButton(
+                ExpressiveIconActionButton(
                     onClick = onTest,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("test_alarm_${alarm.id}")
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.PlayCircleOutline,
-                        contentDescription = "Preview Alarm",
-                        tint = accentColor
-                    )
-                }
+                    icon = Icons.Outlined.PlayCircleOutline,
+                    contentDescription = "Preview Alarm",
+                    size = 48.dp,
+                    iconSize = 22.dp,
+                    containerColor = colorScheme.surfaceContainerHighest,
+                    contentColor = accentColor,
+                    modifier = Modifier.testTag("test_alarm_${alarm.id}")
+                )
 
-                Switch(
+                ExpressiveSwitch(
                     checked = enabledState,
                     onCheckedChange = { onToggle() },
                     modifier = Modifier.testTag("toggle_alarm_${alarm.id}")
                 )
 
-                IconButton(
+                ExpressiveIconActionButton(
                     onClick = onDelete,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("delete_alarm_${alarm.id}")
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteOutline,
-                        contentDescription = "Delete Alarm",
-                        tint = colorScheme.onSurfaceVariant
-                    )
-                }
+                    icon = Icons.Outlined.DeleteOutline,
+                    contentDescription = "Delete Alarm",
+                    size = 48.dp,
+                    iconSize = 20.dp,
+                    containerColor = colorScheme.errorContainer.copy(alpha = 0.55f),
+                    contentColor = colorScheme.onErrorContainer,
+                    modifier = Modifier.testTag("delete_alarm_${alarm.id}")
+                )
             }
         }
     }
@@ -580,6 +596,7 @@ fun ActiveAlarmRingingDialog(
         shape = RoundedCornerShape(28.dp),
         containerColor = colorScheme.surfaceContainerHigh,
         title = {
+            KeepDialogImmersiveFullScreen()
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -676,8 +693,13 @@ fun ActiveAlarmRingingDialog(
             }
         },
         dismissButton = {
-            FilledTonalButton(
+            ExpressiveMorphButton(
                 onClick = onSnooze,
+                selected = false,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = colorScheme.secondaryContainer,
+                    contentColor = colorScheme.onSecondaryContainer
+                ),
                 modifier = Modifier.testTag("ringing_snooze_button")
             ) {
                 Icon(
@@ -686,17 +708,18 @@ fun ActiveAlarmRingingDialog(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Snooze (${alarm.snoozeMinutes}m)")
+                Text("Snooze (${alarm.snoozeMinutes}m)", fontWeight = FontWeight.SemiBold)
             }
         },
         confirmButton = {
-            Button(
+            ExpressiveMorphButton(
                 onClick = onDismiss,
-                modifier = Modifier.testTag("ringing_dismiss_button"),
+                selected = true,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = accentColor,
                     contentColor = if (accentColor == Color.White) Color.Black else Color.White
-                )
+                ),
+                modifier = Modifier.testTag("ringing_dismiss_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.AlarmOff,
@@ -704,7 +727,7 @@ fun ActiveAlarmRingingDialog(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Dismiss")
+                Text("Dismiss", fontWeight = FontWeight.Bold)
             }
         }
     )
@@ -773,8 +796,12 @@ fun CustomAddAlarmDialog(
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
+        KeepDialogImmersiveFullScreen()
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -787,9 +814,10 @@ fun CustomAddAlarmDialog(
             val wheelItemHeight = if (isVeryShort) 38.dp else 44.dp
 
             Surface(
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(30.dp),
                 color = colorScheme.surfaceContainerHigh,
-                tonalElevation = 6.dp,
+                tonalElevation = if (com.example.ui.theme.LocalPureAmoled.current) 0.dp else 6.dp,
+                border = expressiveSurfaceBorder(),
                 modifier = Modifier
                     .widthIn(max = if (useTwoColumns) 680.dp else 460.dp)
                     .fillMaxWidth()
@@ -809,16 +837,28 @@ fun CustomAddAlarmDialog(
                             style = if (isVeryShort) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
                             color = colorScheme.onSurface,
                             fontFamily = customFont,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.ExtraBold
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = onDismiss) {
-                                Text("Cancel", fontFamily = customFont)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ExpressiveMorphButton(
+                                onClick = onDismiss,
+                                selected = false,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = colorScheme.surfaceContainerHighest,
+                                    contentColor = colorScheme.onSurfaceVariant
+                                ),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Text("Cancel", fontFamily = customFont, fontWeight = FontWeight.SemiBold)
                             }
-                            Button(
+                            ExpressiveMorphButton(
                                 enabled = !hasSubmitted,
+                                selected = true,
                                 onClick = {
-                                    if (hasSubmitted) return@Button
+                                    if (hasSubmitted) return@ExpressiveMorphButton
                                     hasSubmitted = true
                                     val finalHour = if (use24Hour) {
                                         pickedHour
@@ -842,9 +882,12 @@ fun CustomAddAlarmDialog(
                                         gradualVolumeSeconds
                                     )
                                 },
+                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
                                 modifier = Modifier.testTag("save_alarm_button")
                             ) {
-                                Text("Save Alarm", fontFamily = customFont)
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Save Alarm", fontFamily = customFont, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -856,7 +899,7 @@ fun CustomAddAlarmDialog(
                             onValueChange = { alarmLabel = it },
                             label = { Text("Alarm Label", fontFamily = customFont) },
                             singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("alarm_label_input")
@@ -929,12 +972,13 @@ fun CustomAddAlarmDialog(
 
                         // Gradual Volume Increase Toggle & Ramp Duration
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(20.dp),
                             color = colorScheme.surfaceContainer,
+                            border = expressiveSurfaceBorder(highlighted = gradualVolumeEnabled),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(
@@ -956,7 +1000,7 @@ fun CustomAddAlarmDialog(
                                             color = colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Switch(
+                                    ExpressiveSwitch(
                                         checked = gradualVolumeEnabled,
                                         onCheckedChange = {
                                             haptics.confirm()
@@ -1148,22 +1192,30 @@ private fun ScrollableTimeDialCard(
             if (!use24Hour) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(
+                    ExpressiveMorphButton(
                         selected = isAm,
                         onClick = {
                             haptics.tick()
                             onAmChanged(true)
                         },
-                        label = { Text("AM", fontWeight = FontWeight.Bold) }
-                    )
-                    FilterChip(
+                        idleCorner = 14.dp,
+                        activeCorner = 10.dp,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text("AM", fontWeight = FontWeight.Bold)
+                    }
+                    ExpressiveMorphButton(
                         selected = !isAm,
                         onClick = {
                             haptics.tick()
                             onAmChanged(false)
                         },
-                        label = { Text("PM", fontWeight = FontWeight.Bold) }
-                    )
+                        idleCorner = 14.dp,
+                        activeCorner = 10.dp,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text("PM", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

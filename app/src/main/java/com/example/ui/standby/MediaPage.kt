@@ -54,7 +54,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 data class InstalledMusicApp(
     val name: String,
@@ -89,16 +91,22 @@ fun MediaPage(
     val albumArt by MediaStateHolder.albumArt.collectAsState()
     val activeAppPackage by MediaStateHolder.activeAppPackage.collectAsState()
 
-    val appInfo = remember(activeAppPackage) {
-        if (activeAppPackage != null) {
-            try {
-                val pm = context.packageManager
-                val info = pm.getApplicationInfo(activeAppPackage!!, 0)
-                val label = pm.getApplicationLabel(info).toString()
-                val icon = pm.getApplicationIcon(info)
-                label to icon
-            } catch (e: Exception) {
-                null
+    val appInfo by produceState<Pair<String, android.graphics.drawable.Drawable>?>(
+        initialValue = null,
+        key1 = activeAppPackage
+    ) {
+        val pkg = activeAppPackage
+        value = if (pkg != null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val pm = context.packageManager
+                    val info = pm.getApplicationInfo(pkg, 0)
+                    val label = pm.getApplicationLabel(info).toString()
+                    val icon = pm.getApplicationIcon(info)
+                    label to icon
+                } catch (_: Exception) {
+                    null
+                }
             }
         } else {
             null
@@ -133,7 +141,7 @@ fun MediaPage(
     }
 
     var isNotificationListenerGranted by remember {
-        mutableStateOf(isNotificationListenerEnabled(context))
+        mutableStateOf(false)
     }
 
     LaunchedEffect(notificationPermissionState?.status?.isGranted) {
@@ -147,28 +155,44 @@ fun MediaPage(
     }
 
     LaunchedEffect(Unit) {
-        installedApps = try {
-            getInstalledMusicApps(context)
-        } catch (e: Exception) {
-            emptyList()
+        installedApps = withContext(Dispatchers.IO) {
+            try {
+                getInstalledMusicApps(context)
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
     }
 
     LaunchedEffect(Unit) {
         while (true) {
-            isMusicActive = try {
-                audioManager?.isMusicActive == true
-            } catch (e: Exception) {
-                false
+            val (musicActive, listenerGranted, notifPermGranted) = withContext(Dispatchers.IO) {
+                val active = try {
+                    audioManager?.isMusicActive == true
+                } catch (_: Exception) {
+                    false
+                }
+                val listener = try {
+                    isNotificationListenerEnabled(context)
+                } catch (_: Exception) {
+                    false
+                }
+                val notif = if (Build.VERSION.SDK_INT >= 33) {
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                } else {
+                    true
+                }
+                Triple(active, listener, notif)
             }
-            isNotificationListenerGranted = isNotificationListenerEnabled(context)
+            isMusicActive = musicActive
+            isNotificationListenerGranted = listenerGranted
             if (Build.VERSION.SDK_INT >= 33) {
-                hasNotificationPermission = androidx.core.content.ContextCompat.checkSelfPermission(
-                    context,
-                    android.Manifest.permission.POST_NOTIFICATIONS
-                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                hasNotificationPermission = notifPermGranted
             }
-            delay(1000)
+            delay(1500)
         }
     }
 
@@ -305,14 +329,15 @@ fun MediaPage(
                                 }
 
                                 if (!isNotificationListenerGranted) {
-                                    FilledTonalButton(
+                                    ExpressiveMorphButton(
                                         onClick = {
                                             haptics.confirm()
                                             openNotificationListenerSettings(context)
                                         },
+                                        selected = false,
                                         contentPadding = PaddingValues(
-                                            horizontal = if (isCompactWidth) 12.dp else 16.dp,
-                                            vertical = 8.dp
+                                            horizontal = if (isCompactWidth) 14.dp else 18.dp,
+                                            vertical = 10.dp
                                         )
                                     ) {
                                         Icon(
@@ -324,7 +349,7 @@ fun MediaPage(
                                         Text(
                                             text = if (isCompactWidth) "Link Player" else "Link System Player",
                                             fontFamily = customFont,
-                                            fontWeight = FontWeight.SemiBold,
+                                            fontWeight = FontWeight.Bold,
                                             maxLines = 1
                                         )
                                     }
@@ -361,11 +386,10 @@ fun MediaPage(
                                         .weight(1f),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    ElevatedCard(
-                                        shape = RoundedCornerShape(24.dp),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
-                                        ),
+                                    Surface(
+                                        shape = RoundedCornerShape(30.dp),
+                                        color = colorScheme.surfaceContainerLow,
+                                        border = expressiveSurfaceBorder(),
                                         modifier = Modifier.widthIn(max = 460.dp)
                                     ) {
                                         Column(
@@ -418,12 +442,11 @@ fun MediaPage(
 @Composable
 fun MusicAppItem(app: InstalledMusicApp, onClick: () -> Unit) {
     val colorScheme = MaterialTheme.colorScheme
-    ElevatedCard(
+    Surface(
         onClick = onClick,
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = colorScheme.surfaceContainerLow
-        ),
-        shape = RoundedCornerShape(18.dp),
+        color = colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(22.dp),
+        border = expressiveSurfaceBorder(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -730,15 +753,14 @@ fun MaterialYouExpressivePlayer(
             verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 4.dp else 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ElevatedCard(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                shape = RoundedCornerShape(if (isCompactHeight) 24.dp else 32.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = colorScheme.surfaceContainerHigh
-                ),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
+                shape = RoundedCornerShape(if (isCompactHeight) 26.dp else 34.dp),
+                color = colorScheme.surfaceContainerHigh,
+                tonalElevation = if (com.example.ui.theme.LocalPureAmoled.current) 0.dp else 6.dp,
+                border = expressiveSurfaceBorder(highlighted = isPlaying, accentColor = accentColor.copy(alpha = 0.55f))
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (albumArt != null) {
@@ -817,32 +839,33 @@ fun MaterialYouExpressivePlayer(
                                 }
                             }
 
-                            AssistChip(
+                            ExpressiveMorphButton(
                                 onClick = {
                                     haptics.tick()
                                     standbyViewModel.setUseClassicMediaTheme(true)
                                 },
-                                label = {
-                                    Text(
-                                        text = "Classic Vinyl",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontFamily = customFont,
-                                        maxLines = 1
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Album,
-                                        contentDescription = "Classic Theme",
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = colorScheme.surfaceContainer.copy(alpha = 0.85f),
-                                    labelColor = colorScheme.onSurface,
-                                    leadingIconContentColor = accentColor
+                                selected = false,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = colorScheme.surfaceContainer.copy(alpha = 0.90f),
+                                    contentColor = colorScheme.onSurface
+                                ),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Album,
+                                    contentDescription = "Classic Theme",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Classic Vinyl",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontFamily = customFont,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1
+                                )
+                            }
                         }
 
                         // Track Metadata & Squiggly M3 Seekbar
@@ -930,56 +953,60 @@ fun MaterialYouExpressivePlayer(
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            FilledTonalIconButton(
+                            ExpressiveIconActionButton(
                                 onClick = {
                                     haptics.tick()
                                     sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
                                 },
-                                modifier = Modifier.size(sideBtnSize)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SkipPrevious,
-                                    contentDescription = "Previous",
-                                    modifier = Modifier.size(sideIconSize)
-                                )
-                            }
+                                icon = Icons.Default.SkipPrevious,
+                                contentDescription = "Previous",
+                                size = sideBtnSize,
+                                iconSize = sideIconSize,
+                                containerColor = colorScheme.secondaryContainer,
+                                contentColor = colorScheme.onSecondaryContainer
+                            )
 
                             Spacer(modifier = Modifier.width(if (isCompactHeight) 18.dp else 24.dp))
 
-                            FilledIconButton(
+                            val playShapeRadius by animateDpAsState(
+                                targetValue = if (isPlaying) 32.dp else 20.dp,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                label = "mediaPlayCorner"
+                            )
+                            Surface(
                                 onClick = {
                                     haptics.confirm()
                                     sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
                                 },
                                 modifier = Modifier.size(width = mainBtnWidth, height = mainBtnHeight),
-                                shape = RoundedCornerShape(if (isCompactHeight) 20.dp else 24.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = accentColor,
-                                    contentColor = if (accentColor == Color.White) Color.Black else Color.White
-                                )
+                                shape = RoundedCornerShape(playShapeRadius),
+                                color = accentColor,
+                                contentColor = if (accentColor == Color.White) Color.Black else Color.White,
+                                border = expressiveSurfaceBorder(highlighted = isPlaying, accentColor = accentColor)
                             ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play/Pause",
-                                    modifier = Modifier.size(mainIconSize)
-                                )
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "Play/Pause",
+                                        modifier = Modifier.size(mainIconSize)
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(if (isCompactHeight) 18.dp else 24.dp))
 
-                            FilledTonalIconButton(
+                            ExpressiveIconActionButton(
                                 onClick = {
                                     haptics.tick()
                                     sendMediaCommand(context, KeyEvent.KEYCODE_MEDIA_NEXT)
                                 },
-                                modifier = Modifier.size(sideBtnSize)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SkipNext,
-                                    contentDescription = "Next",
-                                    modifier = Modifier.size(sideIconSize)
-                                )
-                            }
+                                icon = Icons.Default.SkipNext,
+                                contentDescription = "Next",
+                                size = sideBtnSize,
+                                iconSize = sideIconSize,
+                                containerColor = colorScheme.secondaryContainer,
+                                contentColor = colorScheme.onSecondaryContainer
+                            )
                         }
                     }
                 }

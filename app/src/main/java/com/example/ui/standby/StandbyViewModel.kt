@@ -2,6 +2,7 @@ package com.example.ui.standby
 
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -11,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.R
 import com.example.data.Alarm
 import com.example.data.AppDatabase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,6 +27,24 @@ import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+
+private fun SharedPreferences.safeInt(key: String, default: Int): Int =
+    try { getInt(key, default) } catch (_: Exception) { default }
+
+private fun SharedPreferences.safeFloat(key: String, default: Float): Float =
+    try { getFloat(key, default) } catch (_: Exception) { default }
+
+private fun SharedPreferences.safeFloatOrNull(key: String): Float? =
+    try { if (contains(key)) getFloat(key, 0f) else null } catch (_: Exception) { null }
+
+private fun SharedPreferences.safeBoolean(key: String, default: Boolean): Boolean =
+    try { getBoolean(key, default) } catch (_: Exception) { default }
+
+private fun SharedPreferences.safeString(key: String, default: String? = null): String? =
+    try { getString(key, default) } catch (_: Exception) { default }
+
+private fun SharedPreferences.safeStringSet(key: String, default: Set<String>? = null): Set<String>? =
+    try { getStringSet(key, default) } catch (_: Exception) { default }
 
 class StandbyViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
@@ -42,8 +62,8 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     private val _nextSystemAlarm = MutableStateFlow<String?>("No Alarm")
     val nextSystemAlarm: StateFlow<String?> = _nextSystemAlarm
 
-    // Persisted active clock face index (0..15) so the app always opens on the last used clock face
-    val lastClockFaceIndex = MutableStateFlow(prefs.getInt("lastClockFaceIndex", 0).coerceIn(0, 15))
+    // Persisted active clock face index (0..13) so the app always opens on the last used clock face
+    val lastClockFaceIndex = MutableStateFlow(prefs.safeInt("lastClockFaceIndex", 0).coerceIn(0, 13))
 
     val clockFaceTitles = listOf(
         "Digital Minimal",
@@ -80,14 +100,31 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     )
 
     val enabledClockFaces = MutableStateFlow<Set<Int>>(
-        prefs.getStringSet("enabledClockFaces", null)
+        prefs.safeStringSet("enabledClockFaces", null)
             ?.mapNotNull { it.toIntOrNull()?.takeIf { idx -> idx in 0..13 } }
             ?.toSet()
             ?.takeIf { it.isNotEmpty() }
             ?: (0..13).toSet()
     )
 
-    // Duo screens strictly match the actual main screens we have built (14 Clock Faces + 4 Utility Screens)
+    val toolScreenTitles = listOf(
+        "Focus Pomodoro",
+        "Chrono Stopwatch",
+        "Photo Slideshow",
+        "Connected Battery",
+        "Smart Home Controls",
+        "Ambient Flash & Level"
+    )
+
+    val enabledToolScreens = MutableStateFlow<Set<Int>>(
+        prefs.safeStringSet("enabledToolScreens", null)
+            ?.mapNotNull { it.toIntOrNull()?.takeIf { idx -> idx in 0..5 } }
+            ?.toSet()
+            ?.takeIf { it.isNotEmpty() }
+            ?: (0..5).toSet()
+    )
+
+    // Duo screens include all 14 Clock Faces + 3 Utility Screens + all 6 individual Tool Screens (23 total)
     val duoWidgetTitles = listOf(
         "Digital Minimal",
         "Analog Classic",
@@ -106,12 +143,18 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
         "Alarm Screen",
         "Calendar Screen",
         "Music Player",
-        "Tools Hub"
+        "Focus Pomodoro",
+        "Chrono Stopwatch",
+        "Photo Slideshow",
+        "Connected Battery",
+        "Smart Home Controls",
+        "Ambient Flash & Level"
     )
 
     // Duo screens configuration: Do not show any widget/screens in Duo unless the user has added them
     private fun loadDuoScreenList(key: String): List<Int> {
-        val raw = prefs.getString(key, null)
+        val raw = prefs.safeString(key, null)
+            ?: prefs.safeStringSet(key, null)?.joinToString(",")
         if (raw.isNullOrBlank()) return emptyList()
         return raw.split(",").mapNotNull { it.trim().toIntOrNull() }
             .filter { it in 0..duoWidgetTitles.lastIndex }
@@ -122,28 +165,28 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     val duoRightScreenIndices = MutableStateFlow<List<Int>>(loadDuoScreenList("duoRightScreenIndices"))
 
     // Persisted Duo widget left/right active indices and Tools settings (0..5: Focus, Chrono, Gallery, Charge, Smart Home, Ambient Flash)
-    val duoLeftWidgetIndex = MutableStateFlow(prefs.getInt("duoLeftWidgetIndex", 2).coerceIn(0, duoWidgetTitles.lastIndex))
-    val duoRightWidgetIndex = MutableStateFlow(prefs.getInt("duoRightWidgetIndex", 10).coerceIn(0, duoWidgetTitles.lastIndex))
-    val timerModeIndex = MutableStateFlow(prefs.getInt("timerModeIndex", 0).coerceIn(0, 5))
-    val pomodoroFocusMinutes = MutableStateFlow(prefs.getInt("pomodoroFocusMinutes", 25))
-    val galleryPermissionGranted = MutableStateFlow(prefs.getBoolean("galleryPermissionGranted", false))
+    val duoLeftWidgetIndex = MutableStateFlow(prefs.safeInt("duoLeftWidgetIndex", 2).coerceIn(0, duoWidgetTitles.lastIndex))
+    val duoRightWidgetIndex = MutableStateFlow(prefs.safeInt("duoRightWidgetIndex", 10).coerceIn(0, duoWidgetTitles.lastIndex))
+    val timerModeIndex = MutableStateFlow(prefs.safeInt("timerModeIndex", 0).coerceIn(0, 5))
+    val pomodoroFocusMinutes = MutableStateFlow(prefs.safeInt("pomodoroFocusMinutes", 25).coerceIn(1, 180))
+    val galleryPermissionGranted = MutableStateFlow(prefs.safeBoolean("galleryPermissionGranted", false))
     val galleryPhotoUris = MutableStateFlow<List<String>>(
-        prefs.getStringSet("galleryPhotoUris", emptySet())?.toList()?.sorted() ?: emptyList()
+        prefs.safeStringSet("galleryPhotoUris", emptySet())?.toList()?.sorted() ?: emptyList()
     )
-    val slideshowIntervalSeconds = MutableStateFlow(prefs.getInt("slideshowIntervalSeconds", 8).coerceIn(3, 60))
-    val showSlideshowTimeOverlay = MutableStateFlow(prefs.getBoolean("showSlideshowTimeOverlay", true))
+    val slideshowIntervalSeconds = MutableStateFlow(prefs.safeInt("slideshowIntervalSeconds", 8).coerceIn(3, 60))
+    val showSlideshowTimeOverlay = MutableStateFlow(prefs.safeBoolean("showSlideshowTimeOverlay", true))
 
     // Location & TimeZone settings for Clock, World Map, Airport Split-Flap Terminal, and Duo Panes
-    val locationMode = MutableStateFlow(prefs.getString("locationMode", "auto") ?: "auto")
-    val customLocationName = MutableStateFlow(prefs.getString("customLocationName", "") ?: "")
-    val clockTimeZoneId = MutableStateFlow(prefs.getString("clockTimeZoneId", "AUTO") ?: "AUTO")
-    val duoLeftTimeZoneId = MutableStateFlow(prefs.getString("duoLeftTimeZoneId", "AUTO") ?: "AUTO")
-    val duoRightTimeZoneId = MutableStateFlow(prefs.getString("duoRightTimeZoneId", "AUTO") ?: "AUTO")
-    val duoLeftLocationName = MutableStateFlow(prefs.getString("duoLeftLocationName", "") ?: "")
-    val duoRightLocationName = MutableStateFlow(prefs.getString("duoRightLocationName", "") ?: "")
-    val gpsLocationName = MutableStateFlow<String?>(prefs.getString("gpsLocationName", null))
-    val gpsLatitude = MutableStateFlow<Float?>(if (prefs.contains("gpsLatitude")) prefs.getFloat("gpsLatitude", 0f) else null)
-    val gpsLongitude = MutableStateFlow<Float?>(if (prefs.contains("gpsLongitude")) prefs.getFloat("gpsLongitude", 0f) else null)
+    val locationMode = MutableStateFlow(prefs.safeString("locationMode", "auto") ?: "auto")
+    val customLocationName = MutableStateFlow(prefs.safeString("customLocationName", "") ?: "")
+    val clockTimeZoneId = MutableStateFlow(prefs.safeString("clockTimeZoneId", "AUTO") ?: "AUTO")
+    val duoLeftTimeZoneId = MutableStateFlow(prefs.safeString("duoLeftTimeZoneId", "AUTO") ?: "AUTO")
+    val duoRightTimeZoneId = MutableStateFlow(prefs.safeString("duoRightTimeZoneId", "AUTO") ?: "AUTO")
+    val duoLeftLocationName = MutableStateFlow(prefs.safeString("duoLeftLocationName", "") ?: "")
+    val duoRightLocationName = MutableStateFlow(prefs.safeString("duoRightLocationName", "") ?: "")
+    val gpsLocationName = MutableStateFlow<String?>(prefs.safeString("gpsLocationName", null))
+    val gpsLatitude = MutableStateFlow<Float?>(prefs.safeFloatOrNull("gpsLatitude"))
+    val gpsLongitude = MutableStateFlow<Float?>(prefs.safeFloatOrNull("gpsLongitude"))
 
     val selectableLocations = listOf(
         "San Francisco (SFO)",
@@ -185,80 +228,81 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     )
 
     // Per-page customized settings (Page 0: Clock, 1: Alarm, 2: Calendar, 3: Music, 4: Tools, 5: Duo)
-    val colorPage0 = MutableStateFlow(prefs.getInt("colorPage0", prefs.getInt("selectedColorIndex", 0)))
-    val colorPage1 = MutableStateFlow(prefs.getInt("colorPage1", 2))
-    val colorPage2 = MutableStateFlow(prefs.getInt("colorPage2", 3))
-    val colorPage3 = MutableStateFlow(prefs.getInt("colorPage3", 1))
-    val colorPage4 = MutableStateFlow(prefs.getInt("colorPage4", 2))
-    val colorPage5 = MutableStateFlow(prefs.getInt("colorPage5", 0))
+    val colorPage0 = MutableStateFlow(prefs.safeInt("colorPage0", prefs.safeInt("selectedColorIndex", 0)).coerceIn(0, 9))
+    val colorPage1 = MutableStateFlow(prefs.safeInt("colorPage1", 2).coerceIn(0, 9))
+    val colorPage2 = MutableStateFlow(prefs.safeInt("colorPage2", 3).coerceIn(0, 9))
+    val colorPage3 = MutableStateFlow(prefs.safeInt("colorPage3", 1).coerceIn(0, 9))
+    val colorPage4 = MutableStateFlow(prefs.safeInt("colorPage4", 2).coerceIn(0, 9))
+    val colorPage5 = MutableStateFlow(prefs.safeInt("colorPage5", 0).coerceIn(0, 9))
 
-    val fontPage0 = MutableStateFlow(prefs.getInt("fontPage0", prefs.getInt("selectedFontIndex", 0)))
-    val fontPage1 = MutableStateFlow(prefs.getInt("fontPage1", 1))
-    val fontPage2 = MutableStateFlow(prefs.getInt("fontPage2", 2))
-    val fontPage3 = MutableStateFlow(prefs.getInt("fontPage3", 0))
-    val fontPage4 = MutableStateFlow(prefs.getInt("fontPage4", 0))
-    val fontPage5 = MutableStateFlow(prefs.getInt("fontPage5", 0))
+    val fontPage0 = MutableStateFlow(prefs.safeInt("fontPage0", prefs.safeInt("selectedFontIndex", 0)).coerceIn(0, 8))
+    val fontPage1 = MutableStateFlow(prefs.safeInt("fontPage1", 1).coerceIn(0, 8))
+    val fontPage2 = MutableStateFlow(prefs.safeInt("fontPage2", 2).coerceIn(0, 8))
+    val fontPage3 = MutableStateFlow(prefs.safeInt("fontPage3", 0).coerceIn(0, 8))
+    val fontPage4 = MutableStateFlow(prefs.safeInt("fontPage4", 0).coerceIn(0, 8))
+    val fontPage5 = MutableStateFlow(prefs.safeInt("fontPage5", 0).coerceIn(0, 8))
 
-    val showWeatherPage0 = MutableStateFlow(prefs.getBoolean("showWeatherPage0", prefs.getBoolean("showWeather", false)))
-    val showWeatherPage1 = MutableStateFlow(prefs.getBoolean("showWeatherPage1", false))
-    val showWeatherPage2 = MutableStateFlow(prefs.getBoolean("showWeatherPage2", false))
-    val showWeatherPage3 = MutableStateFlow(prefs.getBoolean("showWeatherPage3", false))
-    val showWeatherPage4 = MutableStateFlow(prefs.getBoolean("showWeatherPage4", false))
-    val showWeatherPage5 = MutableStateFlow(prefs.getBoolean("showWeatherPage5", false))
+    val showWeatherPage0 = MutableStateFlow(prefs.safeBoolean("showWeatherPage0", prefs.safeBoolean("showWeather", false)))
+    val showWeatherPage1 = MutableStateFlow(prefs.safeBoolean("showWeatherPage1", false))
+    val showWeatherPage2 = MutableStateFlow(prefs.safeBoolean("showWeatherPage2", false))
+    val showWeatherPage3 = MutableStateFlow(prefs.safeBoolean("showWeatherPage3", false))
+    val showWeatherPage4 = MutableStateFlow(prefs.safeBoolean("showWeatherPage4", false))
+    val showWeatherPage5 = MutableStateFlow(prefs.safeBoolean("showWeatherPage5", false))
 
-    val scalePage0 = MutableStateFlow(prefs.getFloat("scalePage0", prefs.getFloat("clockScale", 1.2f)))
-    val scalePage1 = MutableStateFlow(prefs.getFloat("scalePage1", 1.0f))
-    val scalePage2 = MutableStateFlow(prefs.getFloat("scalePage2", 1.0f))
-    val scalePage3 = MutableStateFlow(prefs.getFloat("scalePage3", 1.0f))
-    val scalePage4 = MutableStateFlow(prefs.getFloat("scalePage4", 1.0f))
-    val scalePage5 = MutableStateFlow(prefs.getFloat("scalePage5", 1.0f))
+    val scalePage0 = MutableStateFlow(prefs.safeFloat("scalePage0", prefs.safeFloat("clockScale", 1.2f)).coerceIn(0.5f, 2.0f))
+    val scalePage1 = MutableStateFlow(prefs.safeFloat("scalePage1", 1.0f).coerceIn(0.5f, 2.0f))
+    val scalePage2 = MutableStateFlow(prefs.safeFloat("scalePage2", 1.0f).coerceIn(0.5f, 2.0f))
+    val scalePage3 = MutableStateFlow(prefs.safeFloat("scalePage3", 1.0f).coerceIn(0.5f, 2.0f))
+    val scalePage4 = MutableStateFlow(prefs.safeFloat("scalePage4", 1.0f).coerceIn(0.5f, 2.0f))
+    val scalePage5 = MutableStateFlow(prefs.safeFloat("scalePage5", 1.0f).coerceIn(0.5f, 2.0f))
 
     // Setting to remove animation for distraction-free theme (per screen)
-    val animPage0 = MutableStateFlow(prefs.getBoolean("animPage0", true))
-    val animPage1 = MutableStateFlow(prefs.getBoolean("animPage1", true))
-    val animPage2 = MutableStateFlow(prefs.getBoolean("animPage2", true))
-    val animPage3 = MutableStateFlow(prefs.getBoolean("animPage3", true))
-    val animPage4 = MutableStateFlow(prefs.getBoolean("animPage4", true))
-    val animPage5 = MutableStateFlow(prefs.getBoolean("animPage5", true))
+    val animPage0 = MutableStateFlow(prefs.safeBoolean("animPage0", true))
+    val animPage1 = MutableStateFlow(prefs.safeBoolean("animPage1", true))
+    val animPage2 = MutableStateFlow(prefs.safeBoolean("animPage2", true))
+    val animPage3 = MutableStateFlow(prefs.safeBoolean("animPage3", true))
+    val animPage4 = MutableStateFlow(prefs.safeBoolean("animPage4", true))
+    val animPage5 = MutableStateFlow(prefs.safeBoolean("animPage5", true))
 
     // Custom visual overrides
-    val textGlowPage0 = MutableStateFlow(prefs.getBoolean("textGlowPage0", true))
-    val textGlowPage1 = MutableStateFlow(prefs.getBoolean("textGlowPage1", true))
-    val textGlowPage2 = MutableStateFlow(prefs.getBoolean("textGlowPage2", true))
-    val textGlowPage3 = MutableStateFlow(prefs.getBoolean("textGlowPage3", true))
-    val textGlowPage4 = MutableStateFlow(prefs.getBoolean("textGlowPage4", true))
-    val textGlowPage5 = MutableStateFlow(prefs.getBoolean("textGlowPage5", true))
+    val textGlowPage0 = MutableStateFlow(prefs.safeBoolean("textGlowPage0", true))
+    val textGlowPage1 = MutableStateFlow(prefs.safeBoolean("textGlowPage1", true))
+    val textGlowPage2 = MutableStateFlow(prefs.safeBoolean("textGlowPage2", true))
+    val textGlowPage3 = MutableStateFlow(prefs.safeBoolean("textGlowPage3", true))
+    val textGlowPage4 = MutableStateFlow(prefs.safeBoolean("textGlowPage4", true))
+    val textGlowPage5 = MutableStateFlow(prefs.safeBoolean("textGlowPage5", true))
 
-    val textOutlineOnlyPage0 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage0", false))
-    val textOutlineOnlyPage1 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage1", false))
-    val textOutlineOnlyPage2 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage2", false))
-    val textOutlineOnlyPage3 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage3", false))
-    val textOutlineOnlyPage4 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage4", false))
-    val textOutlineOnlyPage5 = MutableStateFlow(prefs.getBoolean("textOutlineOnlyPage5", false))
+    val textOutlineOnlyPage0 = MutableStateFlow(prefs.safeBoolean("textOutlineOnlyPage0", false))
+    val textOutlineOnlyPage1 = MutableStateFlow(prefs.safeBoolean("textOutlineOnlyPage1", false))
+    val textOutlineOnlyPage2 = MutableStateFlow(prefs.safeBoolean("textOutlineOnlyPage2", false))
+    val textOutlineOnlyPage3 = MutableStateFlow(prefs.safeBoolean("textOutlineOnlyPage3", false))
+    val textOutlineOnlyPage4 = MutableStateFlow(prefs.safeBoolean("textOutlineOnlyPage4", false))
+    val textOutlineOnlyPage5 = MutableStateFlow(prefs.safeBoolean("textOutlineOnlyPage5", false))
 
-    val textGradientPage0 = MutableStateFlow(prefs.getInt("textGradientPage0", -1))
-    val textGradientPage1 = MutableStateFlow(prefs.getInt("textGradientPage1", -1))
-    val textGradientPage2 = MutableStateFlow(prefs.getInt("textGradientPage2", -1))
-    val textGradientPage3 = MutableStateFlow(prefs.getInt("textGradientPage3", -1))
-    val textGradientPage4 = MutableStateFlow(prefs.getInt("textGradientPage4", -1))
-    val textGradientPage5 = MutableStateFlow(prefs.getInt("textGradientPage5", -1))
+    val textGradientPage0 = MutableStateFlow(prefs.safeInt("textGradientPage0", -1).coerceIn(-1, 5))
+    val textGradientPage1 = MutableStateFlow(prefs.safeInt("textGradientPage1", -1).coerceIn(-1, 5))
+    val textGradientPage2 = MutableStateFlow(prefs.safeInt("textGradientPage2", -1).coerceIn(-1, 5))
+    val textGradientPage3 = MutableStateFlow(prefs.safeInt("textGradientPage3", -1).coerceIn(-1, 5))
+    val textGradientPage4 = MutableStateFlow(prefs.safeInt("textGradientPage4", -1).coerceIn(-1, 5))
+    val textGradientPage5 = MutableStateFlow(prefs.safeInt("textGradientPage5", -1).coerceIn(-1, 5))
 
-    val bgUriPage0 = MutableStateFlow<String?>(prefs.getString("bgUriPage0", null))
-    val bgUriPage1 = MutableStateFlow<String?>(prefs.getString("bgUriPage1", null))
-    val bgUriPage2 = MutableStateFlow<String?>(prefs.getString("bgUriPage2", null))
-    val bgUriPage3 = MutableStateFlow<String?>(prefs.getString("bgUriPage3", null))
-    val bgUriPage4 = MutableStateFlow<String?>(prefs.getString("bgUriPage4", null))
-    val bgUriPage5 = MutableStateFlow<String?>(prefs.getString("bgUriPage5", null))
+    val bgUriPage0 = MutableStateFlow<String?>(prefs.safeString("bgUriPage0", null))
+    val bgUriPage1 = MutableStateFlow<String?>(prefs.safeString("bgUriPage1", null))
+    val bgUriPage2 = MutableStateFlow<String?>(prefs.safeString("bgUriPage2", null))
+    val bgUriPage3 = MutableStateFlow<String?>(prefs.safeString("bgUriPage3", null))
+    val bgUriPage4 = MutableStateFlow<String?>(prefs.safeString("bgUriPage4", null))
+    val bgUriPage5 = MutableStateFlow<String?>(prefs.safeString("bgUriPage5", null))
 
-    val use24HourFormat = MutableStateFlow(prefs.getBoolean("use24HourFormat", false))
-    val showAmPm = MutableStateFlow(prefs.getBoolean("showAmPm", true))
-    val showSeconds = MutableStateFlow(prefs.getBoolean("showSeconds", false))
-    val useClassicMediaTheme = MutableStateFlow(prefs.getBoolean("useClassicMediaTheme", false))
+    val use24HourFormat = MutableStateFlow(prefs.safeBoolean("use24HourFormat", false))
+    val showAmPm = MutableStateFlow(prefs.safeBoolean("showAmPm", true))
+    val showSeconds = MutableStateFlow(prefs.safeBoolean("showSeconds", false))
+    val useClassicMediaTheme = MutableStateFlow(prefs.safeBoolean("useClassicMediaTheme", false))
+    val isPureAmoledEnabled = MutableStateFlow(prefs.safeBoolean("isPureAmoledEnabled", false))
 
     // Pre-Alarm Gradual Brightness Lowering preferences & live state
-    val gradualAlarmDimEnabled = MutableStateFlow(prefs.getBoolean("gradualAlarmDimEnabled", true))
-    val gradualAlarmDimWindowMinutes = MutableStateFlow(prefs.getInt("gradualAlarmDimWindowMinutes", 30).coerceIn(5, 180))
-    val gradualAlarmMinBrightness = MutableStateFlow(prefs.getFloat("gradualAlarmMinBrightness", 0.25f).coerceIn(0.10f, 0.80f))
+    val gradualAlarmDimEnabled = MutableStateFlow(prefs.safeBoolean("gradualAlarmDimEnabled", true))
+    val gradualAlarmDimWindowMinutes = MutableStateFlow(prefs.safeInt("gradualAlarmDimWindowMinutes", 30).coerceIn(5, 180))
+    val gradualAlarmMinBrightness = MutableStateFlow(prefs.safeFloat("gradualAlarmMinBrightness", 0.25f).coerceIn(0.10f, 0.80f))
 
     private val _clockBrightnessFactor = MutableStateFlow(1.0f)
     val clockBrightnessFactor: StateFlow<Float> = _clockBrightnessFactor
@@ -318,6 +362,28 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     fun toggleClockFace(faceIndex: Int) {
         val isCurrentlyEnabled = faceIndex in enabledClockFaces.value
         setClockFaceEnabled(faceIndex, !isCurrentlyEnabled)
+    }
+
+    fun setToolScreenEnabled(toolIndex: Int, enabled: Boolean) {
+        if (toolIndex !in toolScreenTitles.indices) return
+        val current = enabledToolScreens.value.toMutableSet()
+        if (enabled) {
+            current.add(toolIndex)
+        } else if (current.size > 1) {
+            current.remove(toolIndex)
+        } else {
+            return
+        }
+        enabledToolScreens.value = current
+        prefs.edit().putStringSet("enabledToolScreens", current.map { it.toString() }.toSet()).apply()
+        if (timerModeIndex.value !in current) {
+            setTimerModeIndex(current.minOrNull() ?: 0)
+        }
+    }
+
+    fun toggleToolScreen(toolIndex: Int) {
+        val isCurrentlyEnabled = toolIndex in enabledToolScreens.value
+        setToolScreenEnabled(toolIndex, !isCurrentlyEnabled)
     }
 
     fun setDuoLeftWidgetIndex(index: Int) {
@@ -448,6 +514,15 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     fun setUseClassicMediaTheme(enabled: Boolean) {
         useClassicMediaTheme.value = enabled
         prefs.edit().putBoolean("useClassicMediaTheme", enabled).apply()
+    }
+
+    fun setPureAmoledEnabled(enabled: Boolean) {
+        isPureAmoledEnabled.value = enabled
+        prefs.edit().putBoolean("isPureAmoledEnabled", enabled).apply()
+    }
+
+    fun togglePureAmoledMode() {
+        setPureAmoledEnabled(!isPureAmoledEnabled.value)
     }
 
     fun setLocationMode(mode: String) {
@@ -795,21 +870,23 @@ class StandbyViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
-        refreshDeviceLocation(application)
-        synchronized(alarmWriteLock) {
-            try {
-                val snapshot = db.alarmDao().getAllAlarmsSnapshot()
-                val seen = mutableSetOf<Pair<Int, Int>>()
-                for (alarm in snapshot) {
-                    val key = alarm.hour to alarm.minute
-                    if (!seen.add(key)) {
-                        AlarmScheduler.cancelAlarm(getApplication(), alarm.id)
-                        db.alarmDao().delete(alarm)
-                    } else if (alarm.isEnabled) {
-                        AlarmScheduler.scheduleAlarm(getApplication(), alarm)
+        viewModelScope.launch(Dispatchers.IO) {
+            refreshDeviceLocation(application)
+            synchronized(alarmWriteLock) {
+                try {
+                    val snapshot = db.alarmDao().getAllAlarmsSnapshot()
+                    val seen = mutableSetOf<Pair<Int, Int>>()
+                    for (alarm in snapshot) {
+                        val key = alarm.hour to alarm.minute
+                        if (!seen.add(key)) {
+                            AlarmScheduler.cancelAlarm(getApplication(), alarm.id)
+                            db.alarmDao().delete(alarm)
+                        } else if (alarm.isEnabled) {
+                            AlarmScheduler.scheduleAlarm(getApplication(), alarm)
+                        }
                     }
+                } catch (_: Exception) {
                 }
-            } catch (_: Exception) {
             }
         }
         viewModelScope.launch {

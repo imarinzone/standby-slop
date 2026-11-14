@@ -21,7 +21,9 @@ import android.provider.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -439,12 +441,14 @@ object GoogleDeviceAndHomeMonitor {
 fun rememberGoogleBatteryDevices(): List<GoogleConnectedBatteryDevice> {
     val context = LocalContext.current
     var devices by remember {
-        mutableStateOf(GoogleDeviceAndHomeMonitor.readLiveBatteryDevices(context))
+        mutableStateOf<List<GoogleConnectedBatteryDevice>>(emptyList())
     }
 
     LaunchedEffect(context) {
         while (true) {
-            devices = GoogleDeviceAndHomeMonitor.readLiveBatteryDevices(context)
+            devices = withContext(Dispatchers.IO) {
+                GoogleDeviceAndHomeMonitor.readLiveBatteryDevices(context)
+            }
             delay(5_000L)
         }
     }

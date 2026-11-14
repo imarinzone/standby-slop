@@ -8,6 +8,8 @@ import android.view.KeyEvent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -16,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
 import com.example.ui.standby.*
+import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.toPureAmoledColorScheme
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -239,10 +243,11 @@ class ExampleRobolectricTest {
     @Test
     fun `new standby clock faces duo timezones and single clock world map rendering`() {
         val vm = StandbyViewModel(application)
-        // Verify Duo Mode includes the 18 actual main screens (14 clock faces + 4 main utility screens)
-        assertEquals(18, vm.duoWidgetTitles.size)
+        // Verify Duo Mode includes all 23 screens (14 clock faces + 3 main utility screens + 6 separate tool screens)
+        assertEquals(23, vm.duoWidgetTitles.size)
         assertEquals("Squircle Border Tick", vm.duoWidgetTitles[13])
-        assertEquals("Tools Hub", vm.duoWidgetTitles.last())
+        assertEquals("Focus Pomodoro", vm.duoWidgetTitles[17])
+        assertEquals("Ambient Flash & Level", vm.duoWidgetTitles.last())
 
         // Set different TimeZones / Locations for Main Clock (0), Left Duo Pane (1), and Right Duo Pane (2)
         vm.setClockTimeZoneId("America/New_York")
@@ -499,4 +504,164 @@ class ExampleRobolectricTest {
         composeTestRule.onNodeWithText("0000+", substring = true).assertDoesNotExist()
         composeTestRule.onNodeWithText("UTC", substring = true).assertDoesNotExist()
     }
+
+    @Test
+    fun `pure amoled persistence color scheme and expressive hud settings toggles`() {
+        val vm1 = StandbyViewModel(application)
+        assertFalse(vm1.isPureAmoledEnabled.value)
+
+        // Toggle via ViewModel helper and verify SharedPreferences persistence
+        vm1.togglePureAmoledMode()
+        assertTrue(vm1.isPureAmoledEnabled.value)
+
+        val vm2 = StandbyViewModel(application)
+        assertTrue(vm2.isPureAmoledEnabled.value)
+
+        vm2.setPureAmoledEnabled(false)
+        assertFalse(vm2.isPureAmoledEnabled.value)
+
+        // Verify ColorScheme.toPureAmoledColorScheme maps background/surface to pitch black while preserving accents
+        val darkScheme = androidx.compose.material3.darkColorScheme(
+            primary = Color(0xFFA8C7FA),
+            primaryContainer = Color(0xFF0842A0)
+        )
+        val amoledScheme = darkScheme.toPureAmoledColorScheme()
+        assertEquals(Color.Black, amoledScheme.background)
+        assertEquals(Color.Black, amoledScheme.surface)
+        assertEquals(Color.Black, amoledScheme.surfaceContainerLowest)
+        assertEquals(Color(0xFFA8C7FA), amoledScheme.primary)
+
+        // Render StandbyScreen wrapped in MyApplicationTheme(pureAmoled) and test HUD + Settings toggles
+        composeTestRule.setContent {
+            val isAmoled by vm2.isPureAmoledEnabled.collectAsState()
+            MyApplicationTheme(pureAmoled = isAmoled) {
+                StandbyScreen(viewModel = vm2)
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // Quick HUD Pure AMOLED pill toggles state
+        composeTestRule.onNodeWithTag("hud_amoled_button").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("hud_amoled_button").performClick()
+        composeTestRule.waitForIdle()
+        assertTrue(vm2.isPureAmoledEnabled.value)
+
+        // Open Settings Studio and verify Settings AMOLED Banner & Switch toggle state
+        composeTestRule.onNodeWithTag("hud_settings_button").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("settings_amoled_toggle_card").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("settings_amoled_switch").performClick()
+        composeTestRule.waitForIdle()
+        assertFalse(vm2.isPureAmoledEnabled.value)
+    }
+
+    @Test
+    fun `in-place app update preserves package id monotonic versionCode room alarms and legacy prefs`() {
+        // 1. Package identity must stay com.example and versionCode must be > 1 for in-place upgrades
+        assertEquals("com.example", BuildConfig.APPLICATION_ID)
+        assertTrue("Expected versionCode > 1 for in-place updates, got ${BuildConfig.VERSION_CODE}", BuildConfig.VERSION_CODE > 1)
+        assertTrue(BuildConfig.VERSION_NAME.startsWith("1.1."))
+
+        // 2. Verify Room MIGRATION_1_2 preserves existing v1 user alarms without wiping data
+        val migDbName = "test_in_place_upgrade_v1_to_v2.db"
+        application.deleteDatabase(migDbName)
+        val rawV1 = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(
+            application.getDatabasePath(migDbName),
+            null
+        )
+        rawV1.execSQL(
+            "CREATE TABLE IF NOT EXISTS `alarms` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`hour` INTEGER NOT NULL, " +
+                "`minute` INTEGER NOT NULL, " +
+                "`isEnabled` INTEGER NOT NULL, " +
+                "`label` TEXT NOT NULL)"
+        )
+        rawV1.execSQL("INSERT INTO `alarms` (`id`, `hour`, `minute`, `isEnabled`, `label`) VALUES (7, 6, 45, 1, 'Existing V1 Alarm')")
+        rawV1.version = 1
+        rawV1.close()
+
+        val upgradedDb = androidx.room.Room.databaseBuilder(
+            application,
+            AppDatabase::class.java,
+            migDbName
+        )
+            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .allowMainThreadQueries()
+            .build()
+
+        val migratedAlarms = upgradedDb.alarmDao().getAllAlarmsSnapshot()
+        assertEquals(1, migratedAlarms.size)
+        assertEquals(6, migratedAlarms.first().hour)
+        assertEquals(45, migratedAlarms.first().minute)
+        assertEquals("Existing V1 Alarm", migratedAlarms.first().label)
+        assertTrue(migratedAlarms.first().isEnabled)
+        assertEquals("default_alarm", migratedAlarms.first().toneUri)
+        upgradedDb.close()
+        application.deleteDatabase(migDbName)
+
+        // 3. Verify legacy out-of-bounds or mismatched-type SharedPreferences never crash on update
+        application.getSharedPreferences("standby_prefs", Context.MODE_PRIVATE).edit()
+            .putInt("colorPage0", 99)
+            .putInt("fontPage0", 99)
+            .putString("enabledClockFaces", "legacy_wrong_type")
+            .putStringSet("duoLeftScreenIndices", setOf("2", "10"))
+            .commit()
+
+        val safeVm = StandbyViewModel(application)
+        assertTrue(safeVm.colorPage0.value in safeVm.colors.indices)
+        assertTrue(safeVm.fontPage0.value in safeVm.fonts.indices)
+        assertTrue(safeVm.duoLeftScreenIndices.value.containsAll(listOf(2, 10)))
+
+        // 4. Verify MY_PACKAGE_REPLACED receiver runs cleanly to restore enabled alarms after update
+        safeVm.addAlarm(hour = 8, minute = 15, label = "Post Update Alarm", snooze = 5)
+        val receiver = com.example.receivers.PackageUpdateAndBootReceiver()
+        receiver.onReceive(application, android.content.Intent(android.content.Intent.ACTION_MY_PACKAGE_REPLACED))
+    }
+
+    @Test
+    fun `separate tool screens can be toggled individually and added as separate screens in duo`() {
+        val vm = StandbyViewModel(application)
+        val calVm = CalendarViewModel(application)
+        val weatherVm = WeatherViewModel()
+
+        // Verify all 6 tool screens are enabled by default and individually toggleable
+        assertEquals(6, vm.toolScreenTitles.size)
+        assertEquals(setOf(0, 1, 2, 3, 4, 5), vm.enabledToolScreens.value)
+        vm.toggleToolScreen(2)
+        assertFalse(vm.enabledToolScreens.value.contains(2))
+        vm.setToolScreenEnabled(2, true)
+        assertTrue(vm.enabledToolScreens.value.contains(2))
+
+        // Add separate Tool screens independently to Left and Right Duo panes (just like Clock Faces)
+        vm.addScreenToDuoLeft(17)  // Focus Pomodoro
+        vm.addScreenToDuoLeft(20)  // Connected Battery
+        vm.addScreenToDuoRight(18) // Chrono Stopwatch
+        vm.addScreenToDuoRight(22) // Ambient Flash & Level
+        assertEquals(listOf(17, 20), vm.duoLeftScreenIndices.value)
+        assertEquals(listOf(18, 22), vm.duoRightScreenIndices.value)
+
+        composeTestRule.setContent {
+            Box(modifier = androidx.compose.ui.Modifier.size(840.dp, 420.dp)) {
+                DuoPage(
+                    viewModel = vm,
+                    calendarViewModel = calVm,
+                    weatherViewModel = weatherVm
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        // Connected Battery (20) renders on Left pane while Ambient Flash & Level (22) renders on Right pane simultaneously
+        composeTestRule.onNodeWithTag("connected_devices_charge_tool").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("camera_flash_ambient_toggle_btn").assertIsDisplayed()
+
+        // Switch Left pane to Focus Pomodoro (17) while Right pane stays on Ambient Flash & Level (22)
+        vm.setDuoLeftWidgetIndex(17)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("pomodoro_config_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("camera_flash_ambient_toggle_btn").assertIsDisplayed()
+    }
 }
+
+

@@ -134,13 +134,16 @@ fun StandbyScreen(
         val window = (context as? Activity)?.window ?: return@LaunchedEffect
         val isClockOrDuoVisible = !isOverviewMode && !showSettingsDialog &&
             (horizontalPagerState.currentPage == 0 || horizontalPagerState.currentPage == 5)
-        val params = window.attributes
-        if (isPreAlarmDimming && isClockOrDuoVisible) {
-            params.screenBrightness = clockBrightnessFactor.coerceIn(0.05f, 1.0f)
+        val targetBrightness = if (isPreAlarmDimming && isClockOrDuoVisible) {
+            clockBrightnessFactor.coerceIn(0.05f, 1.0f)
         } else {
-            params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         }
-        window.attributes = params
+        val params = window.attributes
+        if (params.screenBrightness != targetBrightness) {
+            params.screenBrightness = targetBrightness
+            window.attributes = params
+        }
     }
 
     DisposableEffect(Unit) {
@@ -148,8 +151,10 @@ fun StandbyScreen(
             val window = (context as? Activity)?.window
             if (window != null) {
                 val params = window.attributes
-                params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-                window.attributes = params
+                if (params.screenBrightness != WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) {
+                    params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    window.attributes = params
+                }
             }
         }
     }
@@ -265,89 +270,81 @@ fun StandbyScreen(
                 }
             }
 
-            // Material 3 HUD Floating Action Controls (Lock, Overview Directory, Studio Settings)
+            // Material 3 Expressive HUD Floating Action Dock (Pure AMOLED, Lock, Overview Spaces, Settings)
+            val isPureAmoled by viewModel.isPureAmoledEnabled.collectAsState()
             AnimatedVisibility(
                 visible = isHudVisible,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
+                enter = fadeIn() + scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                exit = fadeOut() + scaleOut(targetScale = 0.92f),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(20.dp)
             ) {
                 Surface(
-                    shape = CircleShape,
-                    color = colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                    shape = RoundedCornerShape(28.dp),
+                    color = colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
                     tonalElevation = 6.dp,
-                    shadowElevation = 8.dp,
-                    border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    shadowElevation = 10.dp,
+                    border = expressiveSurfaceBorder(highlighted = isPureAmoled)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FilledTonalIconButton(
+                        ExpressiveIconActionButton(
+                            onClick = {
+                                haptics.confirm()
+                                isHudVisible = true
+                                viewModel.togglePureAmoledMode()
+                            },
+                            icon = if (isPureAmoled) Icons.Filled.Contrast else Icons.Outlined.Contrast,
+                            contentDescription = if (isPureAmoled) "Disable Pure AMOLED Mode" else "Enable Pure AMOLED Mode",
+                            selected = isPureAmoled,
+                            containerColor = if (isPureAmoled) colorScheme.primary else colorScheme.secondaryContainer,
+                            contentColor = if (isPureAmoled) colorScheme.onPrimary else colorScheme.onSecondaryContainer,
+                            modifier = Modifier.testTag("hud_amoled_button")
+                        )
+
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.confirm()
                                 isScreenLocked = true
                                 isHudVisible = false
                             },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("hud_lock_button"),
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = colorScheme.secondaryContainer,
-                                contentColor = colorScheme.onSecondaryContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Lock,
-                                contentDescription = "Lock Screen inputs",
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                            icon = Icons.Outlined.Lock,
+                            contentDescription = "Lock Screen inputs",
+                            containerColor = colorScheme.secondaryContainer,
+                            contentColor = colorScheme.onSecondaryContainer,
+                            modifier = Modifier.testTag("hud_lock_button")
+                        )
 
-                        FilledTonalIconButton(
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.tick()
                                 isHudVisible = true
                                 isOverviewMode = true
                             },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("hud_overview_button"),
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = colorScheme.secondaryContainer,
-                                contentColor = colorScheme.onSecondaryContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.GridView,
-                                contentDescription = "Standby Layout Overview",
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                            icon = Icons.Outlined.GridView,
+                            contentDescription = "Standby Layout Overview",
+                            containerColor = colorScheme.secondaryContainer,
+                            contentColor = colorScheme.onSecondaryContainer,
+                            modifier = Modifier.testTag("hud_overview_button")
+                        )
 
-                        FilledIconButton(
+                        ExpressiveIconActionButton(
                             onClick = {
                                 haptics.tick()
                                 isHudVisible = true
                                 showSettingsDialog = true
                             },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("hud_settings_button"),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = colorScheme.primaryContainer,
-                                contentColor = colorScheme.onPrimaryContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Customize Standby Menu",
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                            icon = Icons.Default.Settings,
+                            contentDescription = "Customize Standby Menu",
+                            selected = true,
+                            containerColor = colorScheme.primaryContainer,
+                            contentColor = colorScheme.onPrimaryContainer,
+                            modifier = Modifier.testTag("hud_settings_button")
+                        )
                     }
                 }
             }
@@ -365,10 +362,12 @@ fun StandbyScreen(
                 )
             }
         } else {
+            val activeToolIdx by viewModel.timerModeIndex.collectAsState()
             AppOverviewLayout(
                 viewModel = viewModel,
                 activePage = horizontalPagerState.currentPage,
                 activeClockFace = activeClockFaceIndices.getOrElse(verticalPagerState.currentPage) { 0 },
+                activeToolScreen = activeToolIdx,
                 onNavigateToPage = { targetPage ->
                     haptics.tick()
                     isOverviewMode = false
@@ -389,6 +388,18 @@ fun StandbyScreen(
                         horizontalPagerState.scrollToPage(0)
                         val targetPagerIdx = viewModel.enabledClockFaces.value.sorted().indexOf(themeIdx).coerceAtLeast(0)
                         verticalPagerState.scrollToPage(targetPagerIdx)
+                    }
+                },
+                onSelectToolScreen = { toolIdx ->
+                    haptics.tick()
+                    if (!viewModel.enabledToolScreens.value.contains(toolIdx)) {
+                        viewModel.setToolScreenEnabled(toolIdx, true)
+                    }
+                    viewModel.setTimerModeIndex(toolIdx)
+                    isOverviewMode = false
+                    isHudVisible = true
+                    coroutineScope.launch {
+                        horizontalPagerState.scrollToPage(4)
                     }
                 },
                 onDismiss = {
@@ -615,12 +626,12 @@ fun TopAppBarOverlay(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val items = listOf(
-        "Clock" to Icons.Outlined.Schedule,
-        "Alarm" to Icons.Outlined.Alarm,
-        "Calendar" to Icons.Outlined.CalendarToday,
-        "Music" to Icons.Outlined.MusicNote,
-        "Tools" to Icons.Outlined.Build,
-        "Duo" to Icons.Outlined.ViewColumn
+        Triple("Clock", Icons.Outlined.Schedule, Icons.Filled.Schedule),
+        Triple("Alarm", Icons.Outlined.Alarm, Icons.Filled.Alarm),
+        Triple("Calendar", Icons.Outlined.CalendarToday, Icons.Filled.CalendarToday),
+        Triple("Music", Icons.Outlined.MusicNote, Icons.Filled.MusicNote),
+        Triple("Tools", Icons.Outlined.Build, Icons.Filled.Build),
+        Triple("Duo", Icons.Outlined.ViewColumn, Icons.Filled.ViewColumn)
     )
 
     BoxWithConstraints(
@@ -630,58 +641,63 @@ fun TopAppBarOverlay(
         contentAlignment = Alignment.Center
     ) {
         val isCompactWidth = maxWidth < 600.dp
-        val itemHPad = if (isCompactWidth) 10.dp else 14.dp
-        val itemVPad = if (isCompactWidth) 6.dp else 8.dp
+        val itemHPad = if (isCompactWidth) 11.dp else 15.dp
+        val itemVPad = if (isCompactWidth) 7.dp else 9.dp
 
         Surface(
-            color = colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
-            shape = CircleShape,
+            color = colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
+            shape = RoundedCornerShape(28.dp),
             tonalElevation = 6.dp,
-            shadowElevation = 8.dp,
-            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.45f))
+            shadowElevation = 10.dp,
+            border = expressiveSurfaceBorder()
         ) {
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp, vertical = 5.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                items.forEachIndexed { index, (title, icon) ->
+                items.forEachIndexed { index, (title, outlinedIcon, filledIcon) ->
                     val isActive = currentPage == index
                     val containerColor by animateColorAsState(
-                        targetValue = if (isActive) colorScheme.secondaryContainer else Color.Transparent,
+                        targetValue = if (isActive) colorScheme.primaryContainer else Color.Transparent,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                         label = "navPillBg"
                     )
                     val contentColor by animateColorAsState(
-                        targetValue = if (isActive) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                        targetValue = if (isActive) colorScheme.onPrimaryContainer else colorScheme.onSurfaceVariant,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                         label = "navPillFg"
+                    )
+                    val pillCorner by animateDpAsState(
+                        targetValue = if (isActive) 24.dp else 14.dp,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                        label = "navPillCorner"
                     )
 
                     Surface(
-                        shape = CircleShape,
+                        shape = RoundedCornerShape(pillCorner),
                         color = containerColor,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable { onPageSelected(index) }
-                            .testTag("top_nav_tab_$index")
+                        onClick = { onPageSelected(index) },
+                        modifier = Modifier.testTag("top_nav_tab_$index")
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = itemHPad, vertical = itemVPad),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = icon,
+                                imageVector = if (isActive) filledIcon else outlinedIcon,
                                 contentDescription = title,
                                 tint = contentColor,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                             Text(
                                 text = title,
                                 color = contentColor,
                                 style = MaterialTheme.typography.labelLarge,
-                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
                                 maxLines = 1
                             )
                         }
@@ -700,10 +716,10 @@ fun VerticalThemeIndicator(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     Surface(
-        color = colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
+        color = colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
         shape = CircleShape,
         tonalElevation = 4.dp,
-        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.4f))
+        border = expressiveSurfaceBorder()
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
@@ -712,14 +728,18 @@ fun VerticalThemeIndicator(
         ) {
             for (i in 0 until pageCount) {
                 val isSelected = i == currentIndex
-                val height by animateDpAsState(targetValue = if (isSelected) 15.dp else 6.dp, label = "dotHeight")
+                val height by animateDpAsState(
+                    targetValue = if (isSelected) 18.dp else 7.dp,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                    label = "dotHeight"
+                )
                 Box(
                     modifier = Modifier
-                        .size(width = 6.dp, height = height)
+                        .size(width = 7.dp, height = height)
                         .clip(CircleShape)
                         .background(
                             if (isSelected) colorScheme.primary
-                            else colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            else colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                         )
                         .clickable { onDotClicked(i) }
                 )
@@ -770,47 +790,53 @@ fun StandbyCustomizationDialog(
     val nextAlarmLabel by viewModel.nextSystemAlarm.collectAsState()
     val minutesUntilAlarm by viewModel.minutesUntilNextAlarm.collectAsState()
 
+    val showSlideshowTime by viewModel.showSlideshowTimeOverlay.collectAsState()
+    val isPureAmoled by viewModel.isPureAmoledEnabled.collectAsState()
     var showHeaderInfo by remember(activeTab) { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
-        com.example.ui.theme.MyApplicationTheme {
+        KeepDialogImmersiveFullScreen()
+        com.example.ui.theme.MyApplicationTheme(pureAmoled = isPureAmoled) {
             val colorScheme = MaterialTheme.colorScheme
             Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding(),
+                modifier = Modifier.fillMaxSize(),
                 color = colorScheme.surface
             ) {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val isCompactHeight = maxHeight < 380.dp
                     val isCompactWidth = maxWidth < 620.dp
-                    val railWidth = if (isCompactWidth) 84.dp else 100.dp
+                    val railWidth = if (isCompactWidth) 88.dp else 104.dp
                     val contentHPad = if (isCompactWidth) 16.dp else 24.dp
                     val contentVPad = if (isCompactHeight) 10.dp else 16.dp
 
                     Row(modifier = Modifier.fillMaxSize()) {
-                        // LEFT PANE: Material 3 NavigationRail following system theme
+                        // LEFT PANE: Material 3 Expressive NavigationRail following system or Pure AMOLED theme
                         NavigationRail(
                             containerColor = colorScheme.surfaceContainerLow,
                             contentColor = colorScheme.onSurface,
                             header = {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = colorScheme.primaryContainer,
-                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Tune,
-                                        contentDescription = "Settings",
-                                        tint = colorScheme.onPrimaryContainer,
-                                        modifier = Modifier
-                                            .padding(8.dp)
-                                            .size(20.dp)
-                                    )
-                                }
+                                ExpressiveIconActionButton(
+                                    onClick = {
+                                        haptics.confirm()
+                                        viewModel.togglePureAmoledMode()
+                                    },
+                                    icon = if (isPureAmoled) Icons.Filled.Contrast else Icons.Outlined.Contrast,
+                                    contentDescription = "Toggle Pure AMOLED Mode",
+                                    selected = isPureAmoled,
+                                    size = 44.dp,
+                                    iconSize = 20.dp,
+                                    containerColor = if (isPureAmoled) colorScheme.primary else colorScheme.primaryContainer,
+                                    contentColor = if (isPureAmoled) colorScheme.onPrimary else colorScheme.onPrimaryContainer,
+                                    modifier = Modifier
+                                        .padding(top = 8.dp, bottom = 6.dp)
+                                        .testTag("navigation_rail_amoled_toggle")
+                                )
                             },
                             modifier = Modifier
                                 .fillMaxHeight()
@@ -820,7 +846,7 @@ fun StandbyCustomizationDialog(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 tabItems.forEachIndexed { idx, (title, _, icon) ->
@@ -841,9 +867,17 @@ fun StandbyCustomizationDialog(
                                             Text(
                                                 text = title,
                                                 style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                                 maxLines = 1
                                             )
                                         },
+                                        colors = NavigationRailItemDefaults.colors(
+                                            selectedIconColor = colorScheme.onPrimaryContainer,
+                                            selectedTextColor = colorScheme.primary,
+                                            indicatorColor = colorScheme.primaryContainer,
+                                            unselectedIconColor = colorScheme.onSurfaceVariant,
+                                            unselectedTextColor = colorScheme.onSurfaceVariant
+                                        ),
                                         alwaysShowLabel = true,
                                         modifier = Modifier.testTag("studio_rail_tab_$idx")
                                     )
@@ -851,16 +885,16 @@ fun StandbyCustomizationDialog(
                             }
                         }
 
-                        VerticalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        VerticalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.55f))
 
-                        // RIGHT PANE: Material 3 Settings Deck
+                        // RIGHT PANE: Material 3 Expressive Settings Deck
                         Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .padding(horizontal = contentHPad, vertical = contentVPad)
                         ) {
-                            // Clean M3 Header Bar with (i) info button instead of permanent sub-text
+                            // Clean Expressive Header Bar
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -874,15 +908,16 @@ fun StandbyCustomizationDialog(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = colorScheme.secondaryContainer
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = colorScheme.primaryContainer,
+                                        border = expressiveSurfaceBorder()
                                     ) {
                                         Icon(
                                             imageVector = tabItems[activeTab].third,
                                             contentDescription = null,
-                                            tint = colorScheme.onSecondaryContainer,
+                                            tint = colorScheme.onPrimaryContainer,
                                             modifier = Modifier
-                                                .padding(8.dp)
+                                                .padding(10.dp)
                                                 .size(20.dp)
                                         )
                                     }
@@ -890,7 +925,7 @@ fun StandbyCustomizationDialog(
                                         text = tabItems[activeTab].first,
                                         style = if (isCompactHeight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
                                         color = colorScheme.onSurface,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.ExtraBold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -899,7 +934,7 @@ fun StandbyCustomizationDialog(
                                             haptics.tick()
                                             showHeaderInfo = !showHeaderInfo
                                         },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(34.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.Info,
@@ -910,8 +945,9 @@ fun StandbyCustomizationDialog(
                                     }
                                 }
 
-                                FilledTonalButton(
+                                ExpressiveMorphButton(
                                     onClick = onDismiss,
+                                    selected = true,
                                     modifier = Modifier.testTag("studio_apply_close_button")
                                 ) {
                                     Icon(
@@ -920,14 +956,15 @@ fun StandbyCustomizationDialog(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Done")
+                                    Text("Done", fontWeight = FontWeight.Bold)
                                 }
                             }
 
                             AnimatedVisibility(visible = showHeaderInfo) {
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = colorScheme.secondaryContainer.copy(alpha = 0.65f),
+                                    border = expressiveSurfaceBorder(),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 10.dp)
@@ -936,12 +973,12 @@ fun StandbyCustomizationDialog(
                                         text = tabItems[activeTab].second,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                                     )
                                 }
                             }
 
-                            // Scrollable Material 3 Cards (Filtered strictly to relevant page settings)
+                            // Scrollable Material 3 Expressive Bento Cards
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
@@ -949,66 +986,57 @@ fun StandbyCustomizationDialog(
                                     .verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 10.dp else 14.dp)
                             ) {
+                                // 0. Hero Pure AMOLED Mode Toggle Card (always 1 tap away in Settings)
+                                ExpressiveAmoledBannerCard(
+                                    isPureAmoled = isPureAmoled,
+                                    onToggle = { enabled ->
+                                        haptics.confirm()
+                                        viewModel.setPureAmoledEnabled(enabled)
+                                    }
+                                )
+
                                 // 1. Visual Color Swatches (Relevant on tabs 0..4; Duo uses each added screen's own page styling)
                                 if (activeTab != 5) {
-                                    ElevatedCard(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
+                                    ExpressiveSectionCard {
+                                        ExpressiveSectionHeader(
+                                            icon = Icons.Outlined.Palette,
+                                            title = "Accent Color"
                                         )
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Palette,
-                                                    contentDescription = null,
-                                                    tint = colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
+                                            viewModel.colors.forEachIndexed { index, (color, name) ->
+                                                val isSelected = index == selectedColorIdx
+                                                val swatchCorner by animateDpAsState(
+                                                    targetValue = if (isSelected) 14.dp else 22.dp,
+                                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                                    label = "swatchCorner"
                                                 )
-                                                Text(
-                                                    text = "Accent Color",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    color = colorScheme.onSurface
-                                                )
-                                            }
-                                            // Visual-only color circles (no text labels underneath)
-                                            FlowRow(
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                viewModel.colors.forEachIndexed { index, (color, name) ->
-                                                    val isSelected = index == selectedColorIdx
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(42.dp)
-                                                            .clip(CircleShape)
-                                                            .background(color)
-                                                            .border(
-                                                                width = if (isSelected) 3.dp else 1.dp,
-                                                                color = if (isSelected) colorScheme.onSurface else colorScheme.outlineVariant,
-                                                                shape = CircleShape
-                                                            )
-                                                            .clickable {
-                                                                haptics.tick()
-                                                                viewModel.setColorIndexForPage(activeTab, index)
-                                                            },
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        if (isSelected) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Check,
-                                                                contentDescription = name,
-                                                                tint = if (color == Color.White) Color.Black else Color.White,
-                                                                modifier = Modifier.size(20.dp)
-                                                            )
-                                                        }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .clip(RoundedCornerShape(swatchCorner))
+                                                        .background(color)
+                                                        .border(
+                                                            width = if (isSelected) 3.dp else 1.dp,
+                                                            color = if (isSelected) colorScheme.onSurface else colorScheme.outlineVariant,
+                                                            shape = RoundedCornerShape(swatchCorner)
+                                                        )
+                                                        .clickable {
+                                                            haptics.tick()
+                                                            viewModel.setColorIndexForPage(activeTab, index)
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = name,
+                                                            tint = if (color == Color.White) Color.Black else Color.White,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
                                                     }
                                                 }
                                             }
@@ -1021,128 +1049,136 @@ fun StandbyCustomizationDialog(
                                     val enabledClockSet by viewModel.enabledClockFaces.collectAsState()
                                     var isClockListExpanded by remember { mutableStateOf(false) }
 
-                                    // 2a. Active Clock Faces Visual Selector
-                                    ElevatedCard(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("clock_faces_toggle_card"),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
-                                        )
+                                    // 2a. Active Clock Faces Visual Selector (Expressive Card)
+                                    ExpressiveSectionCard(
+                                        modifier = Modifier.testTag("clock_faces_toggle_card")
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .clickable {
+                                                    haptics.tick()
+                                                    isClockListExpanded = !isClockListExpanded
+                                                },
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        haptics.tick()
-                                                        isClockListExpanded = !isClockListExpanded
-                                                    },
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                                             ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = colorScheme.primaryContainer
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Outlined.WatchLater,
                                                         contentDescription = null,
-                                                        tint = colorScheme.primary,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                    Text(
-                                                        text = "Clock Faces (${enabledClockSet.size}/${viewModel.clockFaceTitles.size})",
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        color = colorScheme.onSurface
+                                                        tint = colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier
+                                                            .padding(7.dp)
+                                                            .size(18.dp)
                                                     )
                                                 }
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    if (enabledClockSet.size < viewModel.clockFaceTitles.size) {
-                                                        TextButton(
-                                                            onClick = {
-                                                                haptics.tick()
-                                                                viewModel.clockFaceTitles.indices.forEach { idx ->
-                                                                    viewModel.setClockFaceEnabled(idx, true)
-                                                                }
-                                                            },
-                                                            modifier = Modifier.testTag("enable_all_clock_faces_button")
-                                                        ) {
-                                                            Text("Enable All")
-                                                        }
-                                                    }
-                                                    FilledTonalButton(
+                                                Text(
+                                                    text = "Clock Faces (${enabledClockSet.size}/${viewModel.clockFaceTitles.size})",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = colorScheme.onSurface
+                                                )
+                                            }
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (enabledClockSet.size < viewModel.clockFaceTitles.size) {
+                                                    ExpressiveMorphButton(
                                                         onClick = {
                                                             haptics.tick()
-                                                            isClockListExpanded = !isClockListExpanded
-                                                        }
+                                                            viewModel.clockFaceTitles.indices.forEach { idx ->
+                                                                viewModel.setClockFaceEnabled(idx, true)
+                                                            }
+                                                        },
+                                                        selected = false,
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                        modifier = Modifier.testTag("enable_all_clock_faces_button")
                                                     ) {
-                                                        Text(if (isClockListExpanded) "Hide" else "Customize")
+                                                        Text("Enable All", style = MaterialTheme.typography.labelLarge)
                                                     }
                                                 }
-                                            }
-
-                                            AnimatedVisibility(visible = isClockListExpanded) {
-                                                LazyRow(
-                                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(top = 4.dp)
+                                                ExpressiveMorphButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        isClockListExpanded = !isClockListExpanded
+                                                    },
+                                                    selected = isClockListExpanded,
+                                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                                 ) {
-                                                    items(viewModel.clockFaceTitles.size) { idx ->
-                                                        val isEnabled = enabledClockSet.contains(idx)
-                                                        val canUncheck = !isEnabled || enabledClockSet.size > 1
+                                                    Text(if (isClockListExpanded) "Hide" else "Customize", fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
+                                        }
+
+                                        AnimatedVisibility(visible = isClockListExpanded) {
+                                            LazyRow(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 4.dp)
+                                            ) {
+                                                items(viewModel.clockFaceTitles.size) { idx ->
+                                                    val isEnabled = enabledClockSet.contains(idx)
+                                                    val canUncheck = !isEnabled || enabledClockSet.size > 1
+                                                    val previewCorner by animateDpAsState(
+                                                        targetValue = if (isEnabled) 18.dp else 12.dp,
+                                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                                        label = "clockPreviewCorner"
+                                                    )
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(width = 148.dp, height = 88.dp)
+                                                            .clip(RoundedCornerShape(previewCorner))
+                                                            .background(Color.Black)
+                                                            .border(
+                                                                width = if (isEnabled) 2.5.dp else 1.dp,
+                                                                color = if (isEnabled) colorScheme.primary else colorScheme.outlineVariant,
+                                                                shape = RoundedCornerShape(previewCorner)
+                                                            )
+                                                            .clickable {
+                                                                if (canUncheck) {
+                                                                    haptics.tick()
+                                                                    viewModel.toggleClockFace(idx)
+                                                                }
+                                                            }
+                                                            .testTag("clock_face_toggle_row_$idx"),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
                                                         Box(
                                                             modifier = Modifier
-                                                                .size(width = 148.dp, height = 88.dp)
-                                                                .clip(RoundedCornerShape(14.dp))
-                                                                .background(Color.Black)
-                                                                .border(
-                                                                    width = if (isEnabled) 2.5.dp else 1.dp,
-                                                                    color = if (isEnabled) colorScheme.primary else colorScheme.outlineVariant,
-                                                                    shape = RoundedCornerShape(14.dp)
-                                                                )
-                                                                .clickable {
-                                                                    if (canUncheck) {
-                                                                        haptics.tick()
-                                                                        viewModel.toggleClockFace(idx)
-                                                                    }
+                                                                .requiredSize(400.dp, 220.dp)
+                                                                .graphicsLayer {
+                                                                    scaleX = 0.34f
+                                                                    scaleY = 0.34f
                                                                 }
-                                                                .testTag("clock_face_toggle_row_$idx"),
-                                                            contentAlignment = Alignment.Center
                                                         ) {
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .requiredSize(400.dp, 220.dp)
-                                                                    .graphicsLayer {
-                                                                        scaleX = 0.34f
-                                                                        scaleY = 0.34f
-                                                                    }
-                                                            ) {
-                                                                ClockPage(themeIndex = idx)
-                                                            }
-                                                            Surface(
-                                                                modifier = Modifier
-                                                                    .align(Alignment.TopEnd)
-                                                                    .padding(6.dp)
-                                                                    .size(22.dp),
-                                                                shape = CircleShape,
-                                                                color = if (isEnabled) colorScheme.primary else colorScheme.surfaceContainerHighest.copy(alpha = 0.8f)
-                                                            ) {
-                                                                Box(contentAlignment = Alignment.Center) {
-                                                                    Icon(
-                                                                        imageVector = if (isEnabled) Icons.Default.Check else Icons.Default.Add,
-                                                                        contentDescription = null,
-                                                                        tint = if (isEnabled) colorScheme.onPrimary else colorScheme.onSurface,
-                                                                        modifier = Modifier.size(13.dp)
-                                                                    )
-                                                                }
+                                                            ClockPage(themeIndex = idx)
+                                                        }
+                                                        Surface(
+                                                            modifier = Modifier
+                                                                .align(Alignment.TopEnd)
+                                                                .padding(6.dp)
+                                                                .size(22.dp),
+                                                            shape = CircleShape,
+                                                            color = if (isEnabled) colorScheme.primary else colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Icon(
+                                                                    imageVector = if (isEnabled) Icons.Default.Check else Icons.Default.Add,
+                                                                    contentDescription = null,
+                                                                    tint = if (isEnabled) colorScheme.onPrimary else colorScheme.onSurface,
+                                                                    modifier = Modifier.size(13.dp)
+                                                                )
                                                             }
                                                         }
                                                     }
@@ -1151,63 +1187,54 @@ fun StandbyCustomizationDialog(
                                         }
                                     }
 
-                                    // 2b. Typography Style Card (Clock tab only, visual font sample)
-                                    ElevatedCard(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
+                                    // 2b. Typography Style Card (Expressive morphing chips)
+                                    ExpressiveSectionCard {
+                                        ExpressiveSectionHeader(
+                                            icon = Icons.Outlined.FontDownload,
+                                            title = "Typography"
                                         )
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.FontDownload,
-                                                    contentDescription = null,
-                                                    tint = colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
+                                            viewModel.fonts.forEachIndexed { index, (fontFamily, name) ->
+                                                val isSelected = index == selectedFontIdx
+                                                val chipCorner by animateDpAsState(
+                                                    targetValue = if (isSelected) 24.dp else 12.dp,
+                                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                                    label = "fontChipCorner"
                                                 )
-                                                Text(
-                                                    text = "Typography",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    color = colorScheme.onSurface
-                                                )
-                                            }
-                                            FlowRow(
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                viewModel.fonts.forEachIndexed { index, (fontFamily, name) ->
-                                                    val isSelected = index == selectedFontIdx
-                                                    FilterChip(
-                                                        selected = isSelected,
-                                                        onClick = {
-                                                            haptics.tick()
-                                                            viewModel.setFontIndexForPage(activeTab, index)
-                                                        },
-                                                        label = {
-                                                            Text(
-                                                                text = name,
-                                                                fontFamily = fontFamily,
-                                                                style = MaterialTheme.typography.labelLarge
+                                                Surface(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        viewModel.setFontIndexForPage(activeTab, index)
+                                                    },
+                                                    shape = RoundedCornerShape(chipCorner),
+                                                    color = if (isSelected) colorScheme.primaryContainer else colorScheme.surfaceContainer,
+                                                    border = expressiveSurfaceBorder(highlighted = isSelected)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        if (isSelected) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Check,
+                                                                contentDescription = null,
+                                                                tint = colorScheme.onPrimaryContainer,
+                                                                modifier = Modifier.size(16.dp)
                                                             )
-                                                        },
-                                                        leadingIcon = if (isSelected) {
-                                                            {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.Check,
-                                                                    contentDescription = null,
-                                                                    modifier = Modifier.size(16.dp)
-                                                                )
-                                                            }
-                                                        } else null
-                                                    )
+                                                        }
+                                                        Text(
+                                                            text = name,
+                                                            fontFamily = fontFamily,
+                                                            style = MaterialTheme.typography.labelLarge,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                            color = if (isSelected) colorScheme.onPrimaryContainer else colorScheme.onSurface
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -1234,18 +1261,97 @@ fun StandbyCustomizationDialog(
                                         }
                                     }
 
-                                    ElevatedCard(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("terminal_location_settings_card"),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
-                                        )
+                                    ExpressiveSectionCard(
+                                        modifier = Modifier.testTag("terminal_location_settings_card")
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = colorScheme.primaryContainer
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Public,
+                                                        contentDescription = null,
+                                                        tint = colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier
+                                                            .padding(7.dp)
+                                                            .size(18.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "${resolvedInfo.regionName} (${resolvedInfo.airportCode})",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = colorScheme.onSurface,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false)
+                                                )
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = colorScheme.secondaryContainer
+                                                ) {
+                                                    Text(
+                                                        text = resolvedInfo.standardTimeShort,
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                    )
+                                                }
+                                            }
+                                            ExpressiveMorphButton(
+                                                onClick = {
+                                                    haptics.tick()
+                                                    viewModel.setLocationMode("auto")
+                                                    viewModel.setClockTimeZoneId("AUTO")
+                                                    viewModel.setCustomLocationName("")
+                                                    val ok = viewModel.refreshDeviceLocation(settingsContext)
+                                                    if (!ok) {
+                                                        locPermLauncher.launch(
+                                                            arrayOf(
+                                                                android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                                                                android.Manifest.permission.ACCESS_FINE_LOCATION
+                                                            )
+                                                        )
+                                                    }
+                                                },
+                                                selected = locMode == "auto",
+                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                                modifier = Modifier.testTag("detect_gps_location_button")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.MyLocation,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("GPS", fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        SearchableLocationTimeZoneField(
+                                            viewModel = viewModel,
+                                            paneIndex = 0,
+                                            activeSummary = "${resolvedInfo.regionName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort}",
+                                            label = "Search city, airport, or time zone...",
+                                            testTag = "custom_location_input"
+                                        )
+                                    }
+
+                                    // 2d. Clock Scale & Time Format Grouped Expressive Card
+                                    ExpressiveSectionCard {
+                                        var lastScaleBucket by remember { mutableIntStateOf((clockScaleVal * 10).roundToInt()) }
+                                        Column {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1253,138 +1359,78 @@ fun StandbyCustomizationDialog(
                                             ) {
                                                 Row(
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                    modifier = Modifier.weight(1f)
+                                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Public,
-                                                        contentDescription = null,
-                                                        tint = colorScheme.primary,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                    Text(
-                                                        text = "${resolvedInfo.regionName} (${resolvedInfo.airportCode})",
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        color = colorScheme.onSurface,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
                                                     Surface(
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        color = colorScheme.secondaryContainer
+                                                        shape = RoundedCornerShape(12.dp),
+                                                        color = colorScheme.primaryContainer
                                                     ) {
-                                                        Text(
-                                                            text = resolvedInfo.standardTimeShort,
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = colorScheme.onSecondaryContainer,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.AspectRatio,
+                                                            contentDescription = null,
+                                                            tint = colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier
+                                                                .padding(7.dp)
+                                                                .size(18.dp)
                                                         )
                                                     }
-                                                }
-                                                FilledTonalButton(
-                                                    onClick = {
-                                                        haptics.tick()
-                                                        viewModel.setLocationMode("auto")
-                                                        viewModel.setClockTimeZoneId("AUTO")
-                                                        viewModel.setCustomLocationName("")
-                                                        val ok = viewModel.refreshDeviceLocation(settingsContext)
-                                                        if (!ok) {
-                                                            locPermLauncher.launch(
-                                                                arrayOf(
-                                                                    android.Manifest.permission.ACCESS_COARSE_LOCATION,
-                                                                    android.Manifest.permission.ACCESS_FINE_LOCATION
-                                                                )
-                                                            )
-                                                        }
-                                                    },
-                                                    modifier = Modifier.testTag("detect_gps_location_button")
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.MyLocation,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text("GPS")
-                                                }
-                                            }
-
-                                            SearchableLocationTimeZoneField(
-                                                viewModel = viewModel,
-                                                paneIndex = 0,
-                                                activeSummary = "${resolvedInfo.regionName} (${resolvedInfo.airportCode}) • ${resolvedInfo.standardTimeShort}",
-                                                label = "Search city, airport, or time zone...",
-                                                testTag = "custom_location_input"
-                                            )
-                                        }
-                                    }
-
-                                    // 2d. Clock Scale & Time Format Card (Clock tab only)
-                                    ElevatedCard(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
-                                        )
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            var lastScaleBucket by remember { mutableIntStateOf((clockScaleVal * 10).roundToInt()) }
-                                            Column {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
                                                     Text(
                                                         text = "Clock Scale",
                                                         style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
                                                         color = colorScheme.onSurface
                                                     )
-                                                    Surface(
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        color = colorScheme.secondaryContainer
-                                                    ) {
-                                                        Text(
-                                                            text = String.format(Locale.getDefault(), "%.1fx", clockScaleVal),
-                                                            style = MaterialTheme.typography.labelLarge,
-                                                            color = colorScheme.onSecondaryContainer,
-                                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                                        )
-                                                    }
                                                 }
-                                                Slider(
-                                                    value = clockScaleVal,
-                                                    onValueChange = { newValue ->
-                                                        val bucket = (newValue * 10).roundToInt()
-                                                        if (bucket != lastScaleBucket) {
-                                                            lastScaleBucket = bucket
-                                                            haptics.step()
-                                                        }
-                                                        viewModel.setClockScaleForPage(activeTab, newValue)
-                                                    },
-                                                    valueRange = 0.8f..1.8f,
-                                                    steps = 9,
-                                                    modifier = Modifier.padding(top = 2.dp)
-                                                )
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = colorScheme.primaryContainer
+                                                ) {
+                                                    Text(
+                                                        text = String.format(Locale.getDefault(), "%.1fx", clockScaleVal),
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                                    )
+                                                }
                                             }
+                                            Slider(
+                                                value = clockScaleVal,
+                                                onValueChange = { newValue ->
+                                                    val bucket = (newValue * 10).roundToInt()
+                                                    if (bucket != lastScaleBucket) {
+                                                        lastScaleBucket = bucket
+                                                        haptics.step()
+                                                    }
+                                                    viewModel.setClockScaleForPage(activeTab, newValue)
+                                                },
+                                                valueRange = 0.8f..1.8f,
+                                                steps = 9,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        }
 
-                                            M3SettingSwitchRow(
+                                        val timeSwitchCount = if (!use24Hour) 3 else 2
+                                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                            ExpressiveSettingSwitchRow(
                                                 title = "24-Hour Format",
                                                 subtitle = "Display hours in 24-hour military format (e.g. 14:30)",
                                                 checked = use24Hour,
+                                                icon = Icons.Outlined.Schedule,
+                                                shape = expressiveGroupedShape(0, timeSwitchCount),
                                                 onCheckedChange = {
                                                     haptics.confirm()
                                                     viewModel.setUse24HourFormat(it)
                                                 }
                                             )
 
-                                            AnimatedVisibility(visible = !use24Hour) {
-                                                M3SettingSwitchRow(
+                                            if (!use24Hour) {
+                                                ExpressiveSettingSwitchRow(
                                                     title = "AM / PM Indicator",
                                                     subtitle = "Display meridian badge alongside 12-hour clocks",
                                                     checked = showAmPm,
+                                                    icon = Icons.Outlined.WbTwilight,
+                                                    shape = expressiveGroupedShape(1, timeSwitchCount),
                                                     onCheckedChange = {
                                                         haptics.confirm()
                                                         viewModel.setShowAmPm(it)
@@ -1392,10 +1438,12 @@ fun StandbyCustomizationDialog(
                                                 )
                                             }
 
-                                            M3SettingSwitchRow(
+                                            ExpressiveSettingSwitchRow(
                                                 title = "Seconds Tracker",
                                                 subtitle = "Show live ticking seconds on compatible clock faces",
                                                 checked = showSeconds,
+                                                icon = Icons.Outlined.Timer,
+                                                shape = expressiveGroupedShape(timeSwitchCount - 1, timeSwitchCount),
                                                 onCheckedChange = {
                                                     haptics.confirm()
                                                     viewModel.setShowSeconds(it)
@@ -1404,83 +1452,82 @@ fun StandbyCustomizationDialog(
                                         }
                                     }
 
-                                    // 2e. Clock Numeral Effects & Visual Shader Gradients (Clock tab only, no text under gradient boxes)
-                                    ElevatedCard(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
+                                    // 2e. Clock Numeral Effects & Visual Shader Gradients (Grouped Expressive Card)
+                                    ExpressiveSectionCard {
+                                        ExpressiveSectionHeader(
+                                            icon = Icons.Outlined.AutoAwesome,
+                                            title = "Numeral Finish & Shader"
                                         )
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Text(
-                                                text = "Numeral Finish & Shader",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colorScheme.onSurface
-                                            )
 
-                                            M3SettingSwitchRow(
+                                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                            ExpressiveSettingSwitchRow(
                                                 title = "Ambient Glow",
                                                 subtitle = "Render soft tonal luminance around display numerals",
                                                 checked = glowVal,
+                                                icon = Icons.Outlined.Flare,
+                                                shape = expressiveGroupedShape(0, 2),
                                                 onCheckedChange = {
                                                     haptics.confirm()
                                                     viewModel.setTextGlowForPage(activeTab, it)
                                                 }
                                             )
 
-                                            M3SettingSwitchRow(
+                                            ExpressiveSettingSwitchRow(
                                                 title = "Outline Mode",
                                                 subtitle = "Draw hollow architectural strokes instead of solid fills",
                                                 checked = outlineVal,
+                                                icon = Icons.Outlined.FormatShapes,
+                                                shape = expressiveGroupedShape(1, 2),
                                                 onCheckedChange = {
                                                     haptics.confirm()
                                                     viewModel.setTextOutlineForPage(activeTab, it)
                                                 }
                                             )
+                                        }
 
-                                            // Visual-only Gradient Swatches (zero text labels underneath)
-                                            LazyRow(
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                items(viewModel.gradients.size) { index ->
-                                                    val (gradName, gradColors) = viewModel.gradients[index]
-                                                    val isSelected = (index == gradientIdx) || (index == 0 && gradientIdx <= 0)
-                                                    val brush = if (index == 0) {
-                                                        Brush.linearGradient(
-                                                            listOf(colorScheme.surfaceContainerHighest, colorScheme.surfaceContainerHigh)
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            items(viewModel.gradients.size) { index ->
+                                                val (gradName, gradColors) = viewModel.gradients[index]
+                                                val isSelected = (index == gradientIdx) || (index == 0 && gradientIdx <= 0)
+                                                val gradCorner by animateDpAsState(
+                                                    targetValue = if (isSelected) 20.dp else 12.dp,
+                                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                                    label = "gradCorner"
+                                                )
+                                                val brush = if (index == 0) {
+                                                    Brush.linearGradient(
+                                                        listOf(colorScheme.surfaceContainerHighest, colorScheme.surfaceContainerHigh)
+                                                    )
+                                                } else {
+                                                    Brush.linearGradient(gradColors)
+                                                }
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(width = 66.dp, height = 42.dp)
+                                                        .clip(RoundedCornerShape(gradCorner))
+                                                        .background(brush)
+                                                        .border(
+                                                            width = if (isSelected) 3.dp else 1.dp,
+                                                            color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
+                                                            shape = RoundedCornerShape(gradCorner)
                                                         )
-                                                    } else {
-                                                        Brush.linearGradient(gradColors)
-                                                    }
-
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(width = 64.dp, height = 40.dp)
-                                                            .clip(RoundedCornerShape(12.dp))
-                                                            .background(brush)
-                                                            .border(
-                                                                width = if (isSelected) 3.dp else 1.dp,
-                                                                color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
-                                                                shape = RoundedCornerShape(12.dp)
-                                                            )
-                                                            .clickable {
-                                                                haptics.tick()
-                                                                viewModel.setTextGradientForPage(activeTab, if (index == 0) -1 else index)
-                                                            },
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        if (isSelected) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Check,
-                                                                contentDescription = gradName,
-                                                                tint = if (index == 0) colorScheme.onSurface else Color.White,
-                                                                modifier = Modifier.size(18.dp)
-                                                            )
-                                                        }
+                                                        .clickable {
+                                                            haptics.tick()
+                                                            viewModel.setTextGradientForPage(activeTab, if (index == 0) -1 else index)
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = gradName,
+                                                            tint = if (index == 0) colorScheme.onSurface else Color.White,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
                                                     }
                                                 }
                                             }
@@ -1491,156 +1538,164 @@ fun StandbyCustomizationDialog(
                                 // 3. Alarm Tab (activeTab == 1): Pre-Alarm Gradual Dimming
                                 if (activeTab == 1) {
                                     var showAlarmDimInfo by remember { mutableStateOf(false) }
-                                    ElevatedCard(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("pre_alarm_dimming_settings_card"),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
-                                        )
+                                    ExpressiveSectionCard(
+                                        modifier = Modifier.testTag("pre_alarm_dimming_settings_card")
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.weight(1f)
                                             ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text(
-                                                        text = "Pre-Alarm Dimming",
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        color = colorScheme.onSurface
-                                                    )
-                                                    IconButton(
-                                                        onClick = {
-                                                            haptics.tick()
-                                                            showAlarmDimInfo = !showAlarmDimInfo
-                                                        },
-                                                        modifier = Modifier.size(28.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Outlined.Info,
-                                                            contentDescription = "Pre-Alarm Info",
-                                                            tint = if (showAlarmDimInfo) colorScheme.primary else colorScheme.onSurfaceVariant,
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
-                                                    }
-                                                }
-
                                                 Surface(
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    color = if (isPreAlarmDimming) colorScheme.primaryContainer else colorScheme.secondaryContainer
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = colorScheme.primaryContainer
                                                 ) {
-                                                    Text(
-                                                        text = when {
-                                                            !gradualDimEnabled -> "Off"
-                                                            isPreAlarmDimming -> "${(liveBrightnessFactor * 100).roundToInt()}%"
-                                                            minutesUntilAlarm != null -> "${minutesUntilAlarm}m"
-                                                            else -> "Ready"
-                                                        },
-                                                        style = MaterialTheme.typography.labelLarge,
-                                                        color = if (isPreAlarmDimming) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.BrightnessLow,
+                                                        contentDescription = null,
+                                                        tint = colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier
+                                                            .padding(7.dp)
+                                                            .size(18.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "Pre-Alarm Dimming",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = colorScheme.onSurface
+                                                )
+                                                IconButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        showAlarmDimInfo = !showAlarmDimInfo
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Info,
+                                                        contentDescription = "Pre-Alarm Info",
+                                                        tint = if (showAlarmDimInfo) colorScheme.primary else colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp)
                                                     )
                                                 }
                                             }
 
-                                            AnimatedVisibility(visible = showAlarmDimInfo) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = if (isPreAlarmDimming) colorScheme.primaryContainer else colorScheme.secondaryContainer
+                                            ) {
                                                 Text(
-                                                    text = if (!nextAlarmLabel.isNullOrBlank() && nextAlarmLabel != "No Alarm") {
-                                                        "Next scheduled alarm: $nextAlarmLabel. Smoothly lowers screen brightness before wake-up."
-                                                    } else {
-                                                        "Smoothly lowers screen brightness during the lead-up window before your scheduled alarm."
+                                                    text = when {
+                                                        !gradualDimEnabled -> "Off"
+                                                        isPreAlarmDimming -> "${(liveBrightnessFactor * 100).roundToInt()}%"
+                                                        minutesUntilAlarm != null -> "${minutesUntilAlarm}m"
+                                                        else -> "Ready"
                                                     },
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = colorScheme.onSurfaceVariant
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isPreAlarmDimming) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                                                 )
                                             }
+                                        }
 
-                                            M3SettingSwitchRow(
-                                                title = "Gradual Dimming",
-                                                subtitle = "Smoothly dim the display as your scheduled alarm time approaches",
-                                                checked = gradualDimEnabled,
-                                                onCheckedChange = {
-                                                    haptics.confirm()
-                                                    viewModel.setGradualAlarmDimEnabled(it)
+                                        AnimatedVisibility(visible = showAlarmDimInfo) {
+                                            Text(
+                                                text = if (!nextAlarmLabel.isNullOrBlank() && nextAlarmLabel != "No Alarm") {
+                                                    "Next scheduled alarm: $nextAlarmLabel. Smoothly lowers screen brightness before wake-up."
+                                                } else {
+                                                    "Smoothly lowers screen brightness during the lead-up window before your scheduled alarm."
                                                 },
-                                                modifier = Modifier.testTag("gradual_alarm_dim_switch")
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = colorScheme.onSurfaceVariant
                                             )
+                                        }
 
-                                            AnimatedVisibility(visible = gradualDimEnabled) {
-                                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                                    val windowOptions = listOf(15, 30, 45, 60)
-                                                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                                        windowOptions.forEachIndexed { idx, mins ->
-                                                            SegmentedButton(
-                                                                selected = gradualDimWindowMins == mins,
-                                                                onClick = {
-                                                                    haptics.tick()
-                                                                    viewModel.setGradualAlarmDimWindowMinutes(mins)
-                                                                },
-                                                                shape = SegmentedButtonDefaults.itemShape(
-                                                                    index = idx,
-                                                                    count = windowOptions.size
-                                                                ),
-                                                                modifier = Modifier.testTag("gradual_dim_window_$mins")
-                                                            ) {
-                                                                Text("${mins}m")
-                                                            }
+                                        ExpressiveSettingSwitchRow(
+                                            title = "Gradual Dimming",
+                                            subtitle = "Smoothly dim the display as your scheduled alarm time approaches",
+                                            checked = gradualDimEnabled,
+                                            icon = Icons.Outlined.Bedtime,
+                                            shape = expressiveGroupedShape(0, 1),
+                                            onCheckedChange = {
+                                                haptics.confirm()
+                                                viewModel.setGradualAlarmDimEnabled(it)
+                                            },
+                                            modifier = Modifier.testTag("gradual_alarm_dim_switch")
+                                        )
+
+                                        AnimatedVisibility(visible = gradualDimEnabled) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                val windowOptions = listOf(15, 30, 45, 60)
+                                                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                                    windowOptions.forEachIndexed { idx, mins ->
+                                                        SegmentedButton(
+                                                            selected = gradualDimWindowMins == mins,
+                                                            onClick = {
+                                                                haptics.tick()
+                                                                viewModel.setGradualAlarmDimWindowMinutes(mins)
+                                                            },
+                                                            shape = SegmentedButtonDefaults.itemShape(
+                                                                index = idx,
+                                                                count = windowOptions.size
+                                                            ),
+                                                            modifier = Modifier.testTag("gradual_dim_window_$mins")
+                                                        ) {
+                                                            Text("${mins}m", fontWeight = FontWeight.SemiBold)
                                                         }
                                                     }
+                                                }
 
-                                                    var lastBrightnessBucket by remember {
-                                                        mutableIntStateOf((gradualDimMinBrightness * 20).roundToInt())
-                                                    }
-                                                    Column {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                                            verticalAlignment = Alignment.CenterVertically
+                                                var lastBrightnessBucket by remember {
+                                                    mutableIntStateOf((gradualDimMinBrightness * 20).roundToInt())
+                                                }
+                                                Column {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "Minimum Brightness",
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = colorScheme.onSurface
+                                                        )
+                                                        Surface(
+                                                            shape = CircleShape,
+                                                            color = colorScheme.secondaryContainer
                                                         ) {
                                                             Text(
-                                                                text = "Minimum Brightness",
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                fontWeight = FontWeight.Medium,
-                                                                color = colorScheme.onSurface
+                                                                text = "${(gradualDimMinBrightness * 100).roundToInt()}%",
+                                                                style = MaterialTheme.typography.labelLarge,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = colorScheme.onSecondaryContainer,
+                                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                                                             )
-                                                            Surface(
-                                                                shape = RoundedCornerShape(8.dp),
-                                                                color = colorScheme.secondaryContainer
-                                                            ) {
-                                                                Text(
-                                                                    text = "${(gradualDimMinBrightness * 100).roundToInt()}%",
-                                                                    style = MaterialTheme.typography.labelLarge,
-                                                                    color = colorScheme.onSecondaryContainer,
-                                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                                                )
-                                                            }
                                                         }
-                                                        Slider(
-                                                            value = gradualDimMinBrightness,
-                                                            onValueChange = { newVal ->
-                                                                val bucket = (newVal * 20).roundToInt()
-                                                                if (bucket != lastBrightnessBucket) {
-                                                                    lastBrightnessBucket = bucket
-                                                                    haptics.step()
-                                                                }
-                                                                viewModel.setGradualAlarmMinBrightness(newVal)
-                                                            },
-                                                            valueRange = 0.15f..0.60f,
-                                                            steps = 8,
-                                                            modifier = Modifier
-                                                                .padding(top = 2.dp)
-                                                                .testTag("gradual_dim_min_brightness_slider")
-                                                        )
                                                     }
+                                                    Slider(
+                                                        value = gradualDimMinBrightness,
+                                                        onValueChange = { newVal ->
+                                                            val bucket = (newVal * 20).roundToInt()
+                                                            if (bucket != lastBrightnessBucket) {
+                                                                lastBrightnessBucket = bucket
+                                                                haptics.step()
+                                                            }
+                                                            viewModel.setGradualAlarmMinBrightness(newVal)
+                                                        },
+                                                        valueRange = 0.15f..0.60f,
+                                                        steps = 8,
+                                                        modifier = Modifier
+                                                            .padding(top = 2.dp)
+                                                            .testTag("gradual_dim_min_brightness_slider")
+                                                    )
                                                 }
                                             }
                                         }
@@ -1654,62 +1709,59 @@ fun StandbyCustomizationDialog(
                                     val showDots by calendarViewModel.showEventDots.collectAsState()
                                     val calUse24Hour by calendarViewModel.use24HourFormat.collectAsState()
 
-                                    ElevatedCard(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
+                                    ExpressiveSectionCard {
+                                        ExpressiveSectionHeader(
+                                            icon = Icons.Outlined.CalendarViewMonth,
+                                            title = "Calendar Layout"
                                         )
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Text(
-                                                text = "Calendar Layout",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colorScheme.onSurface
-                                            )
 
-                                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                                val options = listOf("Daily" to 0, "Weekly" to 1, "Monthly" to 2)
-                                                options.forEachIndexed { idx, (label, filterVal) ->
-                                                    SegmentedButton(
-                                                        selected = calendarFilter == filterVal,
-                                                        onClick = {
-                                                            haptics.tick()
-                                                            calendarViewModel.setCalendarFilter(filterVal)
-                                                        },
-                                                        shape = SegmentedButtonDefaults.itemShape(index = idx, count = options.size)
-                                                    ) {
-                                                        Text(label)
-                                                    }
+                                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                            val options = listOf("Daily" to 0, "Weekly" to 1, "Monthly" to 2)
+                                            options.forEachIndexed { idx, (label, filterVal) ->
+                                                SegmentedButton(
+                                                    selected = calendarFilter == filterVal,
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        calendarViewModel.setCalendarFilter(filterVal)
+                                                    },
+                                                    shape = SegmentedButtonDefaults.itemShape(index = idx, count = options.size)
+                                                ) {
+                                                    Text(label, fontWeight = FontWeight.SemiBold)
                                                 }
                                             }
+                                        }
 
-                                            M3SettingSwitchRow(
+                                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                            ExpressiveSettingSwitchRow(
                                                 title = "Start Week on Monday",
                                                 subtitle = "Align monthly calendar grid weeks starting Monday",
                                                 checked = startOnMon,
+                                                icon = Icons.Outlined.DateRange,
+                                                shape = expressiveGroupedShape(0, 3),
                                                 onCheckedChange = {
                                                     haptics.confirm()
                                                     calendarViewModel.setStartWeekOnMonday(it)
                                                 }
                                             )
 
-                                            M3SettingSwitchRow(
+                                            ExpressiveSettingSwitchRow(
                                                 title = "Event Day Dots",
                                                 subtitle = "Highlight scheduled dates with subtle accent markers",
                                                 checked = showDots,
+                                                icon = Icons.Outlined.FiberManualRecord,
+                                                shape = expressiveGroupedShape(1, 3),
                                                 onCheckedChange = {
                                                     haptics.confirm()
                                                     calendarViewModel.setShowEventDots(it)
                                                 }
                                             )
 
-                                            M3SettingSwitchRow(
+                                            ExpressiveSettingSwitchRow(
                                                 title = "24-Hour Timeline",
                                                 subtitle = "Format event timestamps using 24-hour notation",
                                                 checked = calUse24Hour,
+                                                icon = Icons.Outlined.Schedule,
+                                                shape = expressiveGroupedShape(2, 3),
                                                 onCheckedChange = {
                                                     haptics.confirm()
                                                     calendarViewModel.setUse24HourFormat(it)
@@ -1721,84 +1773,205 @@ fun StandbyCustomizationDialog(
 
                                 // 5. Music Tab (activeTab == 3)
                                 if (activeTab == 3) {
-                                    ElevatedCard(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
+                                    ExpressiveSectionCard {
+                                        ExpressiveSectionHeader(
+                                            icon = Icons.Outlined.Album,
+                                            title = "Player Visual Theme"
                                         )
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Text(
-                                                text = "Player Visual Theme",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colorScheme.onSurface
-                                            )
-                                            M3SettingSwitchRow(
-                                                title = "Retro Vinyl Turntable",
-                                                subtitle = "Switch between Material 3 Expressive player and Classic Vinyl deck",
-                                                checked = isClassicMediaTheme,
-                                                onCheckedChange = {
-                                                    haptics.confirm()
-                                                    viewModel.setUseClassicMediaTheme(it)
-                                                }
-                                            )
-                                        }
+                                        ExpressiveSettingSwitchRow(
+                                            title = "Retro Vinyl Turntable",
+                                            subtitle = "Switch between Material 3 Expressive player and Classic Vinyl deck",
+                                            checked = isClassicMediaTheme,
+                                            icon = Icons.Outlined.DiscFull,
+                                            shape = expressiveGroupedShape(0, 1),
+                                            onCheckedChange = {
+                                                haptics.confirm()
+                                                viewModel.setUseClassicMediaTheme(it)
+                                            }
+                                        )
                                     }
                                 }
 
-                                // 5b. Tools Tab (activeTab == 4): Immersive Slideshow Time Overlay & Interval
+                                // 5b. Tools Tab (activeTab == 4): Separate Tool Screens Selector + Slideshow Settings
                                 if (activeTab == 4) {
+                                    val enabledToolSet by viewModel.enabledToolScreens.collectAsState()
+                                    var isToolListExpanded by remember { mutableStateOf(false) }
                                     val showSlideshowTime by viewModel.showSlideshowTimeOverlay.collectAsState()
                                     val slideshowInterval by viewModel.slideshowIntervalSeconds.collectAsState()
 
-                                    ElevatedCard(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("tools_slideshow_settings_card"),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
-                                        )
+                                    ExpressiveSectionCard(
+                                        modifier = Modifier.testTag("tool_screens_toggle_card")
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Text(
-                                                text = "Slideshow",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = colorScheme.onSurface
-                                            )
-
-                                            M3SettingSwitchRow(
-                                                title = "Show Time Overlay",
-                                                subtitle = "Display live clock time over the full-screen immersive photo slideshow",
-                                                checked = showSlideshowTime,
-                                                onCheckedChange = {
-                                                    haptics.confirm()
-                                                    viewModel.setShowSlideshowTimeOverlay(it)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .clickable {
+                                                    haptics.tick()
+                                                    isToolListExpanded = !isToolListExpanded
                                                 },
-                                                modifier = Modifier.testTag("slideshow_time_overlay_switch")
-                                            )
-
-                                            val speedOptions = listOf(5, 8, 15, 30)
-                                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                                speedOptions.forEachIndexed { idx, secs ->
-                                                    SegmentedButton(
-                                                        selected = slideshowInterval == secs,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = colorScheme.primaryContainer
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Build,
+                                                        contentDescription = null,
+                                                        tint = colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier
+                                                            .padding(7.dp)
+                                                            .size(18.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "Tool Screens (${enabledToolSet.size}/${viewModel.toolScreenTitles.size})",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = colorScheme.onSurface
+                                                )
+                                            }
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                if (enabledToolSet.size < viewModel.toolScreenTitles.size) {
+                                                    ExpressiveMorphButton(
                                                         onClick = {
                                                             haptics.tick()
-                                                            viewModel.setSlideshowIntervalSeconds(secs)
+                                                            viewModel.toolScreenTitles.indices.forEach { idx ->
+                                                                viewModel.setToolScreenEnabled(idx, true)
+                                                            }
                                                         },
-                                                        shape = SegmentedButtonDefaults.itemShape(
-                                                            index = idx,
-                                                            count = speedOptions.size
-                                                        )
+                                                        selected = false,
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                        modifier = Modifier.testTag("enable_all_tool_screens_button")
                                                     ) {
-                                                        Text("${secs}s")
+                                                        Text("Enable All", style = MaterialTheme.typography.labelLarge)
                                                     }
+                                                }
+                                                ExpressiveMorphButton(
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        isToolListExpanded = !isToolListExpanded
+                                                    },
+                                                    selected = isToolListExpanded,
+                                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                                ) {
+                                                    Text(if (isToolListExpanded) "Hide" else "Customize", fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
+                                        }
+
+                                        AnimatedVisibility(visible = isToolListExpanded) {
+                                            LazyRow(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 4.dp)
+                                            ) {
+                                                items(viewModel.toolScreenTitles.size) { idx ->
+                                                    val isEnabled = enabledToolSet.contains(idx)
+                                                    val canUncheck = !isEnabled || enabledToolSet.size > 1
+                                                    val previewCorner by animateDpAsState(
+                                                        targetValue = if (isEnabled) 18.dp else 12.dp,
+                                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                                                        label = "toolPreviewCorner"
+                                                    )
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(width = 148.dp, height = 88.dp)
+                                                            .clip(RoundedCornerShape(previewCorner))
+                                                            .background(Color.Black)
+                                                            .border(
+                                                                width = if (isEnabled) 2.5.dp else 1.dp,
+                                                                color = if (isEnabled) colorScheme.primary else colorScheme.outlineVariant,
+                                                                shape = RoundedCornerShape(previewCorner)
+                                                            )
+                                                            .clickable {
+                                                                if (canUncheck) {
+                                                                    haptics.tick()
+                                                                    viewModel.toggleToolScreen(idx)
+                                                                }
+                                                            }
+                                                            .testTag("tool_screen_toggle_row_$idx"),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .requiredSize(680.dp, 420.dp)
+                                                                .graphicsLayer {
+                                                                    scaleX = 0.20f
+                                                                    scaleY = 0.20f
+                                                                }
+                                                        ) {
+                                                            ToolScreenRenderer(toolIndex = idx, viewModel = viewModel)
+                                                        }
+                                                        Surface(
+                                                            modifier = Modifier
+                                                                .align(Alignment.TopEnd)
+                                                                .padding(6.dp)
+                                                                .size(22.dp),
+                                                            shape = CircleShape,
+                                                            color = if (isEnabled) colorScheme.primary else colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
+                                                        ) {
+                                                            Box(contentAlignment = Alignment.Center) {
+                                                                Icon(
+                                                                    imageVector = if (isEnabled) Icons.Default.Check else Icons.Default.Add,
+                                                                    contentDescription = null,
+                                                                    tint = if (isEnabled) colorScheme.onPrimary else colorScheme.onSurface,
+                                                                    modifier = Modifier.size(13.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    ExpressiveSectionCard(
+                                        modifier = Modifier.testTag("tools_slideshow_settings_card")
+                                    ) {
+                                        ExpressiveSectionHeader(
+                                            icon = Icons.Outlined.Slideshow,
+                                            title = "Slideshow"
+                                        )
+
+                                        ExpressiveSettingSwitchRow(
+                                            title = "Show Time Overlay",
+                                            subtitle = "Display live clock time over the full-screen immersive photo slideshow",
+                                            checked = showSlideshowTime,
+                                            icon = Icons.Outlined.AccessTime,
+                                            shape = expressiveGroupedShape(0, 1),
+                                            onCheckedChange = {
+                                                haptics.confirm()
+                                                viewModel.setShowSlideshowTimeOverlay(it)
+                                            },
+                                            modifier = Modifier.testTag("slideshow_time_overlay_switch")
+                                        )
+
+                                        val speedOptions = listOf(5, 8, 15, 30)
+                                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                            speedOptions.forEachIndexed { idx, secs ->
+                                                SegmentedButton(
+                                                    selected = slideshowInterval == secs,
+                                                    onClick = {
+                                                        haptics.tick()
+                                                        viewModel.setSlideshowIntervalSeconds(secs)
+                                                    },
+                                                    shape = SegmentedButtonDefaults.itemShape(
+                                                        index = idx,
+                                                        count = speedOptions.size
+                                                    )
+                                                ) {
+                                                    Text("${secs}s", fontWeight = FontWeight.SemiBold)
                                                 }
                                             }
                                         }
@@ -1819,272 +1992,262 @@ fun StandbyCustomizationDialog(
                                     val rightResolved = remember(rightTzId, rightLocName) { viewModel.resolvePaneLocationInfo(2) }
                                     var visualPickerPane by remember { mutableIntStateOf(0) } // 0 = closed, 1 = left, 2 = right
 
-                                    ElevatedCard(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("duo_widgets_selector_card"),
-                                        colors = CardDefaults.elevatedCardColors(
-                                            containerColor = colorScheme.surfaceContainerLow
-                                        )
+                                    ExpressiveSectionCard(
+                                        modifier = Modifier.testTag("duo_widgets_selector_card")
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ExpressiveSectionHeader(
+                                            icon = Icons.Outlined.ViewColumn,
+                                            title = "Duo Split Panes"
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            // LEFT PANE VISUAL-ONLY CONFIGURATION
+                                            Surface(
+                                                modifier = Modifier.weight(1f),
+                                                shape = RoundedCornerShape(22.dp),
+                                                color = colorScheme.surfaceContainer,
+                                                border = expressiveSurfaceBorder()
                                             ) {
-                                                // LEFT PANE VISUAL-ONLY CONFIGURATION
-                                                Surface(
-                                                    modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(16.dp),
-                                                    color = colorScheme.surfaceContainer
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                                 ) {
-                                                    Column(
-                                                        modifier = Modifier.padding(12.dp),
-                                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                                            verticalAlignment = Alignment.CenterVertically
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Outlined.ViewSidebar,
-                                                                contentDescription = "Left Pane",
-                                                                tint = colorScheme.primary,
-                                                                modifier = Modifier.size(18.dp)
-                                                            )
-                                                            FilledTonalIconButton(
-                                                                onClick = {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.ViewSidebar,
+                                                            contentDescription = "Left Pane",
+                                                            tint = colorScheme.primary,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                        ExpressiveIconActionButton(
+                                                            onClick = {
+                                                                haptics.confirm()
+                                                                visualPickerPane = 1
+                                                            },
+                                                            icon = Icons.Default.Add,
+                                                            contentDescription = "Add Left Screen",
+                                                            size = 36.dp,
+                                                            iconSize = 18.dp,
+                                                            containerColor = colorScheme.primaryContainer,
+                                                            contentColor = colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.testTag("duo_settings_left_add_btn")
+                                                        )
+                                                    }
+
+                                                    if (leftScreens.isEmpty()) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .height(92.dp)
+                                                                .clip(RoundedCornerShape(18.dp))
+                                                                .background(colorScheme.surfaceContainerHigh)
+                                                                .border(expressiveSurfaceBorder(), RoundedCornerShape(18.dp))
+                                                                .clickable {
                                                                     haptics.confirm()
                                                                     visualPickerPane = 1
                                                                 },
-                                                                modifier = Modifier
-                                                                    .size(32.dp)
-                                                                    .testTag("duo_settings_left_add_btn")
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.Add,
-                                                                    contentDescription = "Add Left Screen",
-                                                                    modifier = Modifier.size(18.dp)
-                                                                )
-                                                            }
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Add,
+                                                                contentDescription = "Add Left Screen",
+                                                                tint = colorScheme.primary,
+                                                                modifier = Modifier.size(32.dp)
+                                                            )
                                                         }
-
-                                                        if (leftScreens.isEmpty()) {
-                                                            // Empty State: Visual + button only
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .fillMaxWidth()
-                                                                    .height(92.dp)
-                                                                    .clip(RoundedCornerShape(14.dp))
-                                                                    .background(colorScheme.surfaceContainerHigh)
-                                                                    .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(14.dp))
-                                                                    .clickable {
-                                                                        haptics.confirm()
-                                                                        visualPickerPane = 1
-                                                                    },
-                                                                contentAlignment = Alignment.Center
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.Add,
-                                                                    contentDescription = "Add Left Screen",
-                                                                    tint = colorScheme.primary,
-                                                                    modifier = Modifier.size(32.dp)
-                                                                )
-                                                            }
-                                                        } else {
-                                                            LazyRow(
-                                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                                modifier = Modifier.fillMaxWidth()
-                                                            ) {
-                                                                itemsIndexed(leftScreens) { _, sIdx ->
-                                                                    val isActive = leftWidgetIdx == sIdx
-                                                                    Box(
+                                                    } else {
+                                                        LazyRow(
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        ) {
+                                                            itemsIndexed(leftScreens) { _, sIdx ->
+                                                                val isActive = leftWidgetIdx == sIdx
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .size(width = 132.dp, height = 88.dp)
+                                                                        .clip(RoundedCornerShape(16.dp))
+                                                                        .background(Color.Black)
+                                                                        .border(
+                                                                            width = if (isActive) 2.5.dp else 1.dp,
+                                                                            color = if (isActive) colorScheme.primary else colorScheme.outlineVariant,
+                                                                            shape = RoundedCornerShape(16.dp)
+                                                                        )
+                                                                        .clickable {
+                                                                            haptics.tick()
+                                                                            viewModel.setDuoLeftWidgetIndex(sIdx)
+                                                                        }
+                                                                ) {
+                                                                    RenderDuoWidget(
+                                                                        pageIndex = sIdx,
+                                                                        paneIndex = 1,
+                                                                        viewModel = viewModel,
+                                                                        calendarViewModel = calendarViewModel,
+                                                                        weatherViewModel = viewModel()
+                                                                    )
+                                                                    Surface(
                                                                         modifier = Modifier
-                                                                            .size(width = 132.dp, height = 88.dp)
-                                                                            .clip(RoundedCornerShape(12.dp))
-                                                                            .background(Color.Black)
-                                                                            .border(
-                                                                                width = if (isActive) 2.5.dp else 1.dp,
-                                                                                color = if (isActive) colorScheme.primary else colorScheme.outlineVariant,
-                                                                                shape = RoundedCornerShape(12.dp)
-                                                                            )
+                                                                            .align(Alignment.TopEnd)
+                                                                            .padding(4.dp)
+                                                                            .size(20.dp)
                                                                             .clickable {
                                                                                 haptics.tick()
-                                                                                viewModel.setDuoLeftWidgetIndex(sIdx)
-                                                                            }
+                                                                                viewModel.removeScreenFromDuoLeft(sIdx)
+                                                                            },
+                                                                        shape = CircleShape,
+                                                                        color = colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
                                                                     ) {
-                                                                        RenderDuoWidget(
-                                                                            pageIndex = sIdx,
-                                                                            paneIndex = 1,
-                                                                            viewModel = viewModel,
-                                                                            calendarViewModel = calendarViewModel,
-                                                                            weatherViewModel = viewModel()
-                                                                        )
-                                                                        Surface(
-                                                                            modifier = Modifier
-                                                                                .align(Alignment.TopEnd)
-                                                                                .padding(4.dp)
-                                                                                .size(20.dp)
-                                                                                .clickable {
-                                                                                    haptics.tick()
-                                                                                    viewModel.removeScreenFromDuoLeft(sIdx)
-                                                                                },
-                                                                            shape = CircleShape,
-                                                                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
-                                                                        ) {
-                                                                            Box(contentAlignment = Alignment.Center) {
-                                                                                Icon(
-                                                                                    imageVector = Icons.Default.Close,
-                                                                                    contentDescription = "Remove",
-                                                                                    tint = colorScheme.onSurface,
-                                                                                    modifier = Modifier.size(12.dp)
-                                                                                )
-                                                                            }
+                                                                        Box(contentAlignment = Alignment.Center) {
+                                                                            Icon(
+                                                                                imageVector = Icons.Default.Close,
+                                                                                contentDescription = "Remove",
+                                                                                tint = colorScheme.onSurface,
+                                                                                modifier = Modifier.size(12.dp)
+                                                                            )
                                                                         }
                                                                     }
                                                                 }
                                                             }
                                                         }
+                                                    }
 
-                                                        SearchableLocationTimeZoneField(
-                                                            viewModel = viewModel,
-                                                            paneIndex = 1,
-                                                            activeSummary = "${leftResolved.regionName} (${leftResolved.airportCode}) • ${leftResolved.standardTimeShort}",
-                                                            label = "Left Location / Time Zone",
-                                                            testTag = "duo_left_location_search_input"
+                                                    SearchableLocationTimeZoneField(
+                                                        viewModel = viewModel,
+                                                        paneIndex = 1,
+                                                        activeSummary = "${leftResolved.regionName} (${leftResolved.airportCode}) • ${leftResolved.standardTimeShort}",
+                                                        label = "Left Location / Time Zone",
+                                                        testTag = "duo_left_location_search_input"
+                                                    )
+                                                }
+                                            }
+
+                                            // RIGHT PANE VISUAL-ONLY CONFIGURATION
+                                            Surface(
+                                                modifier = Modifier.weight(1f),
+                                                shape = RoundedCornerShape(22.dp),
+                                                color = colorScheme.surfaceContainer,
+                                                border = expressiveSurfaceBorder()
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.ViewSidebar,
+                                                            contentDescription = "Right Pane",
+                                                            tint = colorScheme.primary,
+                                                            modifier = Modifier
+                                                                .size(18.dp)
+                                                                .graphicsLayer { scaleX = -1f }
+                                                        )
+                                                        ExpressiveIconActionButton(
+                                                            onClick = {
+                                                                haptics.confirm()
+                                                                visualPickerPane = 2
+                                                            },
+                                                            icon = Icons.Default.Add,
+                                                            contentDescription = "Add Right Screen",
+                                                            size = 36.dp,
+                                                            iconSize = 18.dp,
+                                                            containerColor = colorScheme.primaryContainer,
+                                                            contentColor = colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.testTag("duo_settings_right_add_btn")
                                                         )
                                                     }
-                                                }
 
-                                                // RIGHT PANE VISUAL-ONLY CONFIGURATION
-                                                Surface(
-                                                    modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(16.dp),
-                                                    color = colorScheme.surfaceContainer
-                                                ) {
-                                                    Column(
-                                                        modifier = Modifier.padding(12.dp),
-                                                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                                                    ) {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                                            verticalAlignment = Alignment.CenterVertically
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Outlined.ViewSidebar,
-                                                                contentDescription = "Right Pane",
-                                                                tint = colorScheme.primary,
-                                                                modifier = Modifier
-                                                                    .size(18.dp)
-                                                                    .graphicsLayer { scaleX = -1f }
-                                                            )
-                                                            FilledTonalIconButton(
-                                                                onClick = {
+                                                    if (rightScreens.isEmpty()) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .height(92.dp)
+                                                                .clip(RoundedCornerShape(18.dp))
+                                                                .background(colorScheme.surfaceContainerHigh)
+                                                                .border(expressiveSurfaceBorder(), RoundedCornerShape(18.dp))
+                                                                .clickable {
                                                                     haptics.confirm()
                                                                     visualPickerPane = 2
                                                                 },
-                                                                modifier = Modifier
-                                                                    .size(32.dp)
-                                                                    .testTag("duo_settings_right_add_btn")
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.Add,
-                                                                    contentDescription = "Add Right Screen",
-                                                                    modifier = Modifier.size(18.dp)
-                                                                )
-                                                            }
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Add,
+                                                                contentDescription = "Add Right Screen",
+                                                                tint = colorScheme.primary,
+                                                                modifier = Modifier.size(32.dp)
+                                                            )
                                                         }
-
-                                                        if (rightScreens.isEmpty()) {
-                                                            // Empty State: Visual + button only
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .fillMaxWidth()
-                                                                    .height(92.dp)
-                                                                    .clip(RoundedCornerShape(14.dp))
-                                                                    .background(colorScheme.surfaceContainerHigh)
-                                                                    .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(14.dp))
-                                                                    .clickable {
-                                                                        haptics.confirm()
-                                                                        visualPickerPane = 2
-                                                                    },
-                                                                contentAlignment = Alignment.Center
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.Add,
-                                                                    contentDescription = "Add Right Screen",
-                                                                    tint = colorScheme.primary,
-                                                                    modifier = Modifier.size(32.dp)
-                                                                )
-                                                            }
-                                                        } else {
-                                                            LazyRow(
-                                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                                modifier = Modifier.fillMaxWidth()
-                                                            ) {
-                                                                itemsIndexed(rightScreens) { _, sIdx ->
-                                                                    val isActive = rightWidgetIdx == sIdx
-                                                                    Box(
+                                                    } else {
+                                                        LazyRow(
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        ) {
+                                                            itemsIndexed(rightScreens) { _, sIdx ->
+                                                                val isActive = rightWidgetIdx == sIdx
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .size(width = 132.dp, height = 88.dp)
+                                                                        .clip(RoundedCornerShape(16.dp))
+                                                                        .background(Color.Black)
+                                                                        .border(
+                                                                            width = if (isActive) 2.5.dp else 1.dp,
+                                                                            color = if (isActive) colorScheme.primary else colorScheme.outlineVariant,
+                                                                            shape = RoundedCornerShape(16.dp)
+                                                                        )
+                                                                        .clickable {
+                                                                            haptics.tick()
+                                                                            viewModel.setDuoRightWidgetIndex(sIdx)
+                                                                        }
+                                                                ) {
+                                                                    RenderDuoWidget(
+                                                                        pageIndex = sIdx,
+                                                                        paneIndex = 2,
+                                                                        viewModel = viewModel,
+                                                                        calendarViewModel = calendarViewModel,
+                                                                        weatherViewModel = viewModel()
+                                                                    )
+                                                                    Surface(
                                                                         modifier = Modifier
-                                                                            .size(width = 132.dp, height = 88.dp)
-                                                                            .clip(RoundedCornerShape(12.dp))
-                                                                            .background(Color.Black)
-                                                                            .border(
-                                                                                width = if (isActive) 2.5.dp else 1.dp,
-                                                                                color = if (isActive) colorScheme.primary else colorScheme.outlineVariant,
-                                                                                shape = RoundedCornerShape(12.dp)
-                                                                            )
+                                                                            .align(Alignment.TopEnd)
+                                                                            .padding(4.dp)
+                                                                            .size(20.dp)
                                                                             .clickable {
                                                                                 haptics.tick()
-                                                                                viewModel.setDuoRightWidgetIndex(sIdx)
-                                                                            }
+                                                                                viewModel.removeScreenFromDuoRight(sIdx)
+                                                                            },
+                                                                        shape = CircleShape,
+                                                                        color = colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
                                                                     ) {
-                                                                        RenderDuoWidget(
-                                                                            pageIndex = sIdx,
-                                                                            paneIndex = 2,
-                                                                            viewModel = viewModel,
-                                                                            calendarViewModel = calendarViewModel,
-                                                                            weatherViewModel = viewModel()
-                                                                        )
-                                                                        Surface(
-                                                                            modifier = Modifier
-                                                                                .align(Alignment.TopEnd)
-                                                                                .padding(4.dp)
-                                                                                .size(20.dp)
-                                                                                .clickable {
-                                                                                    haptics.tick()
-                                                                                    viewModel.removeScreenFromDuoRight(sIdx)
-                                                                                },
-                                                                            shape = CircleShape,
-                                                                            color = colorScheme.surfaceContainerHighest.copy(alpha = 0.85f)
-                                                                        ) {
-                                                                            Box(contentAlignment = Alignment.Center) {
-                                                                                Icon(
-                                                                                    imageVector = Icons.Default.Close,
-                                                                                    contentDescription = "Remove",
-                                                                                    tint = colorScheme.onSurface,
-                                                                                    modifier = Modifier.size(12.dp)
-                                                                                )
-                                                                            }
+                                                                        Box(contentAlignment = Alignment.Center) {
+                                                                            Icon(
+                                                                                imageVector = Icons.Default.Close,
+                                                                                contentDescription = "Remove",
+                                                                                tint = colorScheme.onSurface,
+                                                                                modifier = Modifier.size(12.dp)
+                                                                            )
                                                                         }
                                                                     }
                                                                 }
                                                             }
                                                         }
-
-                                                        SearchableLocationTimeZoneField(
-                                                            viewModel = viewModel,
-                                                            paneIndex = 2,
-                                                            activeSummary = "${rightResolved.regionName} (${rightResolved.airportCode}) • ${rightResolved.standardTimeShort}",
-                                                            label = "Right Location / Time Zone",
-                                                            testTag = "duo_right_location_search_input"
-                                                        )
                                                     }
+
+                                                    SearchableLocationTimeZoneField(
+                                                        viewModel = viewModel,
+                                                        paneIndex = 2,
+                                                        activeSummary = "${rightResolved.regionName} (${rightResolved.airportCode}) • ${rightResolved.standardTimeShort}",
+                                                        label = "Right Location / Time Zone",
+                                                        testTag = "duo_right_location_search_input"
+                                                    )
                                                 }
                                             }
                                         }
@@ -2100,7 +2263,7 @@ fun StandbyCustomizationDialog(
                                     }
                                 }
 
-                                // 7. Custom Backdrop Image Card (Visual row without permanent sub-text)
+                                // 7. Custom Backdrop Image Card (Expressive Card)
                                 val context = LocalContext.current
                                 val launcher = rememberLauncherForActivityResult(
                                     ActivityResultContracts.GetContent()
@@ -2117,32 +2280,33 @@ fun StandbyCustomizationDialog(
                                     }
                                 }
 
-                                ElevatedCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.elevatedCardColors(
-                                        containerColor = colorScheme.surfaceContainerLow
-                                    )
-                                ) {
+                                ExpressiveSectionCard {
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
+                                        modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Wallpaper,
-                                                contentDescription = null,
-                                                tint = colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = colorScheme.primaryContainer
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Wallpaper,
+                                                    contentDescription = null,
+                                                    tint = colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier
+                                                        .padding(7.dp)
+                                                        .size(18.dp)
+                                                )
+                                            }
                                             Text(
                                                 text = "Backdrop Photo",
                                                 style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
                                                 color = colorScheme.onSurface
                                             )
                                         }
@@ -2156,16 +2320,19 @@ fun StandbyCustomizationDialog(
                                                     onClick = {
                                                         haptics.tick()
                                                         viewModel.setBgUriForPage(activeTab, null)
-                                                    }
+                                                    },
+                                                    shape = RoundedCornerShape(18.dp)
                                                 ) {
-                                                    Text("Clear")
+                                                    Text("Clear", fontWeight = FontWeight.SemiBold)
                                                 }
                                             }
-                                            FilledTonalButton(
+                                            ExpressiveMorphButton(
                                                 onClick = {
                                                     haptics.tick()
                                                     launcher.launch("image/*")
-                                                }
+                                                },
+                                                selected = bgUri != null,
+                                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Outlined.Image,
@@ -2173,7 +2340,7 @@ fun StandbyCustomizationDialog(
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(6.dp))
-                                                Text("Choose Photo")
+                                                Text("Choose Photo", fontWeight = FontWeight.SemiBold)
                                             }
                                         }
                                     }
@@ -2188,85 +2355,14 @@ fun StandbyCustomizationDialog(
 }
 
 @Composable
-private fun M3SettingSwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    var showInfo by remember { mutableStateOf(false) }
-
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = colorScheme.surfaceContainer,
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable { onCheckedChange(!checked) }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colorScheme.onSurface
-                    )
-                    if (subtitle.isNotBlank()) {
-                        IconButton(
-                            onClick = { showInfo = !showInfo },
-                            modifier = Modifier.size(26.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Info,
-                                contentDescription = "More Info",
-                                tint = if (showInfo) colorScheme.primary else colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-                }
-                Switch(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange
-                )
-            }
-            AnimatedVisibility(visible = showInfo && subtitle.isNotBlank()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, end = 12.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun AppOverviewLayout(
     viewModel: StandbyViewModel,
     activePage: Int,
     activeClockFace: Int,
+    activeToolScreen: Int = 0,
     onNavigateToPage: (Int) -> Unit,
     onSelectClockFace: (Int) -> Unit,
+    onSelectToolScreen: (Int) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -2322,18 +2418,17 @@ fun AppOverviewLayout(
                     text = "Standby Spaces",
                     style = MaterialTheme.typography.headlineSmall,
                     color = colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.ExtraBold
                 )
 
-                FilledTonalIconButton(
+                ExpressiveIconActionButton(
                     onClick = onDismiss,
+                    icon = Icons.Default.Close,
+                    contentDescription = "Close Overview",
+                    containerColor = colorScheme.secondaryContainer,
+                    contentColor = colorScheme.onSecondaryContainer,
                     modifier = Modifier.testTag("overview_close_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Overview"
-                    )
-                }
+                )
             }
 
             val enabledClockSet by viewModel.enabledClockFaces.collectAsState()
@@ -2361,14 +2456,13 @@ fun AppOverviewLayout(
             ) {
                 // Column 1: Enabled Clock Faces (Visual-only cards)
                 item {
-                    ElevatedCard(
+                    Surface(
                         modifier = Modifier
                             .width(196.dp)
                             .fillMaxHeight(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = colorScheme.surfaceContainerLow
-                        )
+                        shape = RoundedCornerShape(28.dp),
+                        color = colorScheme.surfaceContainerLow,
+                        border = expressiveSurfaceBorder()
                     ) {
                         Column(
                             modifier = Modifier
@@ -2393,22 +2487,20 @@ fun AppOverviewLayout(
                                 itemsIndexed(clockThemes) { _, (clockThemeIdx, _, _) ->
                                     val isActive = (activePage == 0 && activeClockFace == clockThemeIdx)
 
-                                    OutlinedCard(
+                                    Surface(
                                         onClick = { onSelectClockFace(clockThemeIdx) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = CardDefaults.outlinedCardColors(
-                                            containerColor = if (isActive) colorScheme.secondaryContainer else colorScheme.surfaceContainer
-                                        ),
+                                        shape = RoundedCornerShape(18.dp),
+                                        color = if (isActive) colorScheme.secondaryContainer else colorScheme.surfaceContainer,
                                         border = BorderStroke(
                                             width = if (isActive) 2.5.dp else 1.dp,
-                                            color = if (isActive) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            color = if (isActive) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.6f)
                                         )
                                     ) {
                                         Box(
                                             modifier = Modifier
                                                 .padding(6.dp)
                                                 .size(160.dp, 90.dp)
-                                                .clip(RoundedCornerShape(10.dp))
+                                                .clip(RoundedCornerShape(12.dp))
                                                 .background(Color.Black),
                                             contentAlignment = Alignment.Center
                                         ) {
@@ -2430,7 +2522,7 @@ fun AppOverviewLayout(
                     }
                 }
 
-                // Columns 2..6: Utility Screens (Visual cards without sub-labels)
+                // Columns 2..6: Utility Screens (Tools column shows separate enabled Tool Screen cards just like Clock Faces)
                 itemsIndexed(utilityPages) { _, (pageIdx, title) ->
                     val isActive = (activePage == pageIdx)
 
@@ -2442,59 +2534,135 @@ fun AppOverviewLayout(
                         else -> colorScheme.primary
                     }
 
-                    ElevatedCard(
-                        onClick = { onNavigateToPage(pageIdx) },
-                        modifier = Modifier
-                            .width(196.dp)
-                            .fillMaxHeight(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = if (isActive) colorScheme.secondaryContainer.copy(alpha = 0.45f)
-                            else colorScheme.surfaceContainerLow
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .border(
-                                    width = if (isActive) 2.dp else 1.dp,
-                                    color = if (isActive) pageColor else colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .padding(12.dp),
-                            horizontalAlignment = Alignment.Start
-                        ) {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                modifier = Modifier.padding(bottom = 10.dp)
-                            )
+                    if (pageIdx == 4) {
+                        val enabledToolSet by viewModel.enabledToolScreens.collectAsState()
+                        val toolScreens = remember(enabledToolSet) {
+                            viewModel.toolScreenTitles.indices.filter { enabledToolSet.contains(it) }
+                                .ifEmpty { listOf(0) }
+                        }
 
-                            Box(
+                        Surface(
+                            modifier = Modifier
+                                .width(196.dp)
+                                .fillMaxHeight(),
+                            shape = RoundedCornerShape(28.dp),
+                            color = colorScheme.surfaceContainerLow,
+                            border = BorderStroke(
+                                width = if (isActive) 2.dp else 1.dp,
+                                color = if (isActive) pageColor else colorScheme.outlineVariant.copy(alpha = 0.55f)
+                            )
+                        ) {
+                            Column(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(colorScheme.surfaceContainerHighest),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxSize()
+                                    .padding(12.dp)
                             ) {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                )
+
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(bottom = 8.dp)
+                                ) {
+                                    itemsIndexed(toolScreens) { _, toolIdx ->
+                                        val isToolActive = (activePage == 4 && activeToolScreen == toolIdx)
+
+                                        Surface(
+                                            onClick = { onSelectToolScreen(toolIdx) },
+                                            shape = RoundedCornerShape(18.dp),
+                                            color = if (isToolActive) colorScheme.secondaryContainer else colorScheme.surfaceContainer,
+                                            border = BorderStroke(
+                                                width = if (isToolActive) 2.5.dp else 1.dp,
+                                                color = if (isToolActive) pageColor else colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                            ),
+                                            modifier = Modifier.testTag("overview_tool_card_$toolIdx")
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .padding(6.dp)
+                                                    .size(160.dp, 90.dp)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(Color.Black),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .requiredSize(680.dp, 420.dp)
+                                                        .graphicsLayer {
+                                                            scaleX = 0.21f
+                                                            scaleY = 0.21f
+                                                        }
+                                                ) {
+                                                    ToolScreenRenderer(
+                                                        toolIndex = toolIdx,
+                                                        viewModel = viewModel
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Surface(
+                            onClick = { onNavigateToPage(pageIdx) },
+                            modifier = Modifier
+                                .width(196.dp)
+                                .fillMaxHeight(),
+                            shape = RoundedCornerShape(28.dp),
+                            color = if (isActive) colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                            else colorScheme.surfaceContainerLow,
+                            border = BorderStroke(
+                                width = if (isActive) 2.dp else 1.dp,
+                                color = if (isActive) pageColor else colorScheme.outlineVariant.copy(alpha = 0.55f)
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(12.dp),
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                )
+
                                 Box(
                                     modifier = Modifier
-                                        .requiredSize(400.dp, 220.dp)
-                                        .graphicsLayer {
-                                            scaleX = 0.36f
-                                            scaleY = 0.36f
-                                        }
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(colorScheme.surfaceContainerHighest),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    when (pageIdx) {
-                                        1 -> PreviewAlarmPage(accentColor = color1, fontFamily = font1)
-                                        2 -> PreviewCalendarPage(accentColor = color2, fontFamily = font2)
-                                        3 -> PreviewMediaPage(accentColor = color3, fontFamily = font3)
-                                        4 -> PreviewTimerPage(accentColor = color4, fontFamily = font4)
-                                        5 -> PreviewDuoPage(fontFamily = font0)
+                                    Box(
+                                        modifier = Modifier
+                                            .requiredSize(400.dp, 220.dp)
+                                            .graphicsLayer {
+                                                scaleX = 0.36f
+                                                scaleY = 0.36f
+                                            }
+                                    ) {
+                                        when (pageIdx) {
+                                            1 -> PreviewAlarmPage(accentColor = color1, fontFamily = font1)
+                                            2 -> PreviewCalendarPage(accentColor = color2, fontFamily = font2)
+                                            3 -> PreviewMediaPage(accentColor = color3, fontFamily = font3)
+                                            5 -> PreviewDuoPage(fontFamily = font0)
+                                        }
                                     }
                                 }
                             }
@@ -2798,6 +2966,7 @@ fun SearchableLocationTimeZoneField(
                     }
                 }
             },
+            shape = RoundedCornerShape(18.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(testTag)
@@ -2806,10 +2975,10 @@ fun SearchableLocationTimeZoneField(
         AnimatedVisibility(visible = showSuggestions || searchQuery.isNotBlank()) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = colorScheme.surfaceContainerHigh,
-                tonalElevation = 3.dp,
-                border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.45f))
+                tonalElevation = if (com.example.ui.theme.LocalPureAmoled.current) 0.dp else 3.dp,
+                border = expressiveSurfaceBorder()
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     results.forEachIndexed { idx, (selectionKey, displayDesc) ->
