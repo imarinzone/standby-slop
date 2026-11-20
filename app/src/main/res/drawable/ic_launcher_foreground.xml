@@ -1,61 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- Minimalist modern clock dial outer arc -->
-    <path
-        android:pathData="M 54, 26 a 28,28 0 1,1 -0.1,0 z"
-        android:strokeWidth="3.5"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000" />
-
-    <!-- Sleek calendar event tracker dots -->
-    <path
-        android:pathData="M 44, 10.8 a 2.2,2.2 0 1,1 -0.1,0 z"
-        android:fillColor="#F43F5E" />
-    <path
-        android:pathData="M 64, 10.8 a 2.2,2.2 0 1,1 -0.1,0 z"
-        android:fillColor="#10B981" />
-
-    <!-- Hour hand -->
-    <path
-        android:pathData="M 54,54 L 41,41"
-        android:strokeWidth="3.8"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round" />
-
-    <!-- Minute hand -->
-    <path
-        android:pathData="M 54,54 L 72,54"
-        android:strokeWidth="3.8"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round" />
-
-    <!-- Accent color central pin -->
-    <path
-        android:pathData="M 54, 51.5 a 2.5,2.5 0 1,1 -0.1,0 z"
-        android:fillColor="#F59E0B" />
-
-    <!-- Minimalist schedule/timeline tray underneath the clock -->
-    <path
-        android:pathData="M 36, 90 L 72, 90"
-        android:strokeWidth="3"
-        android:strokeColor="#38BDF8"
-        android:strokeLineCap="round" />
-
-    <!-- Visual bullet indicators detailing ongoing status -->
-    <path
-        android:pathData="M 43, 88.2 a 1.8,1.8 0 1,1 -0.1,0 z"
-        android:fillColor="#FFFFFF" />
-    <path
-        android:pathData="M 54, 88.2 a 1.8,1.8 0 1,1 -0.1,0 z"
-        android:fillColor="#FFFFFF" />
-    <path
-        android:pathData="M 65, 88.2 a 1.8,1.8 0 1,1 -0.1,0 z"
-        android:fillColor="#FFFFFF" />
-
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="66dp"
+        android:height="66dp"
+        android:drawable="@drawable/standby_expressive_icon_1795169624091"
+        android:gravity="center" />
+</layer-list>
